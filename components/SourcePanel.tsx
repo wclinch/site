@@ -3,8 +3,10 @@ import { useState, useRef, useEffect } from 'react'
 import { useApp } from '@/context/AppContext'
 import SourceItem from './SourceItem'
 
-
-export default function SourcePanel({ width }: { width: number | string }) {
+export default function SourcePanel({ width, onScoutFullscreen }: {
+  width: number | string
+  onScoutFullscreen?: () => void
+}) {
   const {
     sources, uploadFiles, moveSource, addUrl,
     projects, activeId, activeProject,
@@ -33,7 +35,6 @@ export default function SourcePanel({ width }: { width: number | string }) {
     updateProject(projId, { name: projNameInput.trim() || fallback })
     setEditingProjId(null)
   }
-
 
   useEffect(() => {
     if (!menuProjId) return
@@ -402,6 +403,9 @@ export default function SourcePanel({ width }: { width: number | string }) {
         </div>
       </div>
 
+      {/* Discovery bar */}
+      <DiscoveryBar onClick={onScoutFullscreen} />
+
     </div>
   )
 }
@@ -426,3 +430,26 @@ function UrlBtn({ onClick }: { onClick: () => void }) {
   )
 }
 
+function DiscoveryBar({ onClick }: { onClick?: () => void }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        borderTop: '1px solid #1a1a1a', height: '28px', flexShrink: 0,
+        display: 'flex', alignItems: 'center', padding: '0 10px 0 14px',
+        cursor: 'pointer', background: hov ? '#0d0d0d' : 'none',
+        transition: 'background 0.15s',
+      }}
+    >
+      <span style={{ flex: 1, fontSize: '10px', letterSpacing: '0.08em', userSelect: 'none', color: hov ? '#888' : '#555' }}>
+        Discovery
+      </span>
+      <svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke={hov ? '#777' : '#444'} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" style={{ transition: 'stroke 0.15s' }}>
+        <path d="M6 1h2v2" /><path d="M8 1L4.5 4.5" /><path d="M1 6v2h2" />
+      </svg>
+    </div>
+  )
+}
