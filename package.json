@@ -43,6 +43,7 @@
   "build": {
     "appId": "com.site.app",
     "productName": "Site",
+    "afterPack": "scripts/after-pack-codesign.cjs",
     "directories": {
       "output": "release",
       "buildResources": "public"
