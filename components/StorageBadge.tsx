@@ -65,9 +65,18 @@ export default function StorageBadge() {
 
   const pct     = usage / STORAGE_LIMIT_BYTES
   const usedMb  = usage / (1024 * 1024)
+  const usedKb  = usage / 1024
   const limitMb = Math.round(STORAGE_LIMIT_BYTES / (1024 * 1024))
-  // 1 decimal under 10 MB, whole numbers above — keeps the badge a stable width.
-  const usedStr = usedMb < 10 ? usedMb.toFixed(1) : Math.round(usedMb).toString()
+  // Granularity is unit-adaptive so per-file changes are always visible:
+  //   < 1 MB  → show whole KB (a 200 KB screenshot bumps "0 KB" → "200 KB"
+  //             instead of staying at "0.0 MB" and looking unchanged)
+  //   1-10 MB → one decimal MB
+  //   ≥ 10 MB → whole MB
+  const usedStr =
+    usedMb < 1   ? `${Math.round(usedKb)} KB` :
+    usedMb < 10  ? `${usedMb.toFixed(1)} MB`  :
+                   `${Math.round(usedMb)} MB`
+  const limitStr = `${limitMb} MB`
 
   // Match the project-count badge color (#555) at low usage so the two
   // top-right counters read as a single visual group; brighten only when
@@ -139,7 +148,7 @@ export default function StorageBadge() {
           transition: 'color 0.15s',
         }}
       >
-        {usedStr} / {limitMb} MB
+        {usedStr} / {limitStr}
       </button>
 
       {open && (

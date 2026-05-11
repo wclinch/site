@@ -696,9 +696,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   function removeFromStack(id: string) {
     setStackIds(prev => prev.filter(x => x !== id))
+    // Also evict it from whichever viewer pane it was open in. The user's
+    // intent when unpinning is "I'm done with this for now" — leaving the
+    // source still loaded in the center column contradicts that. The
+    // source itself stays (only the pin is dropped + the viewer is
+    // cleared); use removeSource to actually delete it.
+    if (selectedId === id) setSelectedId(null)
+    if (selectedImageId === id) setSelectedImageId(null)
   }
 
   function clearStack() {
+    // Same intent as removeFromStack — if any stacked source is currently
+    // loaded in the center column, close it. Anything not in the stack
+    // stays where it is.
+    const stackSet = new Set(stackIds)
+    if (selectedId && stackSet.has(selectedId)) setSelectedId(null)
+    if (selectedImageId && stackSet.has(selectedImageId)) setSelectedImageId(null)
     setStackIds([])
   }
 

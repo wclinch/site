@@ -75,7 +75,7 @@ export default function About() {
               { keys: ['Click stack item'],      desc: 'Load it into the viewer (image → top, PDF/URL → bottom)' },
               { keys: ['Click stack arrow'],     desc: 'Flip a PDF / URL row up to the image pane' },
               { keys: ['Drag stack item'],       desc: 'Reorder pinned sources within the stack' },
-              { keys: ['× on stack row'],        desc: 'Unpin from the stack (the source itself stays)' },
+              { keys: ['× on stack row'],        desc: 'Unpin from the stack and close it from the viewer (the source itself stays)' },
               { keys: ['Expand (↗)'],           desc: 'Fullscreen that pane in the center column' },
               { keys: ['X'],                     desc: 'Close source from viewer' },
               { keys: ['··· (draft)'],           desc: 'Export or clear the draft' },

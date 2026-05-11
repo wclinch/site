@@ -332,9 +332,12 @@ function StackRow({
       <span style={{
         flex: 1, minWidth: 0,
         fontSize: '11px', letterSpacing: '0.02em',
-        color: isActive ? '#ccc' : hov ? '#888' : '#666',
+        // Match SourceItem's label brightness (#ccc) so a source in the
+        // Stack reads as the same "weight" of thing as it does in the
+        // main list above. Same brightness across active / idle / hover —
+        // the row's background + left-border carry the state difference.
+        color: '#ccc',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        transition: 'color 0.1s',
       }}>
         {src.label || src.raw}
       </span>

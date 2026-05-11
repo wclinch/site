@@ -106,6 +106,13 @@ function createWindow() {
     height: 840,
     minWidth: 900,
     minHeight: 600,
+    // Explicit even though `true` is the Electron default — keeps the
+    // window resizable + maximizable. Dragging is wired separately via
+    // `-webkit-app-region: drag` on the in-app ProjectBar so the user
+    // can grab anywhere in the top strip to move the window.
+    resizable: true,
+    maximizable: true,
+    fullscreenable: true,
     backgroundColor: '#0a0a0a',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     title: 'Site',
