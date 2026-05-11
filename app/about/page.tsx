@@ -47,10 +47,13 @@ export default function About() {
               <span style={{ color: '#999' }}>3. Open in split view</span> — drag an image into the top viewer pane, drag a PDF or URL into the bottom pane. Hit the expand icon to fullscreen either one. Hit X to close it.
             </p>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-              <span style={{ color: '#999' }}>4. Write</span> — type in the draft panel on the right. The draft is tied to the active project and saves as you type.
+              <span style={{ color: '#999' }}>4. Pin to the stack</span> — drop any source on the <span style={{ color: '#999' }}>Stack</span> at the bottom of the left panel (or right-click → Pin to stack). Click a stacked item to load it into the viewer — images go up top, PDFs and URLs drop to the bottom pane. Hot-swap without losing your draft.
             </p>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-              <span style={{ color: '#999' }}>5. Export</span> — use the <span style={{ color: '#999' }}>···</span> menu to save as <span style={{ color: '#999' }}>.txt</span> or <span style={{ color: '#999' }}>.md</span>.
+              <span style={{ color: '#999' }}>5. Write</span> — type in the draft panel on the right. The draft is tied to the active project and saves as you type.
+            </p>
+            <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
+              <span style={{ color: '#999' }}>6. Export</span> — use the <span style={{ color: '#999' }}>···</span> menu to save as <span style={{ color: '#999' }}>.txt</span> or <span style={{ color: '#999' }}>.md</span>.
             </p>
           </div>
         </div>
@@ -64,9 +67,13 @@ export default function About() {
               { keys: ['New project'],           desc: 'Type a name and press Enter to create a project folder' },
               { keys: ['Right-click project'],   desc: 'Rename or delete the project' },
               { keys: ['Drag source → folder'],  desc: 'Move a floating source into a project' },
-              { keys: ['Right-click source'],    desc: 'Rename, move to a project, or remove' },
+              { keys: ['Right-click source'],    desc: 'Rename, move, pin to stack, or remove' },
               { keys: ['Drag image'],            desc: 'Drop into the top viewer pane' },
               { keys: ['Drag PDF / URL'],        desc: 'Drop into the bottom viewer pane' },
+              { keys: ['Drag source → Stack'],   desc: 'Pin a source to the bottom-left stack (up to 12)' },
+              { keys: ['Click stack item'],      desc: 'Load it into the viewer (image → top, PDF/URL → bottom)' },
+              { keys: ['Drag stack item'],       desc: 'Reorder pinned sources within the stack' },
+              { keys: ['× on stack row'],        desc: 'Unpin from the stack (the source itself stays)' },
               { keys: ['Expand (↗)'],           desc: 'Fullscreen that pane in the center column' },
               { keys: ['X'],                     desc: 'Close source from viewer' },
               { keys: ['··· (draft)'],           desc: 'Export or clear the draft' },
@@ -86,7 +93,7 @@ export default function About() {
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Layout</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Three columns. Left: source list and project folders. Center: split viewer (image top, PDF/URL bottom). Right: draft editor.
+            Three columns. <span style={{ color: '#999' }}>Left</span>: source list and project folders up top; <span style={{ color: '#999' }}>Stack</span> at the bottom for the references you&apos;re actively pulling from. <span style={{ color: '#999' }}>Center</span>: split viewer — image on top, PDF or URL below. <span style={{ color: '#999' }}>Right</span>: draft editor.
           </p>
         </div>
 

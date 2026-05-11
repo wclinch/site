@@ -37,6 +37,7 @@ export default function Home() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
             {([
               ['Add references', 'Drop PDFs or images, or paste a URL from the left panel. Organize them into projects or keep them floating.'],
+              ['Pin a working stack', 'Drag the sources you\'re actively pulling from into the Stack at the bottom-left. Click any item to hot-swap it into the viewer — images go up top, PDFs and URLs to the bottom pane.'],
               ['Open in split view', 'Drag a source into the center panel to view it. Hit the expand icon to fullscreen. Multiple references open at once.'],
               ['Write', 'Your draft lives on the right, tied to the current project. Write directly as you reference. Saves to your machine as you type.'],
               ['Export', 'Use the draft menu to save as .txt or .md when you\'re done.'],
