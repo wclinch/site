@@ -18,6 +18,11 @@ export default function StorageBadge() {
   const [open,  setOpen]    = useState(false)
   const [busy,  setBusy]    = useState(false)
   const [hover, setHover]   = useState(false)
+  // Two-step destructive flow: the first click on "Reset all data" arms
+  // the confirm step (in-modal — never a native dialog), the second click
+  // on "Yes, delete everything" actually wipes. Esc / Cancel / backdrop
+  // click all reset both `open` and `armed` together.
+  const [armed, setArmed]   = useState(false)
 
   const refresh = useCallback(() => {
     getStorageUsage().then(setUsage)
@@ -40,7 +45,10 @@ export default function StorageBadge() {
   useEffect(() => {
     if (!open) return
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !busy) setOpen(false)
+      if (e.key === 'Escape' && !busy) {
+        setOpen(false)
+        setArmed(false)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -64,9 +72,11 @@ export default function StorageBadge() {
   const color = hover ? (pct >= 0.9 ? '#c66' : '#aaa') : baseColor
 
   async function reset() {
-    const confirmed = window.confirm('Are you absolutely sure? This will permanently delete everything and cannot be undone.')
-    if (!confirmed) return
-
+    // First click arms the confirm step; second click does the actual wipe.
+    if (!armed) {
+      setArmed(true)
+      return
+    }
     setBusy(true)
     try {
       // Wipe IDB files + extracted content, and the localStorage state
@@ -106,7 +116,11 @@ export default function StorageBadge() {
         <div
           role="dialog"
           aria-modal="true"
-          onClick={() => { if (!busy) setOpen(false) }}
+          onClick={() => {
+            if (busy) return
+            setOpen(false)
+            setArmed(false)
+          }}
           style={{
             position: 'fixed', inset: 0, zIndex: 1000,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -126,11 +140,19 @@ export default function StorageBadge() {
           >
             {/* Header */}
             <div style={{ padding: '16px 18px 14px' }}>
-              <div style={{ fontSize: '11px', color: '#777', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>
-                Reset all data
+              <div style={{
+                fontSize: '11px',
+                color: armed ? '#c77' : '#777',
+                letterSpacing: '0.1em', textTransform: 'uppercase',
+                marginBottom: '10px',
+                transition: 'color 0.15s',
+              }}>
+                {armed ? 'Are you sure?' : 'Reset all data'}
               </div>
-              <div style={{ fontSize: '12px', color: '#888', lineHeight: 1.7 }}>
-                All files, projects, and drafts on this machine will be permanently removed. This action can&apos;t be undone.
+              <div style={{ fontSize: '12px', color: armed ? '#aaa' : '#888', lineHeight: 1.7 }}>
+                {armed
+                  ? 'Click again to permanently delete every file, project, and draft on this machine. There is no undo.'
+                  : <>All files, projects, and drafts on this machine will be permanently removed. This action can&apos;t be undone.</>}
               </div>
             </div>
 
@@ -151,11 +173,19 @@ export default function StorageBadge() {
 
             {/* Actions */}
             <div style={{ padding: '14px 18px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              <ModalButton onClick={() => setOpen(false)} disabled={busy}>
-                Cancel
+              <ModalButton
+                onClick={() => {
+                  // While armed, Cancel disarms in place instead of closing —
+                  // gives an easy "I didn't mean it" without losing context.
+                  if (armed) setArmed(false)
+                  else setOpen(false)
+                }}
+                disabled={busy}
+              >
+                {armed ? 'Go back' : 'Cancel'}
               </ModalButton>
               <ModalButton onClick={reset} disabled={busy} destructive>
-                {busy ? 'Resetting…' : 'Reset all data'}
+                {busy ? 'Resetting…' : armed ? 'Yes, delete everything' : 'Reset all data'}
               </ModalButton>
             </div>
           </div>
