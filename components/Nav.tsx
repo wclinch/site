@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import Image from 'next/image'
 
 export default function Nav() {
   return (
@@ -8,11 +9,12 @@ export default function Nav() {
       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       borderBottom: '1px solid #1a1a1a', flexShrink: 0,
     }}>
-      <Link href="/app" className="nav-logo">{'{'}</Link>
+      <Link href="/app" style={{ display: 'flex', alignItems: 'center' }}>
+        <Image src="/icon.svg" alt="Site" width={24} height={24} />
+      </Link>
       <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
         <Link href="/about"   className="nav-link">About</Link>
         <Link href="/privacy" className="nav-link">Privacy</Link>
-        <a href="mailto:proof_official@protonmail.com" className="nav-link">Contact</a>
       </div>
     </nav>
   )
