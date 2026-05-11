@@ -52,6 +52,27 @@ export default function Home() {
           </div>
         </section>
 
+        {/* Storage */}
+        <section style={{ borderTop: '1px solid #111', maxWidth: '620px', width: '100%', margin: '0 auto', padding: '64px 24px' }}>
+          <div style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', marginBottom: '32px' }}>
+            Yours, on your machine
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
+            <div>
+              <div style={{ fontSize: '20px', color: '#bbb', fontWeight: 500, marginBottom: '6px', letterSpacing: '-0.01em' }}>250&nbsp;MB</div>
+              <div style={{ fontSize: '13px', color: '#777', lineHeight: 1.7 }}>
+                Local storage for your files. No subscription, no renewal — it&apos;s yours as long as the app is installed.
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: '20px', color: '#bbb', fontWeight: 500, marginBottom: '6px', letterSpacing: '-0.01em' }}>Reset anytime</div>
+              <div style={{ fontSize: '13px', color: '#777', lineHeight: 1.7 }}>
+                A built-in &ldquo;reset all data&rdquo; wipes every file, project, and draft when you want a clean slate.
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Footer CTA */}
         <section style={{ borderTop: '1px solid #111', maxWidth: '620px', width: '100%', margin: '0 auto', padding: '64px 24px' }}>
           <p style={{ fontSize: '13px', color: '#666', lineHeight: 1.75, margin: '0 0 28px' }}>

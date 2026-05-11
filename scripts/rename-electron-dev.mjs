@@ -12,17 +12,21 @@
 // Idempotent: if the plist already says "Site", we no-op.
 
 import { execSync } from 'node:child_process'
-import { existsSync, renameSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, renameSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const __dirname    = dirname(fileURLToPath(import.meta.url))
-const ELECTRON_PKG = join(__dirname, '..', 'node_modules', 'electron')
+const REPO_ROOT    = join(__dirname, '..')
+const ELECTRON_PKG = join(REPO_ROOT, 'node_modules', 'electron')
 const APP_ROOT     = join(ELECTRON_PKG, 'dist', 'Electron.app')
 const PLIST        = join(APP_ROOT, 'Contents', 'Info.plist')
 const MACOS        = join(APP_ROOT, 'Contents', 'MacOS')
+const RESOURCES    = join(APP_ROOT, 'Contents', 'Resources')
 const PATH_FILE    = join(ELECTRON_PKG, 'path.txt')
+const SITE_ICON    = join(REPO_ROOT, 'build', 'icon.icns')
 const DESIRED      = 'Site'
+const BUNDLE_ID    = 'com.site.app.dev'
 
 if (!existsSync(PLIST)) {
   // Not on macOS or electron isn't installed yet — skip silently.
@@ -50,21 +54,34 @@ function set(key, value) {
 // Each step below is idempotent so the script is safe to run on every
 // `npm run electron:dev` — re-running just re-asserts the desired state.
 
-// The Dock label on macOS comes from CFBundleName, but if the process is
-// already running, the dock falls back to the executable name baked into
-// Mach-O metadata. So we patch both the plist and the binary name.
+// 1) Plist fields macOS reads for the Dock label and LS metadata. We
+//    change CFBundleIdentifier too — Launch Services keys Dock-icon
+//    cache by bundle ID, so reusing `com.github.Electron` made macOS
+//    keep showing the old "Electron" name + atom icon even after the
+//    binary was renamed.
 for (const key of ['CFBundleName', 'CFBundleDisplayName', 'CFBundleExecutable']) {
   if (read(key) !== DESIRED) set(key, DESIRED)
 }
+if (read('CFBundleIdentifier') !== BUNDLE_ID) set('CFBundleIdentifier', BUNDLE_ID)
 
+// 2) Replace the bundled icon (Contents/Resources/electron.icns) with
+//    our Site icon. The plist's CFBundleIconFile still points at
+//    `electron.icns`, so swapping the file in place is enough.
+if (existsSync(SITE_ICON)) {
+  copyFileSync(SITE_ICON, join(RESOURCES, 'electron.icns'))
+}
+
+// 3) Rename the actual binary inside MacOS/ so the Dock fallback (which
+//    uses the executable name when CFBundleName is somehow ignored)
+//    also reads as "Site".
 const oldBin = join(MACOS, 'Electron')
 const newBin = join(MACOS, DESIRED)
 if (existsSync(oldBin) && !existsSync(newBin)) {
   renameSync(oldBin, newBin)
 }
 
-// `node_modules/electron/path.txt` is what the `electron` npm CLI reads
-// to locate the binary. Rewrite so `electron .` resolves to the new name.
+// 4) `node_modules/electron/path.txt` is what the `electron` npm CLI
+//    reads to locate the binary. Rewrite so `electron .` resolves.
 writeFileSync(PATH_FILE, `Electron.app/Contents/MacOS/${DESIRED}`)
 
 // Touch the .app so Launch Services notices the change.

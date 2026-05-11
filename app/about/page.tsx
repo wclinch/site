@@ -108,7 +108,13 @@ export default function About() {
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Where your work lives</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            On your machine. Files sit in IndexedDB, project structure and drafts in localStorage — no cloud, no account, nothing leaves the device. Capped at 250&nbsp;MB and up to 3 projects.
+            On your machine. Files sit in IndexedDB, project structure and drafts in localStorage — no cloud, no account, nothing leaves the device.
+          </p>
+          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
+            You get <span style={{ color: '#999' }}>250&nbsp;MB</span> of local storage and up to <span style={{ color: '#999' }}>3 projects</span> — yours for as long as Site is installed. No subscription, no renewal.
+          </p>
+          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
+            Need a clean slate? Click the <span style={{ color: '#999' }}>storage badge</span> in the top bar to reset every file, project, and draft in one step. The action runs locally and can&apos;t be undone.
           </p>
         </div>
 
