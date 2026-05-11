@@ -21,10 +21,9 @@
 
 const KEY = 'proof-v3-license'
 
-// Polar's public license-key validation endpoint. Replace ORG_ID with
-// the organization-id from polar.sh dashboard before shipping a
-// licensed build. (If left as the placeholder, validation returns a
-// clear error so it can't silently succeed.)
+// Polar's public license-key validation endpoint + the organization the
+// keys are issued from. Both are baked into the build — the app makes
+// the request unauthenticated against this org's public key set.
 const POLAR_ENDPOINT      = 'https://api.polar.sh/v1/customer-portal/license-keys/validate'
 const POLAR_ORGANIZATION  = 'ef60cd00-9e07-4db8-83e8-bda9a2afa313' // dashboard → Settings → General → ID
 
@@ -67,10 +66,6 @@ export type ValidateResult =
 export async function validateLicense(rawKey: string): Promise<ValidateResult> {
   const key = rawKey.trim()
   if (!key) return { ok: false, reason: 'Enter a license key.' }
-
-  if (POLAR_ORGANIZATION === 'REPLACE_WITH_POLAR_ORG_ID') {
-    return { ok: false, reason: 'License validation is not configured. Contact support.' }
-  }
 
   let res: Response
   try {

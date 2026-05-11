@@ -106,11 +106,13 @@ function Layout() {
   )
 }
 
-export default function AppPage() {
-  // License gate runs outside AppProvider so we don't spin up the
-  // workspace's IDB / context machinery for a user who hasn't activated.
-  // Tri-state: null while we read localStorage on first paint (SSR-safe),
-  // false if no valid license cached, true once activated.
+function GatedShell() {
+  // Tri-state: null on first paint (SSR-safe — localStorage isn't
+  // available during prerender), false when no valid license is
+  // cached, true once activated. ProjectBar uses useApp so this whole
+  // component sits inside AppProvider regardless of license state —
+  // the context is cheap to mount and gives the gate a real header
+  // strip instead of a bare modal floating in space.
   const [licensed, setLicensed] = useState<boolean | null>(null)
   useEffect(() => { setLicensed(loadLicense() !== null) }, [])
 
@@ -132,9 +134,17 @@ export default function AppPage() {
   }
 
   return (
-    <AppProvider>
+    <>
       <Layout />
       <StorageWarning />
+    </>
+  )
+}
+
+export default function AppPage() {
+  return (
+    <AppProvider>
+      <GatedShell />
     </AppProvider>
   )
 }
