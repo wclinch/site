@@ -290,7 +290,7 @@ export default function SourcePanel({ width }: { width: number | string }) {
               autoFocus
               value={newProjName}
               onChange={e => { setNewProjName(e.target.value); if (newProjDupErr) setNewProjDupErr(null) }}
-              placeholder="Project name..."
+              placeholder="Project name"
               onKeyDown={e => {
                 if (e.key === 'Enter') handleCreateProject()
                 if (e.key === 'Escape') { setCreatingProj(false); setNewProjName(''); setNewProjDupErr(null) }
@@ -309,7 +309,7 @@ export default function SourcePanel({ width }: { width: number | string }) {
             <button
               onClick={() => { if (!atProjectLimit) setCreatingProj(true) }}
               disabled={atProjectLimit}
-              title={atProjectLimit ? 'Project limit reached (3/3). Delete a project to add more.' : undefined}
+              title={atProjectLimit ? 'Project limit reached. Three maximum.' : undefined}
               style={{
                 background: 'none', border: 'none', padding: 0,
                 cursor: atProjectLimit ? 'not-allowed' : 'pointer',
@@ -372,7 +372,7 @@ export default function SourcePanel({ width }: { width: number | string }) {
             style={{ ...shell, background: dragOver ? '#141414' : addHover ? '#111' : '#0d0d0d', borderColor: dragOver ? '#333' : addHover ? '#252525' : '#1a1a1a', cursor: 'pointer' }}
           >
             <span style={{ fontSize: '11px', color: '#777', letterSpacing: '0.04em', flex: 1 }}>
-              {dragOver ? 'Drop to add file' : 'Add file'}
+              {dragOver ? 'Drop source' : 'Add source'}
             </span>
           </div>
           <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif" multiple style={{ display: 'none' }}
@@ -390,7 +390,7 @@ export default function SourcePanel({ width }: { width: number | string }) {
                 autoFocus
                 value={urlInput}
                 onChange={e => setUrlInput(e.target.value)}
-                placeholder="Paste a URL..."
+                placeholder="URL"
                 onKeyDown={e => {
                   if (e.key === 'Enter') {
                     const raw = urlInput.trim()
@@ -424,7 +424,7 @@ export default function SourcePanel({ width }: { width: number | string }) {
               <input
                 ref={filterRef} className="sp-input"
                 value={filterInput} onChange={e => setFilterInput(e.target.value)}
-                placeholder="Filter..."
+                placeholder="Filter"
                 style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', fontFamily: 'inherit', letterSpacing: '0.02em', color: '#555' }}
               />
               {filterInput && (
@@ -450,7 +450,7 @@ export default function SourcePanel({ width }: { width: number | string }) {
               {/* Inbox / floating area */}
               {visibleInbox.length === 0 && namedProjects.length === 0 ? (
                 <div style={{ padding: '6px 16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <span style={{ fontSize: '11px', color: '#555', lineHeight: 1.7 }}>Select a file or paste a URL to begin.</span>
+                  <span style={{ fontSize: '11px', color: '#555', lineHeight: 1.7 }}>No sources yet.</span>
                 </div>
               ) : (
                 <div
@@ -479,8 +479,8 @@ export default function SourcePanel({ width }: { width: number | string }) {
                     </div>
                   ))}
                   {visibleInbox.length === 0 && namedProjects.length > 0 && draggingId && dropTargetId === INBOX_ID && (
-                    <div style={{ padding: '8px 16px', fontSize: '11px', color: '#5ca8a0', letterSpacing: '0.03em' }}>
-                      Drop to make floating
+                    <div style={{ padding: '8px 16px', fontSize: '11px', color: '#888', letterSpacing: '0.03em' }}>
+                      Drop to unproject
                     </div>
                   )}
                 </div>
@@ -604,7 +604,7 @@ export default function SourcePanel({ width }: { width: number | string }) {
                       <div style={{ paddingLeft: '8px' }}>
                         {visibleSrcs.length === 0 && !q && (
                           <div style={{ padding: '6px 16px 8px', fontSize: '11px', color: '#3a3a3a', letterSpacing: '0.02em' }}>
-                            Drop files here
+                            Empty
                           </div>
                         )}
                         {visibleSrcs.map(src => (

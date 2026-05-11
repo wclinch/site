@@ -63,7 +63,7 @@ export function saveProjects(ps: Project[]) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stripped))
   } catch {
     window.dispatchEvent(new CustomEvent('proof-storage-warning', {
-      detail: 'Storage full — changes may not be saved.',
+      detail: 'Storage full. Changes may not be saved.',
     }))
   }
 }

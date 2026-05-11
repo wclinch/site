@@ -32,7 +32,7 @@ export default function ScreenshotZone({ onCollapse }: { onCollapse: () => void 
 
       {!src && (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.02em' }}>Drop an image here</span>
+          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.02em' }}>Drop image</span>
         </div>
       )}
       {src?.fileType === 'image' && <ImageContent source={src} />}
@@ -65,7 +65,7 @@ function ImageContent({ source }: { source: NonNullable<ReturnType<typeof useApp
 
   useEffect(() => () => { if (prevUrl.current) URL.revokeObjectURL(prevUrl.current) }, [])
 
-  if (!imgUrl) return <Msg>{source.status !== 'done' ? 'Loading...' : 'Could not load image.'}</Msg>
+  if (!imgUrl) return <Msg>{source.status !== 'done' ? 'Loading...' : 'Image failed to load.'}</Msg>
   return (
     <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
       <img src={imgUrl} alt={source.label ?? source.raw}
@@ -115,7 +115,7 @@ function PdfContent({ source }: { source: NonNullable<ReturnType<typeof useApp>[
 
   return (
     <div ref={containerRef} style={{ flex: 1, overflow: 'auto', background: '#080808' }}>
-      {!fileUrl && <Msg>{source.status !== 'done' ? 'Loading...' : 'Could not load PDF.'}</Msg>}
+      {!fileUrl && <Msg>{source.status !== 'done' ? 'Loading...' : 'PDF failed to load.'}</Msg>}
       {fileUrl && !loadError && (
         <div>
           <Document file={fileUrl}
@@ -130,7 +130,7 @@ function PdfContent({ source }: { source: NonNullable<ReturnType<typeof useApp>[
           </Document>
         </div>
       )}
-      {loadError && <Msg>Could not read this PDF.</Msg>}
+      {loadError && <Msg>PDF could not be parsed.</Msg>}
     </div>
   )
 }
@@ -155,7 +155,7 @@ function NoteContent({ source }: { source: NonNullable<ReturnType<typeof useApp>
   return (
     <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
       <textarea value={text} onChange={e => handleChange(e.target.value)}
-        placeholder="Start writing..."
+        placeholder="Note."
         style={{
           flex: 1, width: '100%', minHeight: '100%', background: 'transparent',
           border: 'none', outline: 'none', resize: 'none', padding: '20px 24px',

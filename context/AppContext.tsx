@@ -500,7 +500,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // 250 MB cap: reject the whole batch if it would push storage over the limit.
     const batchBytes = list.reduce((sum, f) => sum + f.size, 0)
     if (await wouldExceedLimit(batchBytes)) {
-      warn('Storage limit reached. Delete files to continue.')
+      warn('Storage limit reached.')
       return
     }
 
@@ -615,7 +615,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   function createProject(name?: string): boolean {
     // Enforce 3-project ceiling.
     if (namedProjectCount >= PROJECT_LIMIT) {
-      warn(`Project limit reached (${PROJECT_LIMIT}/${PROJECT_LIMIT}). Delete a project to add more.`)
+      warn(`Project limit reached. ${PROJECT_LIMIT} maximum.`)
       return false
     }
     // Duplicate-name guard — silent. The caller surfaces the message

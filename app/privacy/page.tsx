@@ -13,50 +13,50 @@ export default function Privacy() {
         </span>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>The short version</span>
+          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Summary</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Your data never leaves your computer. Site runs locally — no account, no servers, no tracking. Everything you load and write is stored on your machine.
+            Data resides on the device. No account. No telemetry. No transmission.
           </p>
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Where your work is stored</span>
+          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Storage basis</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            PDFs and images are stored in IndexedDB on your machine. Project names, draft text, source labels, URL references, and your pinned stack live in <code style={{ color: '#999' }}>localStorage</code>. None of it is transmitted anywhere.
+            PDFs and images: <code style={{ color: '#999' }}>IndexedDB</code>.
+            Project structure, draft text, source labels, URL references, and the pinned stack: <code style={{ color: '#999' }}>localStorage</code>.
+            Both reside on the device.
           </p>
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>What we collect</span>
+          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Collection</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Nothing. No telemetry, no account, no servers to reach. The app has no network calls of its own — any traffic you see is the embedded web pages you chose to load.
+            None. The application makes no network requests of its own. Network traffic from embedded web pages originates with the page being viewed.
           </p>
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Deleting your data</span>
+          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Deletion</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Remove individual sources and projects from inside the app — there&apos;s no other copy. Two bulk options:
+            Sources and projects are removed individually from within the workspace. Two bulk operations:
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Storage badge</span> (top bar) — clears every file and source on the machine. <span style={{ color: '#999' }}>Draft text is kept</span> in case the click was accidental; project shells stay too.
+            <span style={{ color: '#999' }}>Storage indicator</span> — clears sources and files. Draft text and project shells are preserved.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Site → Reset Site Data…</span> (desktop menu) — full wipe at the Electron session layer. Removes files, sources, projects, drafts, and any browser-side state in one step.
+            <span style={{ color: '#999' }}>Site → Reset Site Data…</span> (desktop menu) — full reset at the application session layer. Removes all browser-side state.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Both actions run locally; nothing is sent anywhere. Neither can be undone.
+            Both operations are local and cannot be reversed.
           </p>
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Questions</span>
+          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Contact</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Privacy concern or unclear behavior? Email{' '}
             <a href="mailto:Official_Site_Support@protonmail.com?subject=Site%20privacy" style={{ color: '#999', textDecoration: 'underline', textDecorationColor: '#333', textUnderlineOffset: '3px' }}>
               Official_Site_Support@protonmail.com
             </a>
-            .
           </p>
         </div>
 

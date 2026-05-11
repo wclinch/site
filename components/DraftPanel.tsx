@@ -98,7 +98,7 @@ export default function DraftPanel() {
               requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = start + 1 })
             }
           }}
-          placeholder="Start writing here, available anytime..."
+          placeholder="Draft."
           style={{
             width: '100%', minHeight: '100%',
             background: 'transparent', border: 'none', outline: 'none',
@@ -139,7 +139,7 @@ export default function DraftPanel() {
               onMouseEnter={e => (e.currentTarget.style.background = '#1a1a1a')}
               onMouseLeave={e => (e.currentTarget.style.background = 'none')}
             >
-              {confirmClear ? 'Clear all?' : 'Clear all'}
+              {confirmClear ? 'Confirm' : 'Clear draft'}
             </button>
           </div>
         </>

@@ -190,11 +190,11 @@ function createWindow() {
 async function resetSiteData(browserWindow) {
   const choice = await dialog.showMessageBox(browserWindow ?? null, {
     type: 'warning',
-    buttons: ['Cancel', 'Reset all data'],
+    buttons: ['Cancel', 'Reset'],
     defaultId: 0,
     cancelId: 0,
-    message: 'Reset all Site data?',
-    detail: 'All files, projects, and drafts on this machine will be permanently removed. This action cannot be undone.',
+    message: 'Reset Site data?',
+    detail: 'Removes all files, projects, and drafts on the device. Cannot be reversed.',
   })
   if (choice.response !== 1) return
   const session = (browserWindow ?? BrowserWindow.getAllWindows()[0])?.webContents.session

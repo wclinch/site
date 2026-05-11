@@ -186,12 +186,12 @@ export default function StorageBadge() {
                 marginBottom: '10px',
                 transition: 'color 0.15s',
               }}>
-                {armed ? 'Are you sure?' : 'Reset all data'}
+                {armed ? 'Confirm reset' : 'Clear sources'}
               </div>
               <div style={{ fontSize: '12px', color: armed ? '#aaa' : '#888', lineHeight: 1.7 }}>
                 {armed
-                  ? 'Click again to permanently remove every source and file on this machine. Drafts will be kept in case the click was accidental. There is no undo.'
-                  : <>All sources and files on this machine will be removed. <span style={{ color: '#999' }}>Draft text is kept</span> in case the click was accidental. This action can&apos;t be undone.</>}
+                  ? 'Confirm to remove all sources and files on the device. Drafts are preserved. Cannot be reversed.'
+                  : <>Removes all sources and files on the device. <span style={{ color: '#999' }}>Drafts are preserved.</span> Cannot be reversed.</>}
               </div>
             </div>
 
@@ -204,8 +204,8 @@ export default function StorageBadge() {
               fontVariantNumeric: 'tabular-nums',
               display: 'flex', justifyContent: 'space-between',
             }}>
-              <span>Current usage</span>
-              <span>{usedMb.toFixed(2)} MB of {limitMb} MB</span>
+              <span>Used</span>
+              <span>{usedMb.toFixed(2)} / {limitMb} MB</span>
             </div>
 
             <div style={{ height: '1px', background: '#1e1e1e' }} />
@@ -221,10 +221,10 @@ export default function StorageBadge() {
                 }}
                 disabled={busy}
               >
-                {armed ? 'Go back' : 'Cancel'}
+                {armed ? 'Back' : 'Cancel'}
               </ModalButton>
               <ModalButton onClick={reset} disabled={busy} destructive>
-                {busy ? 'Resetting…' : armed ? 'Yes, delete everything' : 'Reset all data'}
+                {busy ? 'Clearing…' : armed ? 'Confirm clear' : 'Clear sources'}
               </ModalButton>
             </div>
           </div>

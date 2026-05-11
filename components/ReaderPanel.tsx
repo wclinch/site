@@ -67,7 +67,7 @@ export default function ReaderPanel({ pdfOnly = false, onExpandScreenshot, onExp
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         onDragOver={allowDrop} onDrop={handlePdfDrop}>
         <Header
-          label="Pdf / Website"
+          label="PDF / URL"
           onExpand={onExpandPdf ?? (() => {})}
           isFullscreen={pdfIsFullscreen}
           onCollapse={onCollapsePdf ?? (() => {})}
@@ -75,7 +75,7 @@ export default function ReaderPanel({ pdfOnly = false, onExpandScreenshot, onExp
         />
         <PdfViewer
           source={selectedSource}
-          wrongMsg={wrongDrop === 'pdf' ? 'Drop images in top pane' : undefined}
+          wrongMsg={wrongDrop === 'pdf' ? 'Images load in the top pane' : undefined}
         />
       </div>
     )
@@ -130,7 +130,7 @@ export default function ReaderPanel({ pdfOnly = false, onExpandScreenshot, onExp
           onDrop={(e) => { handlePdfDrop(e); setDragOverZone(null) }}
         >
           <Header
-            label="Pdf / Website"
+            label="PDF / URL"
             onExpand={() => { setPdfFull(true); setScreenshotFull(false) }}
             isFullscreen={pdfFull}
             onCollapse={() => setPdfFull(false)}
@@ -138,7 +138,7 @@ export default function ReaderPanel({ pdfOnly = false, onExpandScreenshot, onExp
           />
           <PdfViewer
             source={selectedSource}
-            wrongMsg={wrongDrop === 'pdf' ? 'Drop images in top pane' : undefined}
+            wrongMsg={wrongDrop === 'pdf' ? 'Images load in the top pane' : undefined}
           />
         </div>
       )}
@@ -245,7 +245,7 @@ function NoteEditor({ source }: { source: QueuedSource }) {
       <textarea
         value={text}
         onChange={e => handleChange(e.target.value)}
-        placeholder="Start writing..."
+        placeholder="Note."
         style={{
           flex: 1, width: '100%', minHeight: '100%',
           background: 'transparent', border: 'none', outline: 'none',
@@ -291,9 +291,9 @@ function ImageViewer({ source, wrongMsg }: { source: ReturnType<typeof useApp>['
 
   return (
     <div style={{ flex: 1, background: '#080808', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {!source && <Empty label='Drop an image here' sub='PNG · JPG · WEBP · GIF' />}
+      {!source && <Empty label='Drop image' sub='PNG · JPG · WEBP · GIF' />}
       {source && source.status !== 'done' && <Msg>Loading...</Msg>}
-      {source && source.status === 'done' && !imgUrl && <Msg>Could not load image.</Msg>}
+      {source && source.status === 'done' && !imgUrl && <Msg>Image failed to load.</Msg>}
       {source && source.status === 'done' && imgUrl && (
         <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
           <img src={imgUrl} alt={source.label ?? source.raw}
@@ -358,12 +358,12 @@ function PdfViewer({ source, wrongMsg }: { source: ReturnType<typeof useApp>['se
 
   return (
     <div ref={containerRef} style={{ flex: 1, overflow: 'auto', background: '#080808', display: 'flex', flexDirection: 'column' }}>
-      {(!source || isNonPdfSource)            && <Empty label={wrongMsg ?? 'Drop a PDF or paste a URL'} sub={wrongMsg ? undefined : 'PDF · URL · Draft on the right stays tied to what\'s open'} />}
+      {(!source || isNonPdfSource)            && <Empty label={wrongMsg ?? 'Drop PDF or URL'} sub={wrongMsg ? undefined : 'PDF · URL · Draft tracks the active project'} />}
       {source?.status === 'queued'           && <Msg>Waiting...</Msg>}
       {source?.status === 'extracting'       && <Msg>Reading document...</Msg>}
       {source?.status === 'done' && !fileUrl && <Msg>Loading...</Msg>}
-      {source?.status === 'error'            && <Msg>{source.error ?? 'Could not load document.'}</Msg>}
-      {source?.status === 'done' && loadError && <Msg>Could not read this PDF.</Msg>}
+      {source?.status === 'error'            && <Msg>{source.error ?? 'Document failed to load.'}</Msg>}
+      {source?.status === 'done' && loadError && <Msg>PDF could not be parsed.</Msg>}
 
       {source?.status === 'done' && fileUrl && !loadError && !isNonPdfSource && (
         <div>

@@ -64,7 +64,7 @@ export default function SourceContextMenu() {
 
   // All possible move targets
   const allTargets = [
-    ...(isInInbox ? [] : [{ id: INBOX_ID, name: 'Floating' }]),
+    ...(isInInbox ? [] : [{ id: INBOX_ID, name: 'Unprojected' }]),
     ...namedProjects.filter(p => p.id !== homeProj?.id),
   ]
 
@@ -108,7 +108,7 @@ export default function SourceContextMenu() {
                     setContextMenu(null)
                   }}
                   disabled={disabled}
-                  title={disabled ? 'Source stack is full' : undefined}
+                  title={disabled ? 'Stack full' : undefined}
                   style={{
                     ...menuBtn,
                     // Same `#777` weight as every other menu item — the
@@ -121,7 +121,7 @@ export default function SourceContextMenu() {
                   onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = '#1e1e1e' }}
                   onMouseLeave={e => (e.currentTarget.style.background = 'none')}
                 >
-                  {pinned ? 'Unpin from stack' : 'Pin to stack'}
+                  {pinned ? 'Unpin' : 'Pin to stack'}
                 </button>
                 <div style={{ height: '1px', background: '#1e1e1e' }} />
               </>
@@ -138,7 +138,7 @@ export default function SourceContextMenu() {
                 ref={searchRef}
                 value={projSearch}
                 onChange={e => setProjSearch(e.target.value)}
-                placeholder="Move to..."
+                placeholder="Move to"
                 onKeyDown={e => {
                   if (e.key === 'Enter' && moveTargets.length === 1) handleMoveTo(moveTargets[0].id)
                   if (e.key === 'Escape') setContextMenu(null)
@@ -163,11 +163,11 @@ export default function SourceContextMenu() {
                 onMouseEnter={e => { e.currentTarget.style.background = '#1e1e1e'; e.currentTarget.style.color = '#888' }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#555' }}
               >
-                → {t.id === INBOX_ID ? 'Floating' : t.name.length > 22 ? t.name.slice(0, 20) + '…' : t.name}
+                → {t.id === INBOX_ID ? 'Unprojected' : t.name.length > 22 ? t.name.slice(0, 20) + '…' : t.name}
               </button>
             ))}
             {moveTargets.length === 0 && (
-              <div style={{ padding: '8px 14px', fontSize: '11px', color: '#444' }}>No projects found</div>
+              <div style={{ padding: '8px 14px', fontSize: '11px', color: '#444' }}>No match</div>
             )}
           </div>
           <div style={{ height: '1px', background: '#1e1e1e' }} />
@@ -181,7 +181,7 @@ export default function SourceContextMenu() {
         onMouseLeave={e => (e.currentTarget.style.background = 'none')}
       >
         {confirmDeleteSrcId === src.id
-          ? 'Remove?'
+          ? 'Confirm'
           : `Remove${isMulti ? ` ${selectedIds.size}` : ''}`}
       </button>
     </div>

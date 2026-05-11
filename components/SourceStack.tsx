@@ -162,7 +162,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
       {open && stackSources.length > 0 && (
         <button
           onClick={e => { e.stopPropagation(); clearStack() }}
-          title="Empty the stack"
+          title="Clear stack"
           style={{
             background: 'none', border: 'none', padding: '2px 6px',
             cursor: 'pointer', fontSize: '10px', color: '#444',
@@ -226,8 +226,8 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
             transition: 'color 0.12s',
           }}>
             {dragOver
-              ? 'Drop to add to stack'
-              : 'Drop sources here to keep them at hand. Click any item to load it into the viewer.'}
+              ? 'Drop to pin'
+              : 'Pinned working set. Click to load into the viewer.'}
           </div>
         ) : (
           stackSources.map((src, i) => {
@@ -312,7 +312,7 @@ function StackRow({
       onClick={onClick}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
-      title={`${src.label || src.raw} — open in ${pane === 'top' ? 'top' : 'bottom'} pane`}
+      title={`${src.label || src.raw} — loads into ${pane === 'top' ? 'top' : 'bottom'} pane`}
       style={{
         display: 'flex', alignItems: 'center', gap: '8px',
         padding: '6px 10px 6px 14px',
@@ -326,8 +326,8 @@ function StackRow({
         pane={pane} dim={!isActive} interactive={canToggle}
         onClick={e => { e.stopPropagation(); if (canToggle) onToggleArrow() }}
         title={canToggle
-          ? `Open in ${pane === 'top' ? 'top' : 'bottom'} pane — click to switch`
-          : `Open in ${pane === 'top' ? 'top' : 'bottom'} pane`}
+          ? `Loads into ${pane === 'top' ? 'top' : 'bottom'} pane — click to flip`
+          : `Loads into ${pane === 'top' ? 'top' : 'bottom'} pane`}
       />
       <span style={{
         flex: 1, minWidth: 0,
@@ -344,7 +344,7 @@ function StackRow({
       <TypeBadge kind={badgeKind(src)} />
       <button
         onClick={e => { e.stopPropagation(); onRemove() }}
-        title="Remove from stack"
+        title="Unpin"
         style={{
           background: 'none', border: 'none', padding: '0 2px',
           cursor: 'pointer', lineHeight: 1, color: '#444',

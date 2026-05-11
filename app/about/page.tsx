@@ -28,32 +28,32 @@ export default function About() {
         </span>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>What Site is</span>
+          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>System</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            A minimal, local-first research workspace for reading and writing side-by-side. Load PDFs, images, and web pages. Organize them into projects or keep them floating. Write your draft beside them. Everything in one window, on your machine.
+            A local-first workspace for reading sources and writing beside them. PDFs, images, and web pages coexist with the draft in a single window. Files, projects, and text remain on the device.
           </p>
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>How to use it</span>
+          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Operation</span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-              <span style={{ color: '#999' }}>1. Add sources</span> — drop PDFs or images into the left panel, or paste a URL. New sources are floating by default.
+              <span style={{ color: '#999' }}>1. Sources</span> — Drop PDFs or images, or paste a URL. Sources are floating until placed in a project.
             </p>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-              <span style={{ color: '#999' }}>2. Organize with projects</span> — click <span style={{ color: '#999' }}>+ New project</span> in the left panel, type a name, and press Enter. Drag floating sources into a project folder, or right-click to move them. Drag a folder header to reorder projects. Up to 3 projects.
+              <span style={{ color: '#999' }}>2. Projects</span> — Up to three. Drag sources between projects, or drag a folder header to reorder.
             </p>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-              <span style={{ color: '#999' }}>3. Open in split view</span> — drag an image into the top viewer pane, drag a PDF or URL into the bottom pane. Hit the expand icon to fullscreen either one. Hit X to close it.
+              <span style={{ color: '#999' }}>3. Viewer</span> — Split surface. Images above, PDFs and URLs below. Either pane fullscreens.
             </p>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-              <span style={{ color: '#999' }}>4. Pin to the stack</span> — drop any source on the <span style={{ color: '#999' }}>Stack</span> at the bottom of the left panel (or right-click → Pin to stack). Click a stacked item to load it into the viewer — images go up top, PDFs and URLs drop to the bottom pane. The little arrow on each PDF / URL row is clickable: flip it to send that source up to the image pane instead. Hot-swap without losing your draft.
+              <span style={{ color: '#999' }}>4. Stack</span> — A pinned working set at the base of the sidebar. Click a source to load it; click the row arrow to flip a PDF or URL to the image pane.
             </p>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-              <span style={{ color: '#999' }}>5. Write</span> — type in the draft panel on the right. The draft is tied to the active project and saves as you type.
+              <span style={{ color: '#999' }}>5. Draft</span> — Tied to the active project. Saves as you type.
             </p>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-              <span style={{ color: '#999' }}>6. Export</span> — use the <span style={{ color: '#999' }}>···</span> menu to save as <span style={{ color: '#999' }}>.txt</span> or <span style={{ color: '#999' }}>.md</span>.
+              <span style={{ color: '#999' }}>6. Export</span> — Plain text or Markdown.
             </p>
           </div>
         </div>
@@ -62,24 +62,24 @@ export default function About() {
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Interactions</span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {[
-              { keys: ['Drop file'],             desc: 'Add to sources (PDF or image)' },
-              { keys: ['Add URL'],               desc: 'Embed a web page as a reference' },
-              { keys: ['New project'],           desc: 'Type a name and press Enter to create a project folder' },
-              { keys: ['Right-click project'],   desc: 'Rename or delete the project' },
-              { keys: ['Drag folder header'],    desc: 'Reorder projects in the sidebar' },
-              { keys: ['Drag source → folder'],  desc: 'Move a floating source into a project' },
-              { keys: ['Right-click source'],    desc: 'Rename, move, pin to stack, or remove' },
-              { keys: ['Drag image'],            desc: 'Drop into the top viewer pane' },
-              { keys: ['Drag PDF / URL'],        desc: 'Drop into the bottom viewer pane' },
-              { keys: ['Drag source → Stack'],   desc: 'Pin a source to the bottom-left stack (up to 12)' },
-              { keys: ['Click stack item'],      desc: 'Load it into the viewer (image → top, PDF/URL → bottom)' },
-              { keys: ['Click stack arrow'],     desc: 'Flip a PDF / URL row up to the image pane' },
-              { keys: ['Drag stack item'],       desc: 'Reorder pinned sources within the stack' },
-              { keys: ['× on stack row'],        desc: 'Unpin from the stack and close it from the viewer (the source itself stays)' },
-              { keys: ['Expand (↗)'],           desc: 'Fullscreen that pane in the center column' },
-              { keys: ['X'],                     desc: 'Close source from viewer' },
+              { keys: ['Drop file'],             desc: 'Add a PDF or image source' },
+              { keys: ['Add URL'],               desc: 'Add a web page as a source' },
+              { keys: ['New project'],           desc: 'Name and enter to create' },
+              { keys: ['Right-click project'],   desc: 'Rename or delete' },
+              { keys: ['Drag folder header'],    desc: 'Reorder projects' },
+              { keys: ['Drag source → folder'],  desc: 'Move into a project' },
+              { keys: ['Right-click source'],    desc: 'Rename, move, pin, or remove' },
+              { keys: ['Drag image'],            desc: 'Load into the top pane' },
+              { keys: ['Drag PDF / URL'],        desc: 'Load into the bottom pane' },
+              { keys: ['Drag source → Stack'],   desc: 'Pin to the working set (up to 12)' },
+              { keys: ['Click stack item'],      desc: 'Load (image → top, PDF/URL → bottom)' },
+              { keys: ['Click stack arrow'],     desc: 'Flip a PDF or URL row to the image pane' },
+              { keys: ['Drag stack item'],       desc: 'Reorder within the stack' },
+              { keys: ['× on stack row'],        desc: 'Unpin and close from the viewer' },
+              { keys: ['Expand (↗)'],           desc: 'Fullscreen the pane' },
+              { keys: ['X'],                     desc: 'Close from the viewer' },
               { keys: ['··· (draft)'],           desc: 'Export or clear the draft' },
-              { keys: ['Storage badge'],         desc: 'Click to see current usage and clear sources (drafts kept)' },
+              { keys: ['Storage badge'],         desc: 'Usage and source reset (drafts preserved)' },
               { keys: ['Esc'],                   desc: 'Close menus' },
             ].map((row, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
@@ -95,46 +95,41 @@ export default function About() {
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Layout</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Three columns. <span style={{ color: '#999' }}>Left</span>: source list and project folders up top; <span style={{ color: '#999' }}>Stack</span> at the bottom for the references you&apos;re actively pulling from. <span style={{ color: '#999' }}>Center</span>: split viewer — image on top, PDF or URL below. <span style={{ color: '#999' }}>Right</span>: draft editor.
+            Three columns. <span style={{ color: '#999' }}>Sidebar</span>: sources, projects, stack. <span style={{ color: '#999' }}>Center</span>: split viewer — image above, PDF or URL below. <span style={{ color: '#999' }}>Right</span>: draft.
           </p>
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Reference types</span>
+          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Source types</span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-              <span style={{ color: '#999' }}>PDF</span> — renders with selectable text. Scanned or image-only PDFs display but text won't be selectable.
+              <span style={{ color: '#999' }}>PDF</span> — selectable text. Scanned documents render as image-only.
             </p>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-              <span style={{ color: '#999' }}>Image</span> — PNG, JPG, WEBP, GIF. Loads in the top viewer pane.
+              <span style={{ color: '#999' }}>Image</span> — PNG, JPG, WEBP, GIF. Loads into the top pane.
             </p>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-              <span style={{ color: '#999' }}>URL</span> — embeds the page in the bottom viewer pane. Sites that block embedding show an open-in-browser link instead.
+              <span style={{ color: '#999' }}>URL</span> — embedded page in the bottom pane. Sites that refuse embedding surface an open-in-browser link.
             </p>
           </div>
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Where your work lives</span>
+          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Storage</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            On your machine. Files sit in IndexedDB, project structure and drafts in localStorage — no cloud, no account, nothing leaves the device.
+            <span style={{ color: '#999' }}>250&nbsp;MB</span> local, <span style={{ color: '#999' }}>3 projects</span>. Files in IndexedDB; structure, drafts, and the stack in localStorage. Nothing leaves the device.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            You get <span style={{ color: '#999' }}>250&nbsp;MB</span> of local storage and up to <span style={{ color: '#999' }}>3 projects</span> — yours for as long as Site is installed. No subscription, no renewal.
-          </p>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Need a clean slate? Click the <span style={{ color: '#999' }}>storage badge</span> in the top bar to clear every file and source. <span style={{ color: '#999' }}>Draft text is kept</span> in case the click was accidental — your project shells stay too. The action runs locally and can&apos;t be undone.
+            The storage indicator in the top bar clears sources and files. <span style={{ color: '#999' }}>Drafts are preserved.</span> The action is local and cannot be reversed.
           </p>
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Support</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Run into something off? Email{' '}
             <a href="mailto:Official_Site_Support@protonmail.com?subject=Site%20support" style={{ color: '#999', textDecoration: 'underline', textDecorationColor: '#333', textUnderlineOffset: '3px' }}>
               Official_Site_Support@protonmail.com
             </a>
-            . No ticket system, no chatbot — just a person reading the inbox.
           </p>
         </div>
 
