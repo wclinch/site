@@ -22,7 +22,7 @@ export default function Privacy() {
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Where your work is stored</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            PDFs and images are stored in IndexedDB on your machine. Project names, draft text, source labels, and URL references live in <code style={{ color: '#999' }}>localStorage</code>. None of it is transmitted anywhere.
+            PDFs and images are stored in IndexedDB on your machine. Project names, draft text, source labels, URL references, and your pinned stack live in <code style={{ color: '#999' }}>localStorage</code>. None of it is transmitted anywhere.
           </p>
         </div>
 
@@ -36,7 +36,27 @@ export default function Privacy() {
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Deleting your data</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Remove individual sources and projects from inside the app — there&apos;s no other copy. To remove everything at once, click the storage indicator in the top bar (or use <span style={{ color: '#999' }}>Site → Reset Site Data…</span> on desktop) and confirm. The action runs locally; nothing is sent anywhere.
+            Remove individual sources and projects from inside the app — there&apos;s no other copy. Two bulk options:
+          </p>
+          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
+            <span style={{ color: '#999' }}>Storage badge</span> (top bar) — clears every file and source on the machine. <span style={{ color: '#999' }}>Draft text is kept</span> in case the click was accidental; project shells stay too.
+          </p>
+          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
+            <span style={{ color: '#999' }}>Site → Reset Site Data…</span> (desktop menu) — full wipe at the Electron session layer. Removes files, sources, projects, drafts, and any browser-side state in one step.
+          </p>
+          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
+            Both actions run locally; nothing is sent anywhere. Neither can be undone.
+          </p>
+        </div>
+
+        <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Questions</span>
+          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
+            Privacy concern or unclear behavior? Email{' '}
+            <a href="mailto:Official_Site_Support@protonmail.com?subject=Site%20privacy" style={{ color: '#999', textDecoration: 'underline', textDecorationColor: '#333', textUnderlineOffset: '3px' }}>
+              Official_Site_Support@protonmail.com
+            </a>
+            .
           </p>
         </div>
 
