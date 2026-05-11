@@ -173,11 +173,13 @@ function createWindow() {
   })
 
   if (isDev) {
-    mainWindow.loadURL('http://localhost:3000/app')
+    mainWindow.loadURL('http://localhost:3000/')
   } else {
-    // Boot directly into the workspace — the landing page is for the
-    // marketing site, not the desktop product.
-    mainWindow.loadURL('site://localhost/app/')
+    // Boot into the landing page — gives the app a real first surface
+    // (branding, "Open App", About/Privacy/Support links) instead of
+    // dropping a fresh user straight into an empty workspace. They
+    // click "Open App →" to enter the workspace itself.
+    mainWindow.loadURL('site://localhost/')
   }
 }
 
