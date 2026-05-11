@@ -44,6 +44,23 @@ export default function ProjectBar() {
         <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.04em', fontVariantNumeric: 'tabular-nums' }}>
           {namedProjectCount} / 3 projects
         </span>
+        <span style={{ width: '1px', height: '12px', background: '#222' }} />
+        {/* Quiet support hook. mailto: opens the user's default mail
+            client — no tracking, no contact form, no server. Same
+            target as the Nav/footer/About support links so anyone who
+            needs help finds the same inbox regardless of entry point. */}
+        <a
+          href="mailto:Official_Site_Support@protonmail.com?subject=Site%20support"
+          title="Email support"
+          style={{
+            fontSize: '11px', color: '#555', letterSpacing: '0.04em',
+            textDecoration: 'none', transition: 'color 0.15s',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#aaa')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#555')}
+        >
+          Support
+        </a>
       </div>
     </div>
   )
