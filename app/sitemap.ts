@@ -1,5 +1,9 @@
 import { MetadataRoute } from 'next'
 
+// Required by `output: 'export'` (desktop build) so a static `sitemap.xml`
+// is emitted; web build is unaffected.
+export const dynamic = 'force-static'
+
 const BASE = 'https://proof-kxfz.onrender.com'
 
 export default function sitemap(): MetadataRoute.Sitemap {

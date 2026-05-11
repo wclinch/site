@@ -1,20 +1,28 @@
 {
-  "name": "proof",
+  "name": "site",
   "version": "0.1.0",
   "private": true,
+  "description": "A local-first research workspace. Read sources. Write beside them.",
+  "author": "wclinch07",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "next dev",
     "build": "cp node_modules/react-pdf/node_modules/pdfjs-dist/build/pdf.worker.min.mjs public/pdf.worker.min.mjs 2>/dev/null || cp node_modules/pdfjs-dist/build/pdf.worker.min.js public/pdf.worker.min.mjs && next build",
+    "build:desktop": "cp node_modules/react-pdf/node_modules/pdfjs-dist/build/pdf.worker.min.mjs public/pdf.worker.min.mjs 2>/dev/null || cp node_modules/pdfjs-dist/build/pdf.worker.min.js public/pdf.worker.min.mjs && NEXT_BUILD_TARGET=desktop next build && node scripts/build-icon.mjs",
+    "build:icon": "node scripts/build-icon.mjs",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "electron:dev": "concurrently -k -n next,electron -c blue,magenta \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
+    "electron:pack": "npm run build:desktop && electron-builder --dir",
+    "electron:build": "npm run build:desktop && electron-builder",
+    "electron:build:mac": "npm run build:desktop && electron-builder --mac",
+    "electron:build:win": "npm run build:desktop && electron-builder --win",
+    "electron:build:linux": "npm run build:desktop && electron-builder --linux"
   },
   "dependencies": {
-    "@supabase/ssr": "^0.10.2",
-    "@supabase/supabase-js": "^2.102.1",
     "next": "^16.2.4",
     "pdfjs-dist": "^3.11.174",
-    "posthog-js": "^1.369.2",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-pdf": "^10.4.1"
@@ -23,8 +31,67 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.2.1",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^8.0.5"
+  },
+  "build": {
+    "appId": "com.site.app",
+    "productName": "Site",
+    "directories": {
+      "output": "release",
+      "buildResources": "public"
+    },
+    "files": [
+      "electron/**/*",
+      "out/**/*",
+      "package.json",
+      "!node_modules"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.cjs"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.icns",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Office",
+      "icon": "build/icon.png"
+    }
   }
 }

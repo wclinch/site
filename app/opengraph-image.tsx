@@ -1,7 +1,11 @@
 import { ImageResponse } from 'next/og'
 
-export const runtime     = 'edge'
-export const alt         = 'Proof — Research, broken down.'
+// Generated at build time (Node runtime). We previously used `runtime: 'edge'`
+// but static export — used for the desktop Electron build — can't run edge
+// route handlers. Node generation produces the same PNG with no functional
+// difference for the marketing site.
+export const dynamic     = 'force-static'
+export const alt         = 'Site — Read sources. Write beside them.'
 export const size        = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
@@ -28,13 +32,13 @@ export default function Image() {
       {/* Main text */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         <div style={{ fontSize: '72px', fontWeight: 300, color: '#ccc', letterSpacing: '-1px', display: 'flex', lineHeight: 1 }}>
-          Proof
+          Site
         </div>
         <div style={{ fontSize: '28px', color: '#555', fontWeight: 300, display: 'flex', lineHeight: 1.4 }}>
-          Research, broken down.
+          Read sources. Write beside them.
         </div>
         <div style={{ fontSize: '18px', color: '#333', display: 'flex', marginTop: '4px' }}>
-          Analyze sources · Write · Cite — all in one place.
+          PDFs · Images · Web pages — one focused workspace.
         </div>
       </div>
 

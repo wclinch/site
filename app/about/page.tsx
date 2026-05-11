@@ -30,7 +30,7 @@ export default function About() {
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>What Site is</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            A minimal research workspace designed for reading and writing side-by-side. Load PDFs, images, and web references. Organize them into projects or keep them floating. Write directly beside your references. Everything in one window — no switching tabs, no losing your place.
+            A minimal, local-first research workspace for reading and writing side-by-side. Load PDFs, images, and web pages. Organize them into projects or keep them floating. Write your draft beside them. Everything in one window, on your machine.
           </p>
         </div>
 
@@ -41,13 +41,13 @@ export default function About() {
               <span style={{ color: '#999' }}>1. Add sources</span> — drop PDFs or images into the left panel, or paste a URL. New sources are floating by default.
             </p>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-              <span style={{ color: '#999' }}>2. Organize with projects</span> — type a name in the project field to create a project folder. Drag floating sources into a project, or right-click to move them.
+              <span style={{ color: '#999' }}>2. Organize with projects</span> — click <span style={{ color: '#999' }}>+ New project</span> in the left panel, type a name, and press Enter. Drag floating sources into a project folder, or right-click to move them. Up to 3 projects.
             </p>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
               <span style={{ color: '#999' }}>3. Open in split view</span> — drag an image into the top viewer pane, drag a PDF or URL into the bottom pane. Hit the expand icon to fullscreen either one. Hit X to close it.
             </p>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-              <span style={{ color: '#999' }}>4. Write</span> — type in the draft panel on the right. The draft is tied to the active project and saves automatically.
+              <span style={{ color: '#999' }}>4. Write</span> — type in the draft panel on the right. The draft is tied to the active project and saves as you type.
             </p>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
               <span style={{ color: '#999' }}>5. Export</span> — use the <span style={{ color: '#999' }}>···</span> menu to save as <span style={{ color: '#999' }}>.txt</span> or <span style={{ color: '#999' }}>.md</span>.
@@ -70,6 +70,7 @@ export default function About() {
               { keys: ['Expand (↗)'],           desc: 'Fullscreen that pane in the center column' },
               { keys: ['X'],                     desc: 'Close source from viewer' },
               { keys: ['··· (draft)'],           desc: 'Export or clear the draft' },
+              { keys: ['Storage badge'],         desc: 'Click to see current usage and reset all data' },
               { keys: ['Esc'],                   desc: 'Close menus' },
             ].map((row, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
@@ -105,16 +106,9 @@ export default function About() {
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Saving your work</span>
+          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Where your work lives</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            No account needed. Files and drafts are stored locally in your browser. Sign in to sync your projects and draft text across devices — files stay on your machine and need to be re-added on each device.
-          </p>
-        </div>
-
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Contact</span>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <a href="mailto:proof_official@protonmail.com" className="inline-link">proof_official@protonmail.com</a>
+            On your machine. Files sit in IndexedDB, project structure and drafts in localStorage — no cloud, no account, nothing leaves the device. Capped at 250&nbsp;MB and up to 3 projects.
           </p>
         </div>
 

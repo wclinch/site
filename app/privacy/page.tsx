@@ -15,47 +15,28 @@ export default function Privacy() {
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>The short version</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Your files never leave your device. If you sign in, your project structure, source names, URL references, and draft text sync to our servers. We collect your email and anonymized usage events. No file content is ever transmitted.
+            Your data never leaves your computer. Site runs locally — no account, no servers, no tracking. Everything you load and write is stored on your machine.
           </p>
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>What stays on your device</span>
+          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Where your work is stored</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            PDF and image files are stored in your browser (IndexedDB) and are never uploaded to any server. They don't leave your machine under any circumstances. URL references are part of your project data and sync if you're signed in.
-          </p>
-        </div>
-
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>What syncs when you sign in</span>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            When you create an account, your project names, source names, URL references, and draft text are saved to our database so they're accessible on any device. This data is tied to your account and is never shared or sold. PDF and image files must be re-added on each device. Without an account, everything stays local.
+            PDFs and images are stored in IndexedDB on your machine. Project names, draft text, source labels, and URL references live in <code style={{ color: '#999' }}>localStorage</code>. None of it is transmitted anywhere.
           </p>
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>What we collect</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Account:</span> email address. Used only to manage sign-in and synced data.
-          </p>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Usage analytics:</span> anonymized events — page visits, files added. No document content, no IP addresses.
+            Nothing. No telemetry, no account, no servers to reach. The app has no network calls of its own — any traffic you see is the embedded web pages you chose to load.
           </p>
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Deleting your data</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            You can delete your account and all associated data at any time from the{' '}
-            <a href="/account" className="inline-link">account page</a>.
-            Local data (files) is cleared when you clear your browser storage.
-          </p>
-        </div>
-
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Contact</span>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <a href="mailto:proof_official@protonmail.com" className="inline-link">proof_official@protonmail.com</a>
+            Remove individual sources and projects from inside the app — there&apos;s no other copy. To remove everything at once, click the storage indicator in the top bar (or use <span style={{ color: '#999' }}>Site → Reset Site Data…</span> on desktop) and confirm. The action runs locally; nothing is sent anywhere.
           </p>
         </div>
 

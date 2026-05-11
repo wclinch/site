@@ -1,19 +1,17 @@
 'use client'
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
-import type { User } from '@supabase/supabase-js'
 import type { Project, QueuedSource, Clip, Fragment } from '@/lib/types'
 import {
   ACTIVE_KEY, SELECTED_KEY, SELECTED_IMAGE_KEY,
-  uid, newProject, newSource, newNote, newUrlSource,
+  newProject, newSource, newNote, newUrlSource,
   loadProjects, saveProjects,
 } from '@/lib/storage'
-import { loadProjectsCloud, saveProjectsCloud } from '@/lib/sync'
 import { storeFile, deleteFile, getFile, storeContent, getContent, deleteContent } from '@/lib/idb'
 import { extractContent } from '@/lib/extract'
-import { getSupabaseBrowser } from '@/lib/supabase-browser'
-import { capture, identify, reset } from '@/lib/posthog'
+import { wouldExceedLimit, STORAGE_LIMIT_BYTES } from '@/lib/storage-limit'
 
 export const INBOX_ID = '__inbox__'
+export const PROJECT_LIMIT = 3
 
 interface ContextMenu     { srcId: string; x: number; y: number }
 interface ProjContextMenu { projId: string; x: number; y: number }
@@ -35,9 +33,8 @@ interface AppState {
   selectedSource: QueuedSource | null
   selectedImageId: string | null
   selectedImageSource: QueuedSource | null
-  // auth
-  user: User | null
-  cloudSyncing: boolean
+  namedProjectCount: number
+  atProjectLimit: boolean
   // setters
   setShowProjects: (v: boolean | ((prev: boolean) => boolean)) => void
   setSelectedId: (id: string | null) => void
@@ -68,7 +65,7 @@ interface AppState {
   removeSelected: () => void
   createNote: (targetProjId?: string) => void
   addUrl: (url: string, targetProjId?: string) => Promise<void>
-  createProject: (name?: string) => void
+  createProject: (name?: string) => boolean
   switchProject: (id: string) => void
   deleteProject: (id: string) => void
 }
@@ -88,6 +85,20 @@ function makeInbox(): Project {
   }
 }
 
+// Dispatches a transient warning toast (consumed by app/app/page.tsx).
+function warn(msg: string) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('proof-storage-warning', { detail: msg }))
+}
+
+// Fires after any IDB write/delete so storage-aware UI (the badge) can re-poll.
+// `navigator.storage.estimate()` is approximate and lags briefly after deletes,
+// so listeners should be tolerant of the first reading being slightly stale.
+function notifyStorageChanged() {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new Event('proof-storage-changed'))
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [mounted, setMounted]           = useState(false)
   const [projects, setProjects]         = useState<Project[]>([])
@@ -99,12 +110,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [showProjects, setShowProjects] = useState(false)
   const [contextMenu, setContextMenu]     = useState<ContextMenu | null>(null)
   const [projContextMenu, setProjContextMenu] = useState<ProjContextMenu | null>(null)
-  const [user, setUser] = useState<User | null>(null)
 
-  const userIdRef      = useRef<string | null>(null)
-  const saveTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const cloudReady     = useRef(false)
-  const [cloudSyncing, setCloudSyncing] = useState(false)
   const projectsRef    = useRef<Project[]>([])
 
   const activeIdRef = useRef(activeId)
@@ -135,23 +141,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [projContextMenu])
 
   useEffect(() => { setProjContextMenu(null) }, [showProjects])
-
-  useEffect(() => {
-    const sb = getSupabaseBrowser()
-    sb.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-    })
-    const { data: { subscription } } = sb.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        identify(session.user.id, { email: session.user.email })
-        capture('app_opened')
-      } else {
-        reset()
-      }
-    })
-    return () => subscription.unsubscribe()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const saved = loadProjects()
@@ -216,36 +205,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setMounted(true)
   }, [])
 
-  useEffect(() => { userIdRef.current = user?.id ?? null }, [user])
-
-  useEffect(() => {
-    if (!mounted || !user) { cloudReady.current = false; return }
-    cloudReady.current = false
-    loadProjectsCloud(user.id).then(cloud => {
-      if (cloud && cloud.length > 0) {
-        // Ensure inbox exists in cloud data too
-        let fixed = cloud
-        if (!fixed.some((p: Project) => p.id === INBOX_ID)) {
-          fixed = [makeInbox(), ...fixed]
-        }
-        setProjects(fixed)
-        const savedActive = localStorage.getItem(ACTIVE_KEY)
-        const match = fixed.find((p: Project) => p.id === savedActive) ?? fixed.find((p: Project) => p.id !== INBOX_ID) ?? fixed[0]
-        setActiveId(match.id)
-        const savedSelected = localStorage.getItem(SELECTED_KEY)
-        const allSrc = fixed.flatMap((p: Project) => p.sources)
-        if (savedSelected && allSrc.find((s: { id: string }) => s.id === savedSelected)) {
-          setSelectedId(savedSelected)
-        }
-        const savedSelectedImage = localStorage.getItem(SELECTED_IMAGE_KEY)
-        if (savedSelectedImage && allSrc.find((s: { id: string }) => s.id === savedSelectedImage)) {
-          setSelectedImageId(savedSelectedImage)
-        }
-      }
-      cloudReady.current = true
-    }).catch(() => { cloudReady.current = true })
-  }, [mounted, user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
-
   useEffect(() => {
     projectsRef.current = projects
     if (projects.length) saveProjects(projects)
@@ -258,17 +217,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [])
-
-  useEffect(() => {
-    if (!cloudReady.current || !userIdRef.current || !projects.length) return
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    setCloudSyncing(true)
-    saveTimerRef.current = setTimeout(async () => {
-      if (userIdRef.current) await saveProjectsCloud(userIdRef.current, projects)
-      setCloudSyncing(false)
-    }, 2000)
-    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
-  }, [projects])
 
   useEffect(() => { if (activeId) localStorage.setItem(ACTIVE_KEY, activeId) }, [activeId])
   useEffect(() => {
@@ -287,6 +235,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const allSources          = projects.flatMap(p => p.sources)
   const selectedSource      = allSources.find(s => s.id === selectedId) ?? null
   const selectedImageSource = allSources.find(s => s.id === selectedImageId) ?? null
+  const namedProjectCount   = projects.filter(p => p.id !== INBOX_ID).length
+  const atProjectLimit      = namedProjectCount >= PROJECT_LIMIT
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -465,6 +415,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     list = list.filter(f => !currentAllSources.some(s => s.label === f.name))
     if (!list.length) return
 
+    // 250 MB cap: reject the whole batch if it would push storage over the limit.
+    const batchBytes = list.reduce((sum, f) => sum + f.size, 0)
+    if (await wouldExceedLimit(batchBytes)) {
+      warn('Storage limit reached. Delete files to continue.')
+      return
+    }
+
     const newSources = list.map(f => ({
       ...newSource(`file:${f.name}`, f.name),
       fileType: (isImage(f) ? 'image' : 'pdf') as 'pdf' | 'image',
@@ -485,6 +442,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       try {
         await storeFile(src.id, file)
+        // Fire the storage event the moment the file lands in IDB — not
+        // after PDF extraction (which can take a couple of seconds and
+        // would make the badge feel laggy for the user).
+        notifyStorageChanged()
         if (src.fileType === 'image') {
           patchSource(projId, src.id, { status: 'done' })
         } else {
@@ -493,7 +454,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           await storeContent(src.id, content).catch(() => {})
           patchSource(projId, src.id, { status: 'done', content })
         }
-        capture('upload_complete')
       } catch (err) {
         patchSource(projId, src.id, {
           status: 'error',
@@ -531,8 +491,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (selectedImageId === srcId) setSelectedImageId(null)
     setSelectedIds(new Set())
     setAnchorId(null)
-    deleteFile(srcId).catch(() => {})
-    deleteContent(srcId).catch(() => {})
+    // Fire the storage-changed event only after both IDB deletes complete,
+    // so the badge re-poll sees the freed bytes (otherwise the estimate is stale).
+    Promise.allSettled([deleteFile(srcId), deleteContent(srcId)])
+      .then(notifyStorageChanged)
   }
 
   function removeSelected() {
@@ -543,7 +505,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })))
     if (selectedId && selectedIds.has(selectedId)) setSelectedId(null)
     if (selectedImageId && selectedIds.has(selectedImageId)) setSelectedImageId(null)
-    selectedIds.forEach(id => { deleteFile(id).catch(() => {}); deleteContent(id).catch(() => {}) })
+    const ids = Array.from(selectedIds)
+    Promise.allSettled(ids.flatMap(id => [deleteFile(id), deleteContent(id)]))
+      .then(notifyStorageChanged)
     setSelectedIds(new Set())
     setAnchorId(null)
   }
@@ -562,19 +526,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setProjects(ps => ps.map(p =>
       p.id !== projId ? p : { ...p, sources: [...p.sources, src] }
     ))
-    try {
-      const res = await fetch(`/api/url-meta?url=${encodeURIComponent(url)}`)
-      const { title } = await res.json()
-      if (title) patchSource(projId, src.id, { label: title })
-    } catch {}
+    // Title fetch removed — local-only mode. Hostname-derived label
+    // is already set inside newUrlSource().
   }
 
-  function createProject(name?: string) {
-    const p = newProject(projects.filter(proj => proj.id !== INBOX_ID).length + 1)
+  function createProject(name?: string): boolean {
+    // Enforce 3-project ceiling.
+    if (namedProjectCount >= PROJECT_LIMIT) {
+      warn(`Project limit reached (${PROJECT_LIMIT}/${PROJECT_LIMIT}). Delete a project to add more.`)
+      return false
+    }
+    const p = newProject(namedProjectCount + 1)
     if (name) p.name = name
     setProjects(ps => [...ps, p])
     setActiveId(p.id)
     setSelectedId(null)
+    return true
   }
 
   function switchProject(id: string) {
@@ -584,6 +551,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   function deleteProject(id: string) {
     if (id === INBOX_ID) return
+
+    // Reap the project's source files from IDB. Without this, deleting a
+    // project would leak its PDFs/images — the UI forgets them but the
+    // bytes stay on disk, so the storage badge wouldn't budge and the
+    // 250 MB cap would slowly fill with orphaned data.
+    //
+    // We delete by source id for every source the project owned. Notes
+    // and URLs have no IDB entry; deleteFile/deleteContent on a missing
+    // key is a successful no-op, so the broad sweep is safe.
+    const doomed   = projects.find(p => p.id === id)
+    const sourceIds = doomed?.sources.map(s => s.id) ?? []
+
     const updated = projects.filter(p => p.id !== id)
     setSelectedId(null)
     setSelectedIds(new Set())
@@ -599,6 +578,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setActiveId(next.id)
       }
     }
+
+    if (sourceIds.length) {
+      Promise.allSettled(
+        sourceIds.flatMap(sid => [deleteFile(sid), deleteContent(sid)])
+      ).then(notifyStorageChanged)
+    }
   }
 
   // ─── Context value ──────────────────────────────────────────────────────────
@@ -607,7 +592,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     mounted, projects, activeId, selectedId, selectedIds, anchorId,
     showProjects, contextMenu, projContextMenu,
     activeProject, sources, allSources, selectedSource, selectedImageId, selectedImageSource,
-    user, cloudSyncing,
+    namedProjectCount, atProjectLimit,
     setShowProjects, setSelectedId, setSelectedImageId, setSelectedIds, setAnchorId,
     setContextMenu, setProjContextMenu,
     setProjects, updateProject, patchSource, moveSource, moveSourceToProject,
@@ -626,3 +611,6 @@ export function useApp(): AppState {
   if (!ctx) throw new Error('useApp must be used within AppProvider')
   return ctx
 }
+
+// Re-exported for components that just need the cap value.
+export { STORAGE_LIMIT_BYTES }

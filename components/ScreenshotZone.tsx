@@ -170,25 +170,15 @@ function NoteContent({ source }: { source: NonNullable<ReturnType<typeof useApp>
 // ─── URL ──────────────────────────────────────────────────────────────────────
 
 function UrlContent({ source }: { source: NonNullable<ReturnType<typeof useApp>['selectedImageSource']> }) {
-  const [state, setState] = useState<'checking' | 'ready' | 'blocked'>('checking')
+  // Local-only mode: try the iframe directly, fall back to "blocked" UI on error.
+  const [state, setState] = useState<'ready' | 'blocked'>('ready')
   const url = source.url ?? source.raw
   const hostname = (() => { try { return new URL(url).hostname } catch { return url } })()
 
-  useEffect(() => {
-    setState('checking')
-    fetch(`/api/url-check?url=${encodeURIComponent(url)}`)
-      .then(r => r.json())
-      .then(({ embeddable }) => setState(embeddable ? 'ready' : 'blocked'))
-      .catch(() => setState('ready'))
-  }, [url])
+  useEffect(() => { setState('ready') }, [url])
 
   return (
     <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      {state === 'checking' && (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.02em' }}>Checking…</span>
-        </div>
-      )}
       {state === 'blocked' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', padding: '32px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>

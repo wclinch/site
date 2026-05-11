@@ -9,6 +9,7 @@ export default function SourcePanel({ width }: { width: number | string }) {
     projects, activeId, allSources,
     uploadFiles, moveSource, moveSourceToProject, addUrl,
     createProject, switchProject, updateProject, deleteProject,
+    namedProjectCount, atProjectLimit,
   } = useApp()
 
   // ── New project input ──────────────────────────────────────────────────────
@@ -158,6 +159,7 @@ export default function SourcePanel({ width }: { width: number | string }) {
     if (name) {
       const isDuplicate = projects.some(p => p.id !== INBOX_ID && p.name.toLowerCase() === name.toLowerCase())
       if (!isDuplicate) {
+        // createProject silently no-ops (and warns via toast) when at 3-project cap.
         createProject(name)
       }
     }
@@ -184,7 +186,7 @@ export default function SourcePanel({ width }: { width: number | string }) {
   const hasAnySources = allSources.length > 0
 
   const shell: React.CSSProperties = {
-    marginTop: '4px', marginRight: '10px', marginBottom: '0', marginLeft: '10px',
+    marginTop: '10px', marginRight: '10px', marginBottom: '0', marginLeft: '10px',
     padding: '11px 14px',
     background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: '4px',
     display: 'flex', alignItems: 'center', flexShrink: 0, transition: 'border-color 0.15s',
@@ -223,19 +225,30 @@ export default function SourcePanel({ width }: { width: number | string }) {
             />
           ) : (
             <button
-              onClick={() => setCreatingProj(true)}
+              onClick={() => { if (!atProjectLimit) setCreatingProj(true) }}
+              disabled={atProjectLimit}
+              title={atProjectLimit ? 'Project limit reached (3/3). Delete a project to add more.' : undefined}
               style={{
-                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                fontSize: '12px', color: '#444', fontFamily: 'inherit',
+                background: 'none', border: 'none', padding: 0,
+                cursor: atProjectLimit ? 'not-allowed' : 'pointer',
+                fontSize: '12px', color: atProjectLimit ? '#2a2a2a' : '#444',
+                fontFamily: 'inherit',
                 letterSpacing: '0.02em', display: 'flex', alignItems: 'center', gap: '5px',
               }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#888')}
-              onMouseLeave={e => (e.currentTarget.style.color = '#444')}
+              onMouseEnter={e => { if (!atProjectLimit) e.currentTarget.style.color = '#888' }}
+              onMouseLeave={e => { if (!atProjectLimit) e.currentTarget.style.color = '#444' }}
             >
               <span style={{ fontSize: '14px', lineHeight: 1 }}>+</span>
               <span>New project</span>
             </button>
           )}
+          <span style={{
+            marginLeft: 'auto', fontSize: '10px',
+            color: atProjectLimit ? '#a55' : '#3a3a3a',
+            letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums',
+          }}>
+            {namedProjectCount} / 3
+          </span>
         </div>
       )}
 
@@ -267,7 +280,7 @@ export default function SourcePanel({ width }: { width: number | string }) {
 
           {addingUrl ? (
             <div style={{
-              margin: '6px 10px 0', padding: '11px 14px',
+              margin: '8px 10px 0', padding: '11px 14px',
               background: '#0d0d0d', border: '1px solid #333', borderRadius: '4px',
               display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0,
             }}>
@@ -306,7 +319,7 @@ export default function SourcePanel({ width }: { width: number | string }) {
 
           {/* Source list */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
-            <div style={{ ...shell, cursor: 'text', padding: '11px 14px', marginTop: '6px' }} onClick={() => filterRef.current?.focus()}>
+            <div style={{ ...shell, cursor: 'text', padding: '11px 14px', marginTop: '16px' }} onClick={() => filterRef.current?.focus()}>
               <input
                 ref={filterRef} className="sp-input"
                 value={filterInput} onChange={e => setFilterInput(e.target.value)}
@@ -320,9 +333,12 @@ export default function SourcePanel({ width }: { width: number | string }) {
               )}
             </div>
 
+            {/* Divider between filter and the source/project list */}
+            <div style={{ height: '1px', background: '#1a1a1a', margin: '14px 10px 0' }} />
+
             <div
               ref={listRef}
-              style={{ flex: 1, overflowY: 'auto', marginTop: '4px' }}
+              style={{ flex: 1, overflowY: 'auto', marginTop: '10px' }}
               onDragOver={e => {
                 if (draggingId && !e.dataTransfer.types.includes('Files')) {
                   handleListDragOver(e)
@@ -332,7 +348,7 @@ export default function SourcePanel({ width }: { width: number | string }) {
             >
               {/* Inbox / floating area */}
               {visibleInbox.length === 0 && namedProjects.length === 0 ? (
-                <div style={{ padding: '20px 14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ padding: '6px 16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <span style={{ fontSize: '11px', color: '#555', lineHeight: 1.7 }}>Select a file or paste a URL to begin.</span>
                 </div>
               ) : (
@@ -670,7 +686,7 @@ function UrlBtn({ onClick }: { onClick: () => void }) {
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        margin: '6px 10px 0', padding: '11px 14px',
+        margin: '8px 10px 0', padding: '11px 14px',
         background: hov ? '#111' : '#0d0d0d',
         border: `1px solid ${hov ? '#252525' : '#1a1a1a'}`,
         borderRadius: '4px', display: 'flex', alignItems: 'center',

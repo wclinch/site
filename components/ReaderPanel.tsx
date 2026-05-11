@@ -182,26 +182,17 @@ function Header({
 // ─── URL viewer ───────────────────────────────────────────────────────────────
 
 function UrlViewer({ source }: { source: QueuedSource }) {
-  const [state, setState] = useState<'checking' | 'ready' | 'blocked'>('checking')
+  // Local-only mode: skip the server pre-flight, optimistically try the iframe
+  // and surface the blocked-state UI if it errors.
+  const [state, setState] = useState<'ready' | 'blocked'>('ready')
   const url = source.url ?? source.raw
 
-  useEffect(() => {
-    setState('checking')
-    fetch(`/api/url-check?url=${encodeURIComponent(url)}`)
-      .then(r => r.json())
-      .then(({ embeddable }) => setState(embeddable ? 'ready' : 'blocked'))
-      .catch(() => setState('ready'))
-  }, [url])
+  useEffect(() => { setState('ready') }, [url])
 
   const hostname = (() => { try { return new URL(url).hostname } catch { return url } })()
 
   return (
     <div style={{ flex: 1, overflow: 'hidden', background: '#080808', display: 'flex', flexDirection: 'column' }}>
-      {state === 'checking' && (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.02em' }}>Checking…</span>
-        </div>
-      )}
       {state === 'blocked' && <UrlBlocked url={url} hostname={hostname} />}
       {state === 'ready' && (
         <iframe

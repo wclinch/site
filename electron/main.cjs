@@ -10,16 +10,26 @@
 // after the local-only refactor (everything lives in IndexedDB), so the
 // ~200ms static-load start beats a 2s Node-server boot for desktop UX.
 
-const { app, BrowserWindow, Menu, dialog, shell, protocol, net } = require('electron')
+const { app, BrowserWindow, Menu, dialog, shell, protocol, nativeImage } = require('electron')
 const path  = require('path')
 const fs    = require('fs')
-const { pathToFileURL } = require('url')
 
 const isDev = !app.isPackaged
 
 // The static export lives next to main.cjs once packaged (electron-builder
 // copies the project root). In dev (unpackaged) we resolve from the repo.
 const OUT_DIR = path.join(__dirname, '..', 'out')
+
+// In dev, electron-builder's `productName` and bundle icon aren't applied —
+// the running process is just `Electron.app/Contents/MacOS/Electron`. Force
+// the Dock label + icon ourselves so it matches the packaged build.
+app.setName('Site')
+if (process.platform === 'darwin' && isDev) {
+  const iconPath = path.join(__dirname, '..', 'build', 'icon.png')
+  if (fs.existsSync(iconPath)) {
+    try { app.dock.setIcon(nativeImage.createFromPath(iconPath)) } catch {}
+  }
+}
 
 // Reserve `site://` before app-ready so it inherits standard-URL behaviour
 // (relative paths, fetch support, secure context). Required by Electron.
@@ -51,9 +61,39 @@ function resolveStatic(pathname) {
   return path.join(OUT_DIR, 'app', 'index.html')
 }
 
+// Map file extensions to MIME types. `net.fetch` on a file:// URL doesn't
+// always set Content-Type correctly for every extension we ship — and when
+// an HTML page comes back as `application/octet-stream`, Chromium renders
+// the raw bytes as plain text (which is how the RSC flight payload ended
+// up bleeding into the visible UI in earlier builds).
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js':   'application/javascript; charset=utf-8',
+  '.mjs':  'application/javascript; charset=utf-8',
+  '.css':  'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg':  'image/svg+xml',
+  '.png':  'image/png',
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif':  'image/gif',
+  '.ico':  'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2':'font/woff2',
+  '.ttf':  'font/ttf',
+  '.txt':  'text/plain; charset=utf-8',
+  '.xml':  'application/xml; charset=utf-8',
+  '.wasm': 'application/wasm',
+}
+
 let mainWindow = null
 
 function createWindow() {
+  // Window icon (mostly relevant on Linux/Windows — macOS uses the Dock icon).
+  const iconPath = path.join(__dirname, '..', 'build', 'icon.png')
+  const icon = fs.existsSync(iconPath) ? iconPath : undefined
+
   mainWindow = new BrowserWindow({
     width: 1320,
     height: 840,
@@ -61,6 +101,8 @@ function createWindow() {
     minHeight: 600,
     backgroundColor: '#0a0a0a',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    title: 'Site',
+    icon,
     show: false,
     webPreferences: {
       contextIsolation: true,
@@ -164,10 +206,28 @@ function buildMenu() {
 
 app.whenReady().then(() => {
   if (!isDev) {
-    protocol.handle('site', (request) => {
+    protocol.handle('site', async (request) => {
       const url = new URL(request.url)
       const filePath = resolveStatic(url.pathname)
-      return net.fetch(pathToFileURL(filePath).toString())
+      const ext = path.extname(filePath).toLowerCase()
+      const mime = MIME[ext] || 'application/octet-stream'
+
+      // Read the file ourselves and build a Response with an explicit
+      // Content-Type. Going through `net.fetch(file://)` had a habit of
+      // returning HTML as `application/octet-stream`, which made Chromium
+      // dump the RSC flight payload into the page as visible text.
+      try {
+        const body = await fs.promises.readFile(filePath)
+        return new Response(body, {
+          status: 200,
+          headers: { 'Content-Type': mime },
+        })
+      } catch (err) {
+        return new Response(`Not found: ${url.pathname}`, {
+          status: 404,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        })
+      }
     })
   }
 
