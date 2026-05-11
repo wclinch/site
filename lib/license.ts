@@ -26,7 +26,7 @@ const KEY = 'proof-v3-license'
 // licensed build. (If left as the placeholder, validation returns a
 // clear error so it can't silently succeed.)
 const POLAR_ENDPOINT      = 'https://api.polar.sh/v1/customer-portal/license-keys/validate'
-const POLAR_ORGANIZATION  = 'REPLACE_WITH_POLAR_ORG_ID' // dashboard → Settings → General → ID
+const POLAR_ORGANIZATION  = 'ef60cd00-9e07-4db8-83e8-bda9a2afa313' // dashboard → Settings → General → ID
 
 export interface LicenseState {
   key: string
