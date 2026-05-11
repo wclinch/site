@@ -47,24 +47,38 @@ protocol.registerSchemesAsPrivileged([
 // Map an incoming pathname to a real file under `out/`. Tries the literal
 // path first, then `<path>/index.html` (Next trailingSlash convention), then
 // falls back to the root document so client-side routing handles unknowns.
+//
+// Anything that resolves outside OUT_DIR is rejected (returns null) — the
+// caller then renders a 404. `path.join(OUT_DIR, '../../etc/passwd')` would
+// otherwise escape the sandbox; even though only our own renderer can
+// navigate site:// URLs today, defense-in-depth is cheap here.
 function resolveStatic(pathname) {
   const clean = pathname.replace(/^\/+/, '').replace(/\?.*$/, '')
 
+  // Reject any pathname that walks out of OUT_DIR. We resolve to absolute
+  // and check the prefix — `path.resolve('out', '../../x')` collapses the
+  // `..` segments so the final string is definitive.
+  function safeUnder(p) {
+    const abs = path.resolve(p)
+    const root = path.resolve(OUT_DIR)
+    return abs === root || abs.startsWith(root + path.sep) ? abs : null
+  }
+
   // Exact file (e.g. `_next/static/...`, `pdf.worker.min.mjs`)
-  const direct = path.join(OUT_DIR, clean)
-  if (fs.existsSync(direct) && fs.statSync(direct).isFile()) return direct
+  const direct = safeUnder(path.join(OUT_DIR, clean))
+  if (direct && fs.existsSync(direct) && fs.statSync(direct).isFile()) return direct
 
   // Directory route — Next emits `<route>/index.html`
-  const withIndex = path.join(OUT_DIR, clean, 'index.html')
-  if (fs.existsSync(withIndex)) return withIndex
+  const withIndex = safeUnder(path.join(OUT_DIR, clean, 'index.html'))
+  if (withIndex && fs.existsSync(withIndex)) return withIndex
 
   // Same path without trailing slash variations
   const trimmed = clean.replace(/\/$/, '')
-  const trimmedHtml = path.join(OUT_DIR, `${trimmed}.html`)
-  if (fs.existsSync(trimmedHtml)) return trimmedHtml
+  const trimmedHtml = safeUnder(path.join(OUT_DIR, `${trimmed}.html`))
+  if (trimmedHtml && fs.existsSync(trimmedHtml)) return trimmedHtml
 
   // Fallback to the workspace entry — keeps a hard refresh on an unknown
-  // route from showing a blank page.
+  // route from showing a blank page. Always under OUT_DIR by construction.
   return path.join(OUT_DIR, 'app', 'index.html')
 }
 
