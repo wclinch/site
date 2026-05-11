@@ -21,6 +21,10 @@ export default function Nav() {
       <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
         <Link href="/about"   className="nav-link">About</Link>
         <Link href="/privacy" className="nav-link">Privacy</Link>
+        {/* mailto: link — opens the user's default mail client. No
+            tracking, no contact form, no server. */}
+        <a href="mailto:Official_Site_Support@protonmail.com?subject=Site%20support"
+           className="nav-link">Support</a>
       </div>
     </nav>
   )

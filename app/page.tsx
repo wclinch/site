@@ -91,6 +91,7 @@ export default function Home() {
         <div style={{ display: 'flex', gap: '20px' }}>
           <a href="/about"   className="footer-link">About</a>
           <a href="/privacy" className="footer-link">Privacy</a>
+          <a href="mailto:Official_Site_Support@protonmail.com?subject=Site%20support" className="footer-link">Support</a>
         </div>
       </footer>
     </div>

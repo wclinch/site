@@ -127,6 +127,17 @@ export default function About() {
           </p>
         </div>
 
+        <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Support</span>
+          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
+            Run into something off? Email{' '}
+            <a href="mailto:Official_Site_Support@protonmail.com?subject=Site%20support" style={{ color: '#999', textDecoration: 'underline', textDecorationColor: '#333', textUnderlineOffset: '3px' }}>
+              Official_Site_Support@protonmail.com
+            </a>
+            . No ticket system, no chatbot — just a person reading the inbox.
+          </p>
+        </div>
+
         <div style={{ padding: '20px 0', textAlign: 'right' }}>
           <BackButton />
         </div>
