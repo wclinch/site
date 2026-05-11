@@ -135,6 +135,14 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      // Run the renderer in an OS-level sandbox. With contextIsolation +
+      // no node integration this is belt-and-suspenders: even if a
+      // renderer-side bug let an attacker run arbitrary JS, the process
+      // can only touch what the OS sandbox permits — no fs, no exec.
+      sandbox: true,
+      // Default is true but make it explicit so a future edit can't
+      // silently disable same-origin / mixed-content protections.
+      webSecurity: true,
       preload: path.join(__dirname, 'preload.cjs'),
     },
   })
@@ -147,6 +155,21 @@ function createWindow() {
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
     return { action: 'deny' }
+  })
+
+  // Refuse top-level navigations to anywhere outside the dev server (in
+  // dev) or the site:// protocol (in packaged). Without this, code or
+  // an embedded page could window.location away to a phishing URL and
+  // host it inside the Site chrome. The link is still openable in the
+  // user's real browser via the system shell.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const ok = isDev
+      ? url.startsWith('http://localhost:3000')
+      : url.startsWith('site://')
+    if (!ok) {
+      event.preventDefault()
+      shell.openExternal(url)
+    }
   })
 
   if (isDev) {
@@ -244,11 +267,35 @@ app.whenReady().then(() => {
       // Content-Type. Going through `net.fetch(file://)` had a habit of
       // returning HTML as `application/octet-stream`, which made Chromium
       // dump the RSC flight payload into the page as visible text.
+      //
+      // We also send a Content-Security-Policy that only permits same-
+      // protocol scripts/styles + the inline blobs Next emits for fonts
+      // and CSS. `frame-src https:` is intentionally permissive because
+      // the URL viewer embeds arbitrary user-chosen websites; we don't
+      // restrict the user's own input. The site:// document itself is
+      // still locked down — a malicious embedded page can't reach back
+      // through the iframe to the parent.
+      const csp = [
+        "default-src 'self' site:",
+        "script-src 'self' site: 'wasm-unsafe-eval'",
+        "style-src 'self' site: 'unsafe-inline'",
+        "img-src 'self' site: data: blob:",
+        "font-src 'self' site: data:",
+        "connect-src 'self' site: blob: data:",
+        "frame-src https:",
+        "object-src 'none'",
+        "base-uri 'none'",
+        "form-action 'none'",
+      ].join('; ')
       try {
         const body = await fs.promises.readFile(filePath)
         return new Response(body, {
           status: 200,
-          headers: { 'Content-Type': mime },
+          headers: {
+            'Content-Type': mime,
+            'Content-Security-Policy': csp,
+            'X-Content-Type-Options': 'nosniff',
+          },
         })
       } catch (err) {
         return new Response(`Not found: ${url.pathname}`, {
