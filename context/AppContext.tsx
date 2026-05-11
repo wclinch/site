@@ -2,7 +2,7 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
 import type { Project, QueuedSource, Clip, Fragment } from '@/lib/types'
 import {
-  ACTIVE_KEY, SELECTED_KEY, SELECTED_IMAGE_KEY,
+  ACTIVE_KEY, SELECTED_KEY, SELECTED_IMAGE_KEY, STACK_KEY, STACK_LIMIT,
   newProject, newSource, newNote, newUrlSource,
   loadProjects, saveProjects,
 } from '@/lib/storage'
@@ -33,6 +33,13 @@ interface AppState {
   selectedSource: QueuedSource | null
   selectedImageId: string | null
   selectedImageSource: QueuedSource | null
+  // Source Stack — pinned ordered list of source IDs and the resolved sources.
+  // `inStack(id)` is a cheap membership check used by SourceItem.
+  stackIds: string[]
+  stackSources: QueuedSource[]
+  stackLimit: number
+  atStackLimit: boolean
+  inStack: (id: string) => boolean
   namedProjectCount: number
   atProjectLimit: boolean
   // setters
@@ -68,6 +75,14 @@ interface AppState {
   createProject: (name?: string) => boolean
   switchProject: (id: string) => void
   deleteProject: (id: string) => void
+  // Stack actions. `addToStack` is a no-op when already present or at the cap
+  // (with a toast); `openInPane` resolves which pane to send the source to
+  // based on file type — image → top, everything else → bottom reader.
+  addToStack: (id: string) => void
+  removeFromStack: (id: string) => void
+  clearStack: () => void
+  reorderStack: (fromIndex: number, toIndex: number) => void
+  openInPane: (id: string) => void
 }
 
 const AppContext = createContext<AppState | null>(null)
@@ -105,6 +120,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [activeId, setActiveId]         = useState<string | null>(null)
   const [selectedId, setSelectedId]         = useState<string | null>(null)
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null)
+  const [stackIds, setStackIds]             = useState<string[]>([])
   const [selectedIds, setSelectedIds]       = useState<Set<string>>(new Set())
   const [anchorId, setAnchorId]         = useState<string | null>(null)
   const [showProjects, setShowProjects] = useState(false)
@@ -169,6 +185,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (savedSelectedImage && allSrc.find(s => s.id === savedSelectedImage)) {
         setSelectedImageId(savedSelectedImage)
       }
+      // Hydrate the source stack, dropping any IDs that no longer
+      // resolve to a live source (e.g. project deleted between sessions).
+      try {
+        const raw = localStorage.getItem(STACK_KEY)
+        const parsed = raw ? (JSON.parse(raw) as unknown) : null
+        if (Array.isArray(parsed)) {
+          const valid = parsed
+            .filter((id): id is string => typeof id === 'string')
+            .filter(id => allSrc.some(s => s.id === id))
+            .slice(0, STACK_LIMIT)
+          if (valid.length) setStackIds(valid)
+        }
+      } catch {}
 
       ;(async () => {
         for (const proj of fixed) {
@@ -227,6 +256,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (selectedImageId) localStorage.setItem(SELECTED_IMAGE_KEY, selectedImageId)
     else localStorage.removeItem(SELECTED_IMAGE_KEY)
   }, [selectedImageId])
+  useEffect(() => {
+    if (stackIds.length) localStorage.setItem(STACK_KEY, JSON.stringify(stackIds))
+    else localStorage.removeItem(STACK_KEY)
+  }, [stackIds])
 
   // ─── Derived ────────────────────────────────────────────────────────────────
 
@@ -237,6 +270,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const selectedImageSource = allSources.find(s => s.id === selectedImageId) ?? null
   const namedProjectCount   = projects.filter(p => p.id !== INBOX_ID).length
   const atProjectLimit      = namedProjectCount >= PROJECT_LIMIT
+
+  // Resolved stack — drops IDs that no longer have a source (project
+  // deleted, source removed, etc). Order preserved.
+  const stackSources: QueuedSource[] = stackIds
+    .map(id => allSources.find(s => s.id === id))
+    .filter((s): s is QueuedSource => !!s)
+  const atStackLimit = stackIds.length >= STACK_LIMIT
+  const inStack = (id: string) => stackIds.includes(id)
+
+  // Stale ID flush: if a stacked source disappears (delete, project
+  // delete), prune it from `stackIds` so localStorage stays clean.
+  useEffect(() => {
+    if (!mounted || !stackIds.length) return
+    const valid = stackIds.filter(id => allSources.some(s => s.id === id))
+    if (valid.length !== stackIds.length) setStackIds(valid)
+  }, [allSources, mounted, stackIds])
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -586,12 +635,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // ─── Source stack actions ───────────────────────────────────────────────────
+
+  function addToStack(id: string) {
+    if (!allSources.some(s => s.id === id)) return
+    setStackIds(prev => {
+      if (prev.includes(id)) return prev
+      if (prev.length >= STACK_LIMIT) {
+        warn(`Source stack full (${STACK_LIMIT}). Remove one to add more.`)
+        return prev
+      }
+      return [...prev, id]
+    })
+  }
+
+  function removeFromStack(id: string) {
+    setStackIds(prev => prev.filter(x => x !== id))
+  }
+
+  function clearStack() {
+    setStackIds([])
+  }
+
+  function reorderStack(fromIndex: number, toIndex: number) {
+    setStackIds(prev => {
+      if (fromIndex === toIndex) return prev
+      if (fromIndex < 0 || fromIndex >= prev.length) return prev
+      if (toIndex   < 0 || toIndex   >  prev.length) return prev
+      const next = [...prev]
+      const [moved] = next.splice(fromIndex, 1)
+      next.splice(toIndex > fromIndex ? toIndex - 1 : toIndex, 0, moved)
+      return next
+    })
+  }
+
+  // Click-to-load behavior for the stack: images go into the top
+  // screenshot pane, everything else (PDF / URL / note) into the bottom
+  // reader. Two routes because the viewers are type-bound — the user's
+  // "toggle" between top and bottom is really "load the right pane for
+  // this source's type."
+  function openInPane(id: string) {
+    const src = allSources.find(s => s.id === id)
+    if (!src) return
+    if (src.fileType === 'image') setSelectedImageId(id)
+    else setSelectedId(id)
+  }
+
   // ─── Context value ──────────────────────────────────────────────────────────
 
   const value: AppState = {
     mounted, projects, activeId, selectedId, selectedIds, anchorId,
     showProjects, contextMenu, projContextMenu,
     activeProject, sources, allSources, selectedSource, selectedImageId, selectedImageSource,
+    stackIds, stackSources, stackLimit: STACK_LIMIT, atStackLimit, inStack,
     namedProjectCount, atProjectLimit,
     setShowProjects, setSelectedId, setSelectedImageId, setSelectedIds, setAnchorId,
     setContextMenu, setProjContextMenu,
@@ -601,6 +697,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     uploadFiles, retrySource,
     removeSource, removeSelected,
     createNote, addUrl, createProject, switchProject, deleteProject,
+    addToStack, removeFromStack, clearStack, reorderStack, openInPane,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

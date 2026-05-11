@@ -9,6 +9,7 @@ export default function SourceContextMenu() {
     contextMenu, setContextMenu,
     allSources, selectedIds, projects,
     removeSource, removeSelected, moveSourceToProject,
+    inStack, addToStack, removeFromStack, atStackLimit,
   } = useApp()
 
   const [confirmDeleteSrcId, setConfirmDeleteSrcId] = useState<string | null>(null)
@@ -95,6 +96,33 @@ export default function SourceContextMenu() {
             Rename
           </button>
           <div style={{ height: '1px', background: '#1e1e1e' }} />
+          {(() => {
+            const pinned = inStack(src.id)
+            const disabled = !pinned && atStackLimit
+            return (
+              <>
+                <button
+                  onClick={() => {
+                    if (pinned) removeFromStack(src.id)
+                    else if (!disabled) addToStack(src.id)
+                    setContextMenu(null)
+                  }}
+                  disabled={disabled}
+                  title={disabled ? 'Source stack is full' : undefined}
+                  style={{
+                    ...menuBtn,
+                    color: disabled ? '#3a3a3a' : pinned ? '#5ca8a0' : '#777',
+                    cursor: disabled ? 'not-allowed' : 'pointer',
+                  }}
+                  onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = '#1e1e1e' }}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                >
+                  {pinned ? 'Unpin from stack' : 'Pin to stack'}
+                </button>
+                <div style={{ height: '1px', background: '#1e1e1e' }} />
+              </>
+            )
+          })()}
         </>
       )}
 

@@ -4,6 +4,12 @@ const STORAGE_KEY  = 'proof-v3-projects'
 export const ACTIVE_KEY          = 'proof-v3-active'
 export const SELECTED_KEY        = 'proof-v3-selected'
 export const SELECTED_IMAGE_KEY  = 'proof-v3-selected-image'
+// Source Stack — the pinned ingestion queue at the bottom of the sidebar.
+// Stores an ordered list of source IDs (NOT sources themselves); the
+// resolved sources are derived from `allSources` so deletes flow through
+// automatically. Capped at STACK_LIMIT to keep the panel scrollable.
+export const STACK_KEY           = 'proof-v3-stack'
+export const STACK_LIMIT         = 12
 
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10)

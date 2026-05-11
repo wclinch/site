@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useApp } from '@/context/AppContext'
 import { INBOX_ID } from '@/context/AppContext'
 import SourceItem from './SourceItem'
+import SourceStack from './SourceStack'
 
 export default function SourcePanel({ width }: { width: number | string }) {
   const {
@@ -542,6 +543,10 @@ export default function SourcePanel({ width }: { width: number | string }) {
           </div>
         )
       })()}
+
+      {/* Source Stack — pinned ingestion queue. Hidden while the clock
+          fills the sidebar, since that mode takes over the whole panel. */}
+      <SourceStack hidden={clockOpen} />
 
       <Clock open={clockOpen} onToggle={() => setClockOpen(o => !o)} />
     </div>
