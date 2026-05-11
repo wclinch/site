@@ -41,13 +41,13 @@ export default function About() {
               <span style={{ color: '#999' }}>1. Add sources</span> — drop PDFs or images into the left panel, or paste a URL. New sources are floating by default.
             </p>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-              <span style={{ color: '#999' }}>2. Organize with projects</span> — click <span style={{ color: '#999' }}>+ New project</span> in the left panel, type a name, and press Enter. Drag floating sources into a project folder, or right-click to move them. Up to 3 projects.
+              <span style={{ color: '#999' }}>2. Organize with projects</span> — click <span style={{ color: '#999' }}>+ New project</span> in the left panel, type a name, and press Enter. Drag floating sources into a project folder, or right-click to move them. Drag a folder header to reorder projects. Up to 3 projects.
             </p>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
               <span style={{ color: '#999' }}>3. Open in split view</span> — drag an image into the top viewer pane, drag a PDF or URL into the bottom pane. Hit the expand icon to fullscreen either one. Hit X to close it.
             </p>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-              <span style={{ color: '#999' }}>4. Pin to the stack</span> — drop any source on the <span style={{ color: '#999' }}>Stack</span> at the bottom of the left panel (or right-click → Pin to stack). Click a stacked item to load it into the viewer — images go up top, PDFs and URLs drop to the bottom pane. Hot-swap without losing your draft.
+              <span style={{ color: '#999' }}>4. Pin to the stack</span> — drop any source on the <span style={{ color: '#999' }}>Stack</span> at the bottom of the left panel (or right-click → Pin to stack). Click a stacked item to load it into the viewer — images go up top, PDFs and URLs drop to the bottom pane. The little arrow on each PDF / URL row is clickable: flip it to send that source up to the image pane instead. Hot-swap without losing your draft.
             </p>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
               <span style={{ color: '#999' }}>5. Write</span> — type in the draft panel on the right. The draft is tied to the active project and saves as you type.
@@ -66,18 +66,20 @@ export default function About() {
               { keys: ['Add URL'],               desc: 'Embed a web page as a reference' },
               { keys: ['New project'],           desc: 'Type a name and press Enter to create a project folder' },
               { keys: ['Right-click project'],   desc: 'Rename or delete the project' },
+              { keys: ['Drag folder header'],    desc: 'Reorder projects in the sidebar' },
               { keys: ['Drag source → folder'],  desc: 'Move a floating source into a project' },
               { keys: ['Right-click source'],    desc: 'Rename, move, pin to stack, or remove' },
               { keys: ['Drag image'],            desc: 'Drop into the top viewer pane' },
               { keys: ['Drag PDF / URL'],        desc: 'Drop into the bottom viewer pane' },
               { keys: ['Drag source → Stack'],   desc: 'Pin a source to the bottom-left stack (up to 12)' },
               { keys: ['Click stack item'],      desc: 'Load it into the viewer (image → top, PDF/URL → bottom)' },
+              { keys: ['Click stack arrow'],     desc: 'Flip a PDF / URL row up to the image pane' },
               { keys: ['Drag stack item'],       desc: 'Reorder pinned sources within the stack' },
               { keys: ['× on stack row'],        desc: 'Unpin from the stack (the source itself stays)' },
               { keys: ['Expand (↗)'],           desc: 'Fullscreen that pane in the center column' },
               { keys: ['X'],                     desc: 'Close source from viewer' },
               { keys: ['··· (draft)'],           desc: 'Export or clear the draft' },
-              { keys: ['Storage badge'],         desc: 'Click to see current usage and reset all data' },
+              { keys: ['Storage badge'],         desc: 'Click to see current usage and clear sources (drafts kept)' },
               { keys: ['Esc'],                   desc: 'Close menus' },
             ].map((row, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
@@ -121,7 +123,7 @@ export default function About() {
             You get <span style={{ color: '#999' }}>250&nbsp;MB</span> of local storage and up to <span style={{ color: '#999' }}>3 projects</span> — yours for as long as Site is installed. No subscription, no renewal.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Need a clean slate? Click the <span style={{ color: '#999' }}>storage badge</span> in the top bar to reset every file, project, and draft in one step. The action runs locally and can&apos;t be undone.
+            Need a clean slate? Click the <span style={{ color: '#999' }}>storage badge</span> in the top bar to clear every file and source. <span style={{ color: '#999' }}>Draft text is kept</span> in case the click was accidental — your project shells stay too. The action runs locally and can&apos;t be undone.
           </p>
         </div>
 

@@ -8,7 +8,7 @@ import SourceStack from './SourceStack'
 export default function SourcePanel({ width }: { width: number | string }) {
   const {
     projects, activeId, allSources,
-    uploadFiles, moveSource, moveSourceToProject, addUrl,
+    uploadFiles, moveSource, moveSourceToProject, moveProject, addUrl,
     createProject, switchProject, updateProject, deleteProject,
     namedProjectCount, atProjectLimit,
   } = useApp()
@@ -16,6 +16,10 @@ export default function SourcePanel({ width }: { width: number | string }) {
   // ── New project input ──────────────────────────────────────────────────────
   const [creatingProj, setCreatingProj] = useState(false)
   const [newProjName, setNewProjName]   = useState('')
+  // Inline duplicate-name error rendered right under the input — matches
+  // the "Already added" pattern used for file/URL drops, instead of a
+  // disconnected top-bar toast.
+  const [newProjDupErr, setNewProjDupErr] = useState<string | null>(null)
   const newProjRef = useRef<HTMLInputElement>(null)
 
   // ── Project folder state ───────────────────────────────────────────────────
@@ -50,6 +54,11 @@ export default function SourcePanel({ width }: { width: number | string }) {
   const [dupMsg, setDupMsg]           = useState(false)
   const [draggingId, setDraggingId]   = useState<string | null>(null)
   const [liveOrder, setLiveOrder]     = useState<string[] | null>(null)
+  // Project reorder is a parallel system to source reorder — separate
+  // dataTransfer type, separate live-order so dragging one doesn't
+  // interfere with the other.
+  const [draggingProjId, setDraggingProjId] = useState<string | null>(null)
+  const [projLiveOrder,  setProjLiveOrder]  = useState<string[] | null>(null)
   const [clockOpen, setClockOpen]     = useState(false)
   const folderDropHandled             = useRef(false)
 
@@ -102,15 +111,19 @@ export default function SourcePanel({ width }: { width: number | string }) {
     if (e.dataTransfer.types.includes('Files')) return
     if (dropTargetId) return  // hovering a folder — don't reorder
     e.preventDefault()
-    const items = listRef.current.querySelectorAll<HTMLElement>('[data-src-id]')
-    if (!items.length) return
-    let insertIdx = liveOrder.length
+    // Skip the dragging item itself when picking the insert slot —
+    // otherwise insertIdx is in liveOrder-space (which still includes the
+    // dragging item) while the splice is against `without` (which doesn't),
+    // and the off-by-one makes drags past a neighbour feel sticky.
+    const items = Array.from(listRef.current.querySelectorAll<HTMLElement>('[data-src-id]'))
+      .filter(el => el.dataset.srcId !== draggingId)
+    const without = liveOrder.filter(id => id !== draggingId)
+    let insertIdx = without.length
     for (let i = 0; i < items.length; i++) {
       const rect = items[i].getBoundingClientRect()
       if (e.clientY < rect.top + rect.height * 0.5) { insertIdx = i; break }
     }
-    const without = liveOrder.filter(id => id !== draggingId)
-    const next    = [...without]
+    const next = [...without]
     next.splice(insertIdx, 0, draggingId)
     if (next.join() !== liveOrder.join()) setLiveOrder(next)
   }
@@ -118,6 +131,53 @@ export default function SourcePanel({ width }: { width: number | string }) {
   function handleListDrop(e: React.DragEvent) {
     if (e.dataTransfer.types.includes('Files')) return
     e.stopPropagation()
+  }
+
+  // ── Project (folder) reorder ───────────────────────────────────────────────
+  //
+  // Uses a separate dataTransfer type from source drags so a folder being
+  // reordered never gets misread as "drop source into folder" and vice
+  // versa. Live order updates as the user hovers over other folder
+  // headers; commit on drag end via moveProject.
+  const PROJ_DRAG_TYPE = 'application/x-proof-project-id'
+
+  function handleProjDragStart(projId: string, e: React.DragEvent) {
+    e.stopPropagation()
+    e.dataTransfer.setData(PROJ_DRAG_TYPE, projId)
+    e.dataTransfer.effectAllowed = 'move'
+    setDraggingProjId(projId)
+    setProjLiveOrder(namedProjects.map(p => p.id))
+  }
+
+  function handleProjDragOverHeader(targetProjId: string, e: React.DragEvent) {
+    if (!draggingProjId || !projLiveOrder) return
+    if (targetProjId === draggingProjId) return
+    if (!e.dataTransfer.types.includes(PROJ_DRAG_TYPE)) return
+    e.preventDefault()
+    e.stopPropagation()
+    // Work entirely in `without`-space so the splice index matches the
+    // array we're splicing into. Computing targetIdx against projLiveOrder
+    // (which still contains the dragging item) caused an off-by-one when
+    // dragging downward past a neighbour — items wouldn't swap until the
+    // cursor crossed deep past their midpoint.
+    const without = projLiveOrder.filter(id => id !== draggingProjId)
+    const targetIdx = without.indexOf(targetProjId)
+    if (targetIdx === -1) return
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const above = e.clientY < rect.top + rect.height / 2
+    const insertAt = above ? targetIdx : targetIdx + 1
+    const next = [...without]
+    next.splice(insertAt, 0, draggingProjId)
+    if (next.join() !== projLiveOrder.join()) setProjLiveOrder(next)
+  }
+
+  function handleProjDragEnd() {
+    if (draggingProjId && projLiveOrder) {
+      const toIndex = projLiveOrder.indexOf(draggingProjId)
+      if (toIndex !== -1) moveProject(draggingProjId, toIndex)
+    }
+    setDraggingProjId(null)
+    setProjLiveOrder(null)
   }
 
   function handleFolderDragOver(projId: string, e: React.DragEvent) {
@@ -157,15 +217,33 @@ export default function SourcePanel({ width }: { width: number | string }) {
 
   function handleCreateProject() {
     const name = newProjName.trim()
-    if (name) {
-      const isDuplicate = projects.some(p => p.id !== INBOX_ID && p.name.toLowerCase() === name.toLowerCase())
-      if (!isDuplicate) {
-        // createProject silently no-ops (and warns via toast) when at 3-project cap.
-        createProject(name)
-      }
+    if (!name) {
+      setCreatingProj(false)
+      setNewProjName('')
+      setNewProjDupErr(null)
+      return
     }
-    setCreatingProj(false)
-    setNewProjName('')
+    // Pre-check duplicate ourselves so we can render an inline error;
+    // createProject also guards silently in case it's called elsewhere.
+    // At-cap rejection still uses the top-bar warn() because there's no
+    // input to attach an inline message to.
+    const dup = projects.some(p =>
+      p.id !== INBOX_ID && p.name.trim().toLowerCase() === name.toLowerCase()
+    )
+    if (dup) {
+      setNewProjDupErr(`"${name}" already exists.`)
+      setTimeout(() => newProjRef.current?.select(), 0)
+      // Auto-clear so the message reads as transient feedback, not a
+      // persistent banner sitting under the input.
+      setTimeout(() => setNewProjDupErr(null), 2500)
+      return
+    }
+    const ok = createProject(name)
+    if (ok) {
+      setCreatingProj(false)
+      setNewProjName('')
+      setNewProjDupErr(null)
+    }
   }
 
   const q = filter.trim().toLowerCase()
@@ -211,13 +289,16 @@ export default function SourcePanel({ width }: { width: number | string }) {
               ref={newProjRef}
               autoFocus
               value={newProjName}
-              onChange={e => setNewProjName(e.target.value)}
+              onChange={e => { setNewProjName(e.target.value); if (newProjDupErr) setNewProjDupErr(null) }}
               placeholder="Project name..."
               onKeyDown={e => {
                 if (e.key === 'Enter') handleCreateProject()
-                if (e.key === 'Escape') { setCreatingProj(false); setNewProjName('') }
+                if (e.key === 'Escape') { setCreatingProj(false); setNewProjName(''); setNewProjDupErr(null) }
               }}
-              onBlur={() => { handleCreateProject() }}
+              // Skip auto-commit on blur while the dup error is showing —
+              // otherwise tabbing away closes the input and loses the
+              // message before the user reads it.
+              onBlur={() => { if (!newProjDupErr) handleCreateProject() }}
               style={{
                 flex: 1, background: 'transparent', border: 'none', outline: 'none',
                 fontSize: '12px', color: '#ccc', fontFamily: 'inherit',
@@ -250,6 +331,25 @@ export default function SourcePanel({ width }: { width: number | string }) {
           }}>
             {namedProjectCount} / 3
           </span>
+        </div>
+      )}
+
+      {/* Inline duplicate-name validation — bare muted text, no surface
+          or divider, auto-dismisses after a couple seconds (timer wired
+          where the error is set). Matches the unobtrusive inline copy
+          used elsewhere for transient validation. */}
+      {!clockOpen && newProjDupErr && (
+        <div style={{
+          // padding-top is bigger than padding-bottom because the "Add
+          // file" box below has its own marginTop:10 (from `shell`). The
+          // visible gap below the message = padding-bottom + 10, so we
+          // give padding-top an extra 10 to match — making the text sit
+          // visually centered between the divider above and the Add file
+          // box below rather than biased toward the divider.
+          padding: '16px 14px 6px', fontSize: '11px', color: '#666',
+          letterSpacing: '0.02em', lineHeight: 1,
+        }}>
+          {newProjDupErr}
         </div>
       )}
 
@@ -390,8 +490,13 @@ export default function SourcePanel({ width }: { width: number | string }) {
                 <div style={{ padding: '6px 16px', fontSize: '12px', color: '#555' }}>No results</div>
               )}
 
-              {/* Named project folders */}
-              {namedProjects.map(proj => {
+              {/* Named project folders — render in liveOrder while a folder
+                  is being dragged so the user sees the new position before
+                  release. */}
+              {(draggingProjId && projLiveOrder
+                ? projLiveOrder.map(id => namedProjects.find(p => p.id === id)).filter(Boolean) as typeof namedProjects
+                : namedProjects
+              ).map(proj => {
                 const isActive    = proj.id === activeId
                 const isCollapsed = !expanded.has(proj.id)
                 const projSrcs    = proj.sources
@@ -399,17 +504,31 @@ export default function SourcePanel({ width }: { width: number | string }) {
                   ? liveOrder.map(id => projSrcs.find(s => s.id === id)).filter(Boolean) as typeof projSrcs
                   : filterSources(projSrcs)
                 const isDropTarget = dropTargetId === proj.id
+                const isDraggingMe = draggingProjId === proj.id
 
                 return (
-                  <div key={proj.id}>
+                  <div key={proj.id} style={{ opacity: isDraggingMe ? 0.35 : 1, transition: 'opacity 0.1s' }}>
                     {/* Folder header */}
                     <div
+                      draggable
+                      onDragStart={e => handleProjDragStart(proj.id, e)}
+                      onDragEnd={handleProjDragEnd}
                       onClick={e => {
+                        // Suppress the click toggle when finishing a drag —
+                        // browsers fire onClick after onDragEnd in some cases.
+                        if (draggingProjId) return
                         e.stopPropagation()
                         switchProject(proj.id)
                         setExpanded(s => { const n = new Set(s); isCollapsed ? n.add(proj.id) : n.delete(proj.id); return n })
                       }}
-                      onDragOver={e => handleFolderDragOver(proj.id, e)}
+                      onDragOver={e => {
+                        // Project drag → reorder. Source drag → drop-into-folder.
+                        if (e.dataTransfer.types.includes(PROJ_DRAG_TYPE)) {
+                          handleProjDragOverHeader(proj.id, e)
+                        } else {
+                          handleFolderDragOver(proj.id, e)
+                        }
+                      }}
                       onDragLeave={() => setDropTargetId(null)}
                       onDrop={e => handleFolderDrop(proj.id, e)}
                       onContextMenu={e => {
@@ -544,8 +663,9 @@ export default function SourcePanel({ width }: { width: number | string }) {
         )
       })()}
 
-      {/* Source Stack — pinned ingestion queue. Hidden while the clock
-          fills the sidebar, since that mode takes over the whole panel. */}
+      {/* Source Stack — pinned ingestion queue. Sits at the bottom of the
+          sidebar, above the Clock, so a quick drop-from-anywhere lands in
+          a predictable place. Hidden while the clock fills the sidebar. */}
       <SourceStack hidden={clockOpen} />
 
       <Clock open={clockOpen} onToggle={() => setClockOpen(o => !o)} />

@@ -350,16 +350,22 @@ function PdfViewer({ source, wrongMsg }: { source: ReturnType<typeof useApp>['se
 
   if (source?.fileType === 'url') return <UrlViewer source={source} />
 
+  // Defensive: if the bottom pane somehow ends up with a non-PDF source
+  // (e.g. an image that slipped through stale state), don't hand the
+  // blob to react-pdf — `<Document>` blows up with InvalidPDFException.
+  // Show the empty drop-zone instead.
+  const isNonPdfSource = source && source.fileType && source.fileType !== 'pdf'
+
   return (
     <div ref={containerRef} style={{ flex: 1, overflow: 'auto', background: '#080808', display: 'flex', flexDirection: 'column' }}>
-      {!source                               && <Empty label={wrongMsg ?? 'Drop a PDF or paste a URL'} sub={wrongMsg ? undefined : 'PDF · URL · Draft on the right stays tied to what\'s open'} />}
+      {(!source || isNonPdfSource)            && <Empty label={wrongMsg ?? 'Drop a PDF or paste a URL'} sub={wrongMsg ? undefined : 'PDF · URL · Draft on the right stays tied to what\'s open'} />}
       {source?.status === 'queued'           && <Msg>Waiting...</Msg>}
       {source?.status === 'extracting'       && <Msg>Reading document...</Msg>}
       {source?.status === 'done' && !fileUrl && <Msg>Loading...</Msg>}
       {source?.status === 'error'            && <Msg>{source.error ?? 'Could not load document.'}</Msg>}
       {source?.status === 'done' && loadError && <Msg>Could not read this PDF.</Msg>}
 
-      {source?.status === 'done' && fileUrl && !loadError && (
+      {source?.status === 'done' && fileUrl && !loadError && !isNonPdfSource && (
         <div>
           <Document
             file={fileUrl}

@@ -14,7 +14,14 @@ const { app, BrowserWindow, Menu, dialog, shell, protocol, nativeImage } = requi
 const path  = require('path')
 const fs    = require('fs')
 
-const isDev = !app.isPackaged
+// `app.isPackaged` flips to `true` in our dev setup because
+// scripts/rename-electron-dev.mjs renames the Electron binary to "Site" to
+// fix the Dock label — and Electron decides default-app vs packaged based
+// on argv[0] being literally "Electron". Once renamed, defaultApp is
+// undefined → isPackaged is true → dev would silently use the production
+// `site://` protocol and 404 on every route. The npm dev script sets
+// SITE_DEV=1 so we can detect dev reliably regardless of the rename.
+const isDev = process.env.SITE_DEV === '1' || !app.isPackaged
 
 // The static export lives next to main.cjs once packaged (electron-builder
 // copies the project root). In dev (unpackaged) we resolve from the repo.

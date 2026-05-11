@@ -14,7 +14,7 @@
     "start": "next start",
     "lint": "eslint",
     "electron:dev:rename": "node scripts/rename-electron-dev.mjs",
-    "electron:dev": "npm run electron:dev:rename && concurrently -k -n next,electron -c blue,magenta \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
+    "electron:dev": "npm run electron:dev:rename && concurrently -k -n next,electron -c blue,magenta \"npm run dev\" \"wait-on http://localhost:3000 && SITE_DEV=1 electron .\"",
     "electron:pack": "npm run build:desktop && electron-builder --dir",
     "electron:build": "npm run build:desktop && electron-builder",
     "electron:build:mac": "npm run build:desktop && electron-builder --mac",

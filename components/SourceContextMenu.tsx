@@ -111,7 +111,11 @@ export default function SourceContextMenu() {
                   title={disabled ? 'Source stack is full' : undefined}
                   style={{
                     ...menuBtn,
-                    color: disabled ? '#3a3a3a' : pinned ? '#5ca8a0' : '#777',
+                    // Same `#777` weight as every other menu item — the
+                    // pinned state is already implied by the label
+                    // ("Unpin from stack" vs "Pin to stack"), no need to
+                    // color it differently from its siblings.
+                    color: disabled ? '#3a3a3a' : '#777',
                     cursor: disabled ? 'not-allowed' : 'pointer',
                   }}
                   onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = '#1e1e1e' }}

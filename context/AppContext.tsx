@@ -66,6 +66,7 @@ interface AppState {
   clearFragments: () => void
   moveSource: (srcId: string, toIndex: number) => void
   moveSourceToProject: (srcId: string, targetProjId: string) => void
+  moveProject: (projId: string, toIndex: number) => void
   uploadFiles: (files: FileList | File[], targetProjId?: string) => Promise<void>
   retrySource: (srcId: string) => Promise<void>
   removeSource: (srcId: string) => void
@@ -427,10 +428,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }))
   }
 
+  // Reorder named projects within the projects array. Inbox stays where
+  // it is (it's not user-visible in the project list); only the named
+  // projects shuffle. `toIndex` is an index into the named-projects view,
+  // i.e. 0 means "first folder", not "first project array slot".
+  function moveProject(projId: string, toIndex: number) {
+    if (projId === INBOX_ID) return
+    setProjects(ps => {
+      const named = ps.filter(p => p.id !== INBOX_ID)
+      const from  = named.findIndex(p => p.id === projId)
+      if (from === -1) return ps
+      const arr = [...named]
+      const [item] = arr.splice(from, 1)
+      const clamped = Math.max(0, Math.min(toIndex, arr.length))
+      arr.splice(clamped, 0, item)
+      // Stitch inbox back in at its original position.
+      const inboxIdx = ps.findIndex(p => p.id === INBOX_ID)
+      const out = [...arr]
+      if (inboxIdx !== -1) out.splice(inboxIdx, 0, ps[inboxIdx])
+      return out
+    })
+  }
+
   function moveSourceToProject(srcId: string, targetProjId: string) {
     setProjects(ps => {
       const src = ps.flatMap(p => p.sources).find(s => s.id === srcId)
       if (!src) return ps
+      // No-op guard: if the source already lives in the target project,
+      // bail. Without this, .map() would hit the remove branch first and
+      // never reach the add branch (each project takes a single arm of
+      // the if/else chain), so the source gets stripped and never
+      // re-attached — which is the "drag one floating source onto
+      // another and it disappears" bug, since dropping an inbox source
+      // on another inbox source bubbles up to handleInboxDrop and asks
+      // to move the source it already owns back into inbox.
+      const currentProj = ps.find(p => p.sources.some(s => s.id === srcId))
+      if (currentProj?.id === targetProjId) return ps
       return ps.map(p => {
         if (p.sources.some(s => s.id === srcId)) {
           return { ...p, sources: p.sources.filter(s => s.id !== srcId) }
@@ -585,8 +618,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       warn(`Project limit reached (${PROJECT_LIMIT}/${PROJECT_LIMIT}). Delete a project to add more.`)
       return false
     }
+    // Duplicate-name guard — silent. The caller surfaces the message
+    // inline next to the input that triggered it; using the top-bar
+    // warn() toast here would be inconsistent with the rest of the
+    // app's inline validation pattern (see `dupMsg` for "Already added"
+    // on file/URL drops).
+    const trimmed = name?.trim() ?? ''
+    if (trimmed) {
+      const dup = projects.some(p =>
+        p.id !== INBOX_ID && p.name.trim().toLowerCase() === trimmed.toLowerCase()
+      )
+      if (dup) return false
+    }
     const p = newProject(namedProjectCount + 1)
-    if (name) p.name = name
+    if (trimmed) p.name = trimmed
     setProjects(ps => [...ps, p])
     setActiveId(p.id)
     setSelectedId(null)
@@ -691,7 +736,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     namedProjectCount, atProjectLimit,
     setShowProjects, setSelectedId, setSelectedImageId, setSelectedIds, setAnchorId,
     setContextMenu, setProjContextMenu,
-    setProjects, updateProject, patchSource, moveSource, moveSourceToProject,
+    setProjects, updateProject, patchSource, moveSource, moveSourceToProject, moveProject,
     addClip, removeClip, updateClip, reorderClips,
     addFragment, insertFragment, removeFragment, updateFragment, moveFragment, clearFragments,
     uploadFiles, retrySource,

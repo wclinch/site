@@ -2,6 +2,13 @@
 import { useEffect, useState, useCallback } from 'react'
 import { getStorageUsage, STORAGE_LIMIT_BYTES } from '@/lib/storage-limit'
 import { clearAllStored } from '@/lib/idb'
+import type { Project } from '@/lib/types'
+
+// Keys whose values we wipe wholesale (selections / stack / active project
+// id). Project records themselves are preserved with sources stripped — see
+// reset() — so accidentally clicking "reset" never costs the user their
+// draft text.
+const PROJECTS_KEY  = 'proof-v3-projects'
 
 // Top-bar badge showing "X.X MB / 250 MB". Always visible.
 //
@@ -79,14 +86,37 @@ export default function StorageBadge() {
     }
     setBusy(true)
     try {
-      // Wipe IDB files + extracted content, and the localStorage state
-      // that referenced them. A full reload is the cleanest way to get
-      // React state back in sync without threading a reset callback
-      // through every consumer.
+      // Preserve draft text per project — if the click was accidental the
+      // user shouldn't lose their writing. We snapshot projects first,
+      // strip their `sources` + legacy `fragments`, then restore. Project
+      // shells (id, name, draft, projectDraft, scratchpad) stay, so the
+      // active project still has a home for the recovered text.
+      let preservedProjects: Project[] = []
+      try {
+        const raw = localStorage.getItem(PROJECTS_KEY)
+        if (raw) {
+          const ps = JSON.parse(raw) as Project[]
+          if (Array.isArray(ps)) {
+            preservedProjects = ps.map(p => ({
+              ...p,
+              sources: [],
+              fragments: [],
+            }))
+          }
+        }
+      } catch {}
+
+      // Wipe IDB files + extracted content, then every `proof-` key, then
+      // put the stripped project shells back. A full reload is the
+      // cleanest way to resync React state without threading a reset
+      // callback through every consumer.
       await clearAllStored()
       try {
         const keys = Object.keys(localStorage).filter(k => k.startsWith('proof-'))
         keys.forEach(k => localStorage.removeItem(k))
+        if (preservedProjects.length) {
+          localStorage.setItem(PROJECTS_KEY, JSON.stringify(preservedProjects))
+        }
       } catch {}
       window.dispatchEvent(new Event('proof-storage-changed'))
       window.location.reload()
@@ -151,8 +181,8 @@ export default function StorageBadge() {
               </div>
               <div style={{ fontSize: '12px', color: armed ? '#aaa' : '#888', lineHeight: 1.7 }}>
                 {armed
-                  ? 'Click again to permanently delete every file, project, and draft on this machine. There is no undo.'
-                  : <>All files, projects, and drafts on this machine will be permanently removed. This action can&apos;t be undone.</>}
+                  ? 'Click again to permanently remove every source and file on this machine. Drafts will be kept in case the click was accidental. There is no undo.'
+                  : <>All sources and files on this machine will be removed. <span style={{ color: '#999' }}>Draft text is kept</span> in case the click was accidental. This action can&apos;t be undone.</>}
               </div>
             </div>
 

@@ -29,9 +29,17 @@ function StorageWarning() {
   if (!msg) return null
   return (
     <div style={{
-      position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)',
-      background: '#1a0f0f', border: '1px solid #4a2020', borderRadius: '4px',
-      padding: '9px 16px', fontSize: '12px', color: '#a55', letterSpacing: '0.04em',
+      // Top-center, just under the project bar — validation messages
+      // ("name already exists", "limit reached") read as part of the
+      // header chrome instead of a stray notification at the bottom.
+      position: 'fixed', top: '56px', left: '50%', transform: 'translateX(-50%)',
+      // Neutral palette to match the rest of the app (#0f0f0f surface,
+      // #222 borders, #888 text). The old oxblood treatment implied a
+      // destructive error; most of what flows through here is just
+      // input-level validation.
+      background: '#0f0f0f', border: '1px solid #222', borderRadius: '4px',
+      padding: '9px 16px', fontSize: '12px', color: '#aaa', letterSpacing: '0.04em',
+      boxShadow: '0 6px 20px rgba(0,0,0,0.5)',
       zIndex: 9999, pointerEvents: 'none',
     }}>
       {msg}

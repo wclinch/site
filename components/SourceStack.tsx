@@ -11,9 +11,13 @@ import type { QueuedSource } from '@/lib/types'
 // project deletes flow through automatically. This component is purely a
 // view + drop target.
 
-const COLLAPSED_HEIGHT = 28      // px, matches the Clock collapsed row
-const EXPANDED_MAX_VH  = '35vh'  // ≈ 35% of sidebar height — fixed cap
-const EXPANDED_MIN_PX  = 160     // floor so an empty stack still has presence
+const COLLAPSED_HEIGHT = 28      // px, matches the standard panel header
+const EXPANDED_MAX_VH  = '65vh'  // expanded stack is the primary working
+                                 // surface but leaves ~35vh for the source
+                                 // list above so it stays usable, not just
+                                 // a thin header.
+const EXPANDED_MIN_PX  = 380     // floor — drop target reads as a real
+                                 // surface without crowding the list
 
 // `application/x-proof-source-id` is the drag type SourceItem sets when a
 // source is dragged from the main list. Reusing it lets users drag any
@@ -23,15 +27,58 @@ const DRAG_TYPE = 'application/x-proof-source-id'
 export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
   const {
     stackSources, stackLimit, atStackLimit,
-    addToStack, removeFromStack, clearStack, reorderStack, openInPane,
+    addToStack, removeFromStack, clearStack, reorderStack,
+    setSelectedId, setSelectedImageId,
     selectedId, selectedImageId, allSources,
   } = useApp()
 
-  const [open, setOpen]         = useState(false)
+  // Open by default — the stack is part of the primary working surface,
+  // not a hidden tray. The user can collapse it via the header chevron.
+  const [open, setOpen]         = useState(true)
   const [dragOver, setDragOver] = useState(false)
   const [reorderIdx, setReorderIdx] = useState<number | null>(null) // hovered drop slot during in-stack reorder
+  // Per-item pane override. By default a source loads into its natural
+  // pane (image → top, PDF/URL/note → bottom); clicking the row's arrow
+  // flips the preference so the next row-click loads it into the other
+  // pane. Persisted only for the session — collapses on reload.
+  const [paneOverrides, setPaneOverrides] = useState<Record<string, 'top' | 'bottom'>>({})
   const dragSrcIdRef = useRef<string | null>(null)
   const listRef     = useRef<HTMLDivElement>(null)
+
+  // A source "looks like an image" if its fileType says so OR its
+  // filename ends in a known image extension. The filename check covers
+  // (a) legacy sources written before the fileType field existed, and
+  // (b) any source whose fileType somehow got mislabeled. Images can
+  // only render in the top pane — never togglable, never sent down to
+  // the PDF viewer (which would crash on a PNG).
+  const IMG_EXT = /\.(png|jpe?g|webp|gif|bmp|heic|avif)$/
+  function looksLikeImage(src: QueuedSource): boolean {
+    if (src.fileType === 'image') return true
+    const name = (src.label ?? src.raw ?? '').toLowerCase()
+    return IMG_EXT.test(name)
+  }
+  function defaultPaneFor(src: QueuedSource): 'top' | 'bottom' {
+    return looksLikeImage(src) ? 'top' : 'bottom'
+  }
+  function effectivePane(src: QueuedSource): 'top' | 'bottom' {
+    return paneOverrides[src.id] ?? defaultPaneFor(src)
+  }
+  function togglePane(src: QueuedSource) {
+    const next = effectivePane(src) === 'top' ? 'bottom' : 'top'
+    setPaneOverrides(o => {
+      // If the new value matches the natural default, drop the override
+      // entirely so we don't pile up dead entries.
+      if (next === defaultPaneFor(src)) {
+        const { [src.id]: _, ...rest } = o
+        return rest
+      }
+      return { ...o, [src.id]: next }
+    })
+  }
+  function openSrcInEffectivePane(src: QueuedSource) {
+    if (effectivePane(src) === 'top') setSelectedImageId(src.id)
+    else setSelectedId(src.id)
+  }
 
   // Auto-open the stack the first time something is added, so the user
   // sees the result of their drop. We don't auto-collapse — that's manual.
@@ -77,31 +124,36 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
     }
   }
 
-  // Header — visible in both collapsed and expanded states. Click anywhere
-  // on it (except the action buttons) toggles open.
+  // Header — visible in both collapsed and expanded states. Matches the
+  // standard 28px / borderBottom panel-header style used by the Reference
+  // and Pdf/Website pane headers in ReaderPanel, so the Stack reads as
+  // peer with them visually rather than a special floating tray.
+  //
+  // Only the expand/collapse icon is the toggle target — the header
+  // surface itself doesn't react to clicks, so accidental clicks on the
+  // label or count don't fire a collapse the user didn't intend.
   const header = (
     <div
-      onClick={() => setOpen(o => !o)}
       style={{
         height: `${COLLAPSED_HEIGHT}px`, flexShrink: 0,
         display: 'flex', alignItems: 'center', gap: '6px',
         padding: '0 8px 0 14px',
+        borderBottom: '1px solid #1a1a1a',
         borderTop: '1px solid #1a1a1a',
-        cursor: 'pointer', userSelect: 'none',
-        background: dragOver ? 'rgba(92,168,160,0.05)' : 'transparent',
+        userSelect: 'none',
+        background: dragOver ? '#0d0d0d' : 'transparent',
         transition: 'background 0.12s',
       }}
     >
       <span style={{
-        fontSize: '10px', color: open ? '#888' : '#555',
-        letterSpacing: '0.1em', textTransform: 'uppercase',
-        transition: 'color 0.12s',
+        fontSize: '10px', color: '#888',
+        letterSpacing: '0.04em', userSelect: 'none',
       }}>
         Stack
       </span>
       <span style={{
         fontSize: '10px',
-        color: atStackLimit ? '#a55' : '#3a3a3a',
+        color: atStackLimit ? '#a55' : '#555',
         letterSpacing: '0.04em', fontVariantNumeric: 'tabular-nums',
       }}>
         {stackSources.length} / {stackLimit}
@@ -121,7 +173,9 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
           onMouseLeave={e => (e.currentTarget.style.color = '#444')}
         >Clear</button>
       )}
-      <Chevron open={open} />
+      <HeaderIconBtn onClick={() => setOpen(o => !o)} title={open ? 'Collapse stack' : 'Expand stack'}>
+        {open ? <CollapseIcon /> : <ExpandIcon />}
+      </HeaderIconBtn>
     </div>
   )
 
@@ -149,7 +203,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
         minHeight: `${EXPANDED_MIN_PX}px`,
         display: 'flex', flexDirection: 'column',
         overflow: 'hidden',
-        background: dragOver ? 'rgba(92,168,160,0.03)' : 'transparent',
+        background: dragOver ? '#0a0a0a' : 'transparent',
         transition: 'background 0.12s',
       }}
     >
@@ -167,7 +221,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
         {stackSources.length === 0 ? (
           <div style={{
             padding: '14px 16px', fontSize: '11px',
-            color: dragOver ? '#5ca8a0' : '#3a3a3a',
+            color: dragOver ? '#888' : '#3a3a3a',
             letterSpacing: '0.03em', lineHeight: 1.6,
             transition: 'color 0.12s',
           }}>
@@ -182,14 +236,22 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
             const isActive = isActiveTop || isActiveBottom
             const isDraggingMe = dragSrcIdRef.current === src.id
             const showSlotBefore = reorderIdx === i && !isDraggingMe
+            const pane = effectivePane(src)
+            // Only PDFs and URLs can be sent to either pane. Anything
+            // that looks like an image is locked to the top pane (sending
+            // a PNG to the PDF viewer crashes <Document>); notes are
+            // locked to the bottom one.
+            const canToggle = !looksLikeImage(src) && (src.fileType === 'pdf' || src.fileType === 'url')
             return (
               <div key={src.id}>
                 {showSlotBefore && <DropSlot />}
                 <StackRow
                   src={src}
                   isActive={isActive}
-                  pane={src.fileType === 'image' ? 'top' : 'bottom'}
-                  onClick={() => openInPane(src.id)}
+                  pane={pane}
+                  canToggle={canToggle}
+                  onClick={() => openSrcInEffectivePane(src)}
+                  onToggleArrow={() => togglePane(src)}
                   onRemove={() => removeFromStack(src.id)}
                   onDragStart={e => {
                     dragSrcIdRef.current = src.id
@@ -225,13 +287,15 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
 // ─── Row ────────────────────────────────────────────────────────────────────
 
 function StackRow({
-  src, isActive, pane, onClick, onRemove,
+  src, isActive, pane, canToggle, onClick, onToggleArrow, onRemove,
   onDragStart, onDragEnd, onDragOverRow,
 }: {
   src: QueuedSource
   isActive: boolean
   pane: 'top' | 'bottom'
+  canToggle: boolean
   onClick: () => void
+  onToggleArrow: () => void
   onRemove: () => void
   onDragStart: (e: React.DragEvent) => void
   onDragEnd: () => void
@@ -253,16 +317,22 @@ function StackRow({
         display: 'flex', alignItems: 'center', gap: '8px',
         padding: '6px 10px 6px 14px',
         cursor: 'pointer', userSelect: 'none',
-        background: isActive ? '#0f0f0f' : hov ? '#0a0a0a' : 'transparent',
-        borderLeft: isActive ? '2px solid #5ca8a0' : '2px solid transparent',
+        background: isActive ? '#111' : hov ? '#0d0d0d' : 'transparent',
+        borderLeft: isActive ? '2px solid #444' : '2px solid transparent',
         transition: 'background 0.1s, border-color 0.1s',
       }}
     >
-      <PaneArrow pane={pane} dim={!isActive} />
+      <PaneArrow
+        pane={pane} dim={!isActive} interactive={canToggle}
+        onClick={e => { e.stopPropagation(); if (canToggle) onToggleArrow() }}
+        title={canToggle
+          ? `Open in ${pane === 'top' ? 'top' : 'bottom'} pane — click to switch`
+          : `Open in ${pane === 'top' ? 'top' : 'bottom'} pane`}
+      />
       <span style={{
         flex: 1, minWidth: 0,
         fontSize: '11px', letterSpacing: '0.02em',
-        color: isActive ? '#bbb' : hov ? '#888' : '#666',
+        color: isActive ? '#ccc' : hov ? '#888' : '#666',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         transition: 'color 0.1s',
       }}>
@@ -278,7 +348,7 @@ function StackRow({
           fontSize: '12px', borderRadius: '2px',
           opacity: hov ? 1 : 0, transition: 'opacity 0.12s, color 0.12s',
         }}
-        onMouseEnter={e => (e.currentTarget.style.color = '#c66')}
+        onMouseEnter={e => (e.currentTarget.style.color = '#888')}
         onMouseLeave={e => (e.currentTarget.style.color = '#444')}
       >×</button>
     </div>
@@ -289,7 +359,7 @@ function DropSlot() {
   return (
     <div style={{
       height: '2px', margin: '2px 14px',
-      background: '#5ca8a0', borderRadius: '1px',
+      background: '#666', borderRadius: '1px',
       opacity: 0.7,
     }} />
   )
@@ -302,12 +372,23 @@ function badgeKind(src: QueuedSource): 'IMG' | 'PDF' | 'URL' | 'NOTE' {
   return 'PDF'
 }
 
+// Per-type palette mirrors the file-type dot in SourceItem so a stacked
+// item reads as the same "kind" of thing as it does in the main source
+// list — color + glyph carry the same meaning across both surfaces.
+const KIND_COLOR: Record<'IMG' | 'PDF' | 'URL' | 'NOTE', string> = {
+  IMG:  '#5c9e6e',
+  PDF:  '#5c7eb8',
+  URL:  '#5ca8a0',
+  NOTE: '#b8935c',
+}
+
 function TypeBadge({ kind }: { kind: 'IMG' | 'PDF' | 'URL' | 'NOTE' }) {
+  const color = KIND_COLOR[kind]
   return (
     <span style={{
       flexShrink: 0,
       fontSize: '8px', letterSpacing: '0.1em',
-      color: '#555', background: '#141414',
+      color, background: '#141414',
       border: '1px solid #1e1e1e', borderRadius: '2px',
       padding: '1px 4px',
       fontVariantNumeric: 'tabular-nums',
@@ -317,32 +398,104 @@ function TypeBadge({ kind }: { kind: 'IMG' | 'PDF' | 'URL' | 'NOTE' }) {
   )
 }
 
-function PaneArrow({ pane, dim }: { pane: 'top' | 'bottom'; dim: boolean }) {
-  const color = dim ? '#333' : '#5ca8a0'
+// Clickable only when `interactive` (i.e. the source can render in either
+// pane — PDFs and URLs). For image/note rows the arrow is just a static
+// indicator of which pane the source will land in, no hover state, no
+// pointer cursor — same glyph but no implied affordance to flip it.
+function PaneArrow({
+  pane, dim, interactive, onClick, title,
+}: {
+  pane: 'top' | 'bottom'
+  dim: boolean
+  interactive: boolean
+  onClick: (e: React.MouseEvent) => void
+  title: string
+}) {
+  const [hov, setHov] = useState(false)
+  const color = (interactive && hov) ? '#aaa' : (dim ? '#444' : '#888')
   return (
-    <svg width="9" height="9" viewBox="0 0 9 9" fill="none"
-      stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"
-      style={{ flexShrink: 0, transition: 'stroke 0.1s' }}
+    <button
+      onClick={onClick}
+      title={title}
+      // Bubble drag events through the host row instead of having the
+      // button swallow them — otherwise grabbing the arrow to drag the
+      // row would fail silently.
+      draggable={false}
+      onMouseEnter={() => interactive && setHov(true)}
+      onMouseLeave={() => interactive && setHov(false)}
+      tabIndex={interactive ? 0 : -1}
+      style={{
+        background: 'none', border: 'none',
+        cursor: interactive ? 'pointer' : 'default',
+        padding: '2px', lineHeight: 0, borderRadius: '2px',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0,
+      }}
     >
-      {pane === 'top'
-        ? <><path d="M4.5 7.5v-6" /><path d="M2 4l2.5-2.5L7 4" /></>
-        : <><path d="M4.5 1.5v6" /><path d="M2 5l2.5 2.5L7 5" /></>
-      }
+      <svg width="9" height="9" viewBox="0 0 9 9" fill="none"
+        stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"
+        style={{ transition: 'stroke 0.1s' }}
+      >
+        {pane === 'top'
+          ? <><path d="M4.5 7.5v-6" /><path d="M2 4l2.5-2.5L7 4" /></>
+          : <><path d="M4.5 1.5v6" /><path d="M2 5l2.5 2.5L7 5" /></>
+        }
+      </svg>
+    </button>
+  )
+}
+
+// Bracket-style expand/collapse icons matching the Reference and Pdf/Website
+// pane headers in ReaderPanel — so all three panel-header glyphs read as the
+// same family.
+function ExpandIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 11 11" fill="none"
+      stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 4V1H4" /><path d="M7 1H10V4" />
+      <path d="M10 7V10H7" /><path d="M4 10H1V7" />
     </svg>
   )
 }
 
-function Chevron({ open }: { open: boolean }) {
+function CollapseIcon() {
   return (
-    <svg width="9" height="7" viewBox="0 0 9 7" fill="none"
-      stroke="#555" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"
+    <svg width="11" height="11" viewBox="0 0 11 11" fill="none"
+      stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 1V4H1" /><path d="M10 4H7V1" />
+      <path d="M7 10V7H10" /><path d="M1 7H4V10" />
+    </svg>
+  )
+}
+
+// Sidebar palette is more muted than the center column — the bracket
+// glyphs on ReaderPanel use #777/#bbb but in the sidebar that reads as
+// too bright next to the #444-#555 text of the "+ New project" button and
+// the rest of the action chrome. Step down one notch so the icon sits at
+// the same weight as those neighbors.
+function HeaderIconBtn({ onClick, title, children }: {
+  onClick: () => void; title: string; children: React.ReactNode
+}) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      // Clear hover state on click — the icon glyph swaps (expand ↔
+      // collapse) but the button itself stays mounted under a stationary
+      // cursor, so without this the post-click icon keeps the brighter
+      // hover color until the user moves the mouse.
+      onClick={() => { setHov(false); onClick() }}
+      title={title}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
       style={{
-        transition: 'transform 0.15s',
-        transform: open ? 'rotate(0)' : 'rotate(180deg)',
-        flexShrink: 0,
+        background: 'none', border: 'none', cursor: 'pointer',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        padding: '4px', lineHeight: 0, borderRadius: '2px',
+        color: hov ? '#888' : '#555',
+        transition: 'color 0.12s',
       }}
     >
-      <path d="M1.5 5l3-3 3 3" />
-    </svg>
+      {children}
+    </button>
   )
 }

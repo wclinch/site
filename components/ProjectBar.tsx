@@ -15,14 +15,16 @@ export default function ProjectBar() {
         style={{
           display: 'flex', alignItems: 'center',
           textDecoration: 'none', lineHeight: 1,
-          opacity: 0.55, transition: 'opacity 0.15s',
+          opacity: 0.85, transition: 'opacity 0.15s',
         }}
         onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-        onMouseLeave={e => (e.currentTarget.style.opacity = '0.55')}
+        onMouseLeave={e => (e.currentTarget.style.opacity = '0.85')}
       >
+        {/* No background plate — the bare `{` is the mark. Bumped weight +
+            slightly larger glyph so it reads as a logo on its own rather
+            than as a stray punctuation character. */}
         <svg width="22" height="22" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-          <rect width="32" height="32" rx="7" fill="#1a1a1a" />
-          <text x="16" y="23" fontFamily="Georgia, serif" fontSize="22" fontWeight="400" fill="#e8e8e8" textAnchor="middle">{'{'}</text>
+          <text x="16" y="26" fontFamily="Georgia, serif" fontSize="30" fontWeight="500" fill="#e8e8e8" textAnchor="middle">{'{'}</text>
         </svg>
       </a>
 

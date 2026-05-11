@@ -11,9 +11,11 @@ export default function Nav() {
       <Link href="/app" aria-label="Site"
         style={{ display: 'flex', alignItems: 'center', lineHeight: 1 }}
       >
+        {/* No background plate — bare `{` glyph, weight bumped so it reads
+            as a logo rather than as a punctuation character. Matches the
+            in-app ProjectBar mark. */}
         <svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-          <rect width="32" height="32" rx="7" fill="#1a1a1a" />
-          <text x="16" y="23" fontFamily="Georgia, serif" fontSize="22" fontWeight="400" fill="#e8e8e8" textAnchor="middle">{'{'}</text>
+          <text x="16" y="26" fontFamily="Georgia, serif" fontSize="30" fontWeight="500" fill="#e8e8e8" textAnchor="middle">{'{'}</text>
         </svg>
       </Link>
       <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
