@@ -275,13 +275,25 @@ app.whenReady().then(() => {
       // restrict the user's own input. The site:// document itself is
       // still locked down — a malicious embedded page can't reach back
       // through the iframe to the parent.
+      // Next.js's static export uses inline <script> tags to stream the
+      // RSC flight payload that bootstraps React hydration. A strict
+      // script-src that excludes 'unsafe-inline' kills hydration and
+      // leaves the user staring at the empty shell (just the ProjectBar
+      // renders — everything below it depends on the client-side React
+      // mounting). 'unsafe-eval' is needed for the same reason: pdf.js
+      // and some Next chunked-module code uses Function() for module
+      // wrapping. We accept the trade-off because the renderer is
+      // already sandboxed (contextIsolation + nodeIntegration:false +
+      // sandbox:true) — CSP here is defense-in-depth, not the primary
+      // boundary.
       const csp = [
         "default-src 'self' site:",
-        "script-src 'self' site: 'wasm-unsafe-eval'",
+        "script-src 'self' site: 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'",
         "style-src 'self' site: 'unsafe-inline'",
         "img-src 'self' site: data: blob:",
         "font-src 'self' site: data:",
         "connect-src 'self' site: blob: data:",
+        "worker-src 'self' site: blob:",
         "frame-src https:",
         "object-src 'none'",
         "base-uri 'none'",
