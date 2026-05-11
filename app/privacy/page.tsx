@@ -31,7 +31,17 @@ export default function Privacy() {
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Collection</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            None. The application makes no network requests of its own. Network traffic from embedded web pages originates with the page being viewed.
+            None. The application has no analytics, no telemetry, and no user accounts.
+          </p>
+        </div>
+
+        <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Network</span>
+          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
+            One outbound request: license-key validation against <code style={{ color: '#999' }}>api.polar.sh</code> on first activation. The key is the only payload. The result is cached locally; the application does not contact the endpoint again.
+          </p>
+          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
+            Network traffic from embedded web pages originates with the page being viewed.
           </p>
         </div>
 

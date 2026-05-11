@@ -5,8 +5,10 @@ import ProjectBar        from '@/components/ProjectBar'
 import SourcePanel       from '@/components/SourcePanel'
 import DraftPanel        from '@/components/DraftPanel'
 import SourceContextMenu from '@/components/SourceContextMenu'
+import LicenseGate       from '@/components/LicenseGate'
 import { useApp }        from '@/context/AppContext'
 import { useState, useEffect } from 'react'
+import { loadLicense }   from '@/lib/license'
 
 // pdfjs-dist uses DOMMatrix at module init — must not run during SSR
 const ReaderPanel    = dynamic(() => import('@/components/ReaderPanel'),    { ssr: false })
@@ -105,6 +107,30 @@ function Layout() {
 }
 
 export default function AppPage() {
+  // License gate runs outside AppProvider so we don't spin up the
+  // workspace's IDB / context machinery for a user who hasn't activated.
+  // Tri-state: null while we read localStorage on first paint (SSR-safe),
+  // false if no valid license cached, true once activated.
+  const [licensed, setLicensed] = useState<boolean | null>(null)
+  useEffect(() => { setLicensed(loadLicense() !== null) }, [])
+
+  if (licensed === null) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#080808' }}>
+        <ProjectBar />
+      </div>
+    )
+  }
+
+  if (!licensed) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#080808' }}>
+        <ProjectBar />
+        <LicenseGate onActivated={() => setLicensed(true)} />
+      </div>
+    )
+  }
+
   return (
     <AppProvider>
       <Layout />

@@ -288,13 +288,16 @@ app.whenReady().then(() => {
       // already sandboxed (contextIsolation + nodeIntegration:false +
       // sandbox:true) — CSP here is defense-in-depth, not the primary
       // boundary.
+      // api.polar.sh allowed for license-key validation only — see
+      // lib/license.ts. This is the single external endpoint the
+      // packaged app ever contacts; documented on the Privacy page.
       const csp = [
         "default-src 'self' site:",
         "script-src 'self' site: 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'",
         "style-src 'self' site: 'unsafe-inline'",
         "img-src 'self' site: data: blob:",
         "font-src 'self' site: data:",
-        "connect-src 'self' site: blob: data:",
+        "connect-src 'self' site: blob: data: https://api.polar.sh",
         "worker-src 'self' site: blob:",
         "frame-src https:",
         "object-src 'none'",
