@@ -27,11 +27,29 @@ export default function LicenseGate({ onActivated }: { onActivated: () => void }
   return (
     <div style={{
       flex: 1, display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
       background: '#080808',
       fontFamily: 'inherit',
       padding: '24px',
+      position: 'relative',
     }}>
+      {/* Back to landing. Subtle top-left link so the gate doesn't feel
+          like a trap — users who reached it by accident (or who want to
+          re-read the About / Privacy pages) can step back out. */}
+      <a
+        href="/"
+        style={{
+          position: 'absolute', top: '20px', left: '24px',
+          fontSize: '11px', color: '#555',
+          letterSpacing: '0.06em', textDecoration: 'none',
+          transition: 'color 0.15s',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.color = '#aaa')}
+        onMouseLeave={e => (e.currentTarget.style.color = '#555')}
+      >
+        ← Back
+      </a>
+
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ maxWidth: '420px', width: '100%' }}>
 
         {/* Eyebrow */}
@@ -144,6 +162,7 @@ export default function LicenseGate({ onActivated }: { onActivated: () => void }
           One key per purchase. Activation contacts Polar once; no further transmissions.
         </p>
 
+      </div>
       </div>
     </div>
   )
