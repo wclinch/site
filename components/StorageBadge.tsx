@@ -18,7 +18,6 @@ export default function StorageBadge() {
   const [open,  setOpen]    = useState(false)
   const [busy,  setBusy]    = useState(false)
   const [hover, setHover]   = useState(false)
-  const [confirming, setConfirming] = useState(false)
 
   const refresh = useCallback(() => {
     getStorageUsage().then(setUsage)
@@ -41,10 +40,7 @@ export default function StorageBadge() {
   useEffect(() => {
     if (!open) return
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !busy) {
-        setOpen(false)
-        setConfirming(false)
-      }
+      if (e.key === 'Escape' && !busy) setOpen(false)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -68,10 +64,9 @@ export default function StorageBadge() {
   const color = hover ? (pct >= 0.9 ? '#c66' : '#aaa') : baseColor
 
   async function reset() {
-    if (!confirming) {
-      setConfirming(true)
-      return
-    }
+    const confirmed = window.confirm('Are you absolutely sure? This will permanently delete everything and cannot be undone.')
+    if (!confirmed) return
+
     setBusy(true)
     try {
       // Wipe IDB files + extracted content, and the localStorage state
@@ -111,12 +106,7 @@ export default function StorageBadge() {
         <div
           role="dialog"
           aria-modal="true"
-          onClick={() => {
-            if (!busy) {
-              setOpen(false)
-              setConfirming(false)
-            }
-          }}
+          onClick={() => { if (!busy) setOpen(false) }}
           style={{
             position: 'fixed', inset: 0, zIndex: 1000,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -137,12 +127,10 @@ export default function StorageBadge() {
             {/* Header */}
             <div style={{ padding: '16px 18px 14px' }}>
               <div style={{ fontSize: '11px', color: '#777', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>
-                {confirming ? 'Confirm reset' : 'Reset all data'}
+                Reset all data
               </div>
-              <div style={{ fontSize: '12px', color: confirming ? '#c77' : '#888', lineHeight: 1.7 }}>
-                {confirming
-                  ? 'This will permanently delete everything. Once confirmed, this cannot be undone.'
-                  : 'All files, projects, and drafts on this machine will be permanently removed. This action can\'t be undone.'}
+              <div style={{ fontSize: '12px', color: '#888', lineHeight: 1.7 }}>
+                All files, projects, and drafts on this machine will be permanently removed. This action can&apos;t be undone.
               </div>
             </div>
 
@@ -163,17 +151,11 @@ export default function StorageBadge() {
 
             {/* Actions */}
             <div style={{ padding: '14px 18px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              <ModalButton
-                onClick={() => {
-                  if (confirming) setConfirming(false)
-                  else setOpen(false)
-                }}
-                disabled={busy}
-              >
-                {confirming ? 'Go back' : 'Cancel'}
+              <ModalButton onClick={() => setOpen(false)} disabled={busy}>
+                Cancel
               </ModalButton>
               <ModalButton onClick={reset} disabled={busy} destructive>
-                {busy ? 'Resetting…' : confirming ? 'Yes, delete everything' : 'Reset all data'}
+                {busy ? 'Resetting…' : 'Reset all data'}
               </ModalButton>
             </div>
           </div>
