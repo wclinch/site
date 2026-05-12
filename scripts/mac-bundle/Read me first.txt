@@ -15,18 +15,13 @@ Support
 ────────────────────────────────────────────
 
 Manual install (only if the installer doesn't run)
-  1. Open Installers/, mount the DMG that matches the Mac
-       Site-0.1.0-arm64.dmg    Apple Silicon (M1 / M2 / M3 / M4)
-       Site-0.1.0.dmg          Intel
-  2. Drag Site.app to Applications.
-  3. Open Terminal and paste:
+  1. Drag Site.app into the Applications folder.
+  2. Open Terminal and paste:
        xattr -cr /Applications/Site.app
-  4. Launch Site.
+  3. Launch Site.
 
 Why the xattr step?
   Site is not notarized by Apple (notarization requires the $99/yr
   Apple Developer Program). macOS therefore blocks it on first
   launch. The command removes the "downloaded from the internet"
   flag. The application itself is unchanged.
-
-Integrity hashes are in Installers/SHA256SUMS.txt.

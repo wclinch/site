@@ -17,7 +17,7 @@
     "electron:dev": "npm run electron:dev:rename && concurrently -k -n next,electron -c blue,magenta \"npm run dev\" \"wait-on http://localhost:3000 && SITE_DEV=1 electron .\"",
     "electron:pack": "npm run build:desktop && electron-builder --dir",
     "electron:build": "npm run build:desktop && electron-builder",
-    "electron:build:mac": "npm run build:desktop && electron-builder --mac",
+    "electron:build:mac": "npm run build:desktop && electron-builder --mac && node scripts/pack-mac-release.mjs",
     "electron:build:win": "npm run build:desktop && electron-builder --win",
     "electron:build:linux": "npm run build:desktop && electron-builder --linux"
   },
@@ -60,7 +60,7 @@
     "mac": {
       "target": [
         {
-          "target": "dmg",
+          "target": "zip",
           "arch": [
             "arm64",
             "x64"
