@@ -1,9 +1,33 @@
 Site v0.1.0 — macOS
 
 Install
-  Double-click  Install Site.command
-  Click "Allow" if macOS asks.
-  Site installs and launches automatically.
+  Drag Site.app into the Applications folder.
+
+First launch
+  macOS will block Site once, because Site is not notarized by
+  Apple (notarization requires the $99/yr Apple Developer Program).
+  Pick whichever path is easier:
+
+  Path A — System Settings (no Terminal):
+    1. Double-click Site.app. The dialog says "Apple could not
+       verify Site". Click  Done  (NOT Move to Trash — that
+       deletes the app).
+    2. Open System Settings → Privacy & Security.
+    3. Scroll to the bottom. There will be a line:
+         "Site was blocked from use because it is not from an
+          identified developer."
+       Click  Open Anyway.
+    4. Confirm with your password. Site launches.
+
+  Path B — Terminal (one line):
+    Open the Terminal app and paste:
+
+      xattr -cr /Applications/Site.app
+
+    Then double-click Site.app. It launches normally.
+
+  After the first launch, macOS remembers Site on this Mac. You
+  will not see the dialog again.
 
 Activation
   A license key was issued at purchase. Paste it into the gate on
@@ -11,17 +35,3 @@ Activation
 
 Support
   Official_Site_Support@protonmail.com
-
-────────────────────────────────────────────
-
-Manual install (only if the installer doesn't run)
-  1. Drag Site.app into the Applications folder.
-  2. Open Terminal and paste:
-       xattr -cr /Applications/Site.app
-  3. Launch Site.
-
-Why the xattr step?
-  Site is not notarized by Apple (notarization requires the $99/yr
-  Apple Developer Program). macOS therefore blocks it on first
-  launch. The command removes the "downloaded from the internet"
-  flag. The application itself is unchanged.

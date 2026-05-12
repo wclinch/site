@@ -16,7 +16,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync, statSync, copyFileSync, chmodSync, rmSync, mkdtempSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, statSync, copyFileSync, rmSync, mkdtempSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
@@ -60,10 +60,13 @@ for (const [src, dst] of TARGETS) {
   console.log(`    unpacking ${src}...`)
   run('ditto', ['-x', '-k', srcPath, stage])  // ditto preserves resource forks + xattrs
 
-  console.log(`    adding installer + readme...`)
-  copyFileSync(join(BUNDLE_SRC, 'Install Site.command'), join(stage, 'Install Site.command'))
-  copyFileSync(join(BUNDLE_SRC, 'Read me first.txt'),    join(stage, 'Read me first.txt'))
-  chmodSync(join(stage, 'Install Site.command'), 0o755)
+  console.log(`    adding readme...`)
+  copyFileSync(join(BUNDLE_SRC, 'Read me first.txt'), join(stage, 'Read me first.txt'))
+  // We used to also ship an `Install Site.command` helper here, but on
+  // macOS 15 (Sequoia) Gatekeeper hard-blocks unsigned .command files
+  // with the same "Move to Trash" dialog as .app files — so the script
+  // can't actually run as a workaround. The README explains the two
+  // Apple-supported paths past the dialog (System Settings or xattr).
 
   console.log(`    repacking → ${dst}...`)
   rmSync(dstPath, { force: true })
