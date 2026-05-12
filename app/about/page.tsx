@@ -30,7 +30,7 @@ export default function About() {
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>System</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            A local-first workspace for reading sources and writing beside them. PDFs, images, and web pages coexist with the draft in a single window. Files, projects, and text remain on the device.
+            A local-first workspace for reading sources and writing beside them. PDFs, images, and web pages coexist with the project's writing surface in a single window. Files, projects, and text remain on the device.
           </p>
         </div>
 
@@ -41,7 +41,7 @@ export default function About() {
               <span style={{ color: '#999' }}>1. Sources</span> — Drop PDFs or images, or paste a URL. Sources are floating until placed in a project.
             </p>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-              <span style={{ color: '#999' }}>2. Projects</span> — Up to three. Drag sources between projects, or drag a folder header to reorder.
+              <span style={{ color: '#999' }}>2. Projects</span> — Unlimited. Drag sources between projects, or drag a folder header to reorder. Each project holds up to twelve sources.
             </p>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
               <span style={{ color: '#999' }}>3. Viewer</span> — Split surface. Images above, PDFs and URLs below. Either pane fullscreens.
@@ -50,7 +50,7 @@ export default function About() {
               <span style={{ color: '#999' }}>4. Stack</span> — A pinned working set at the base of the sidebar. Click a source to load it; click the row arrow to flip a PDF or URL to the image pane.
             </p>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-              <span style={{ color: '#999' }}>5. Draft</span> — Tied to the active project. Saves as you type.
+              <span style={{ color: '#999' }}>5. Work</span> — Each project has its own writing surface. Saves as you type. Switching projects loads that project's saved work.
             </p>
             <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
               <span style={{ color: '#999' }}>6. Export</span> — Plain text or Markdown.
@@ -78,8 +78,8 @@ export default function About() {
               { keys: ['× on stack row'],        desc: 'Unpin and close from the viewer' },
               { keys: ['Expand (↗)'],           desc: 'Fullscreen the pane' },
               { keys: ['X'],                     desc: 'Close from the viewer' },
-              { keys: ['··· (draft)'],           desc: 'Export or clear the draft' },
-              { keys: ['Storage badge'],         desc: 'Usage and source reset (drafts preserved)' },
+              { keys: ['··· (work)'],            desc: 'Export or clear the work' },
+              { keys: ['Storage badge'],         desc: 'Usage and source reset (work preserved)' },
               { keys: ['Esc'],                   desc: 'Close menus' },
             ].map((row, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
@@ -95,7 +95,7 @@ export default function About() {
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Layout</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Three columns. <span style={{ color: '#999' }}>Sidebar</span>: sources, projects, stack. <span style={{ color: '#999' }}>Center</span>: split viewer — image above, PDF or URL below. <span style={{ color: '#999' }}>Right</span>: draft.
+            Three columns. <span style={{ color: '#999' }}>Sidebar</span>: sources, projects, stack. <span style={{ color: '#999' }}>Center</span>: split viewer — references above and below. <span style={{ color: '#999' }}>Right</span>: the active project's work.
           </p>
         </div>
 
@@ -117,10 +117,10 @@ export default function About() {
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Storage</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>250&nbsp;MB</span> local, <span style={{ color: '#999' }}>3 projects</span>. Files in IndexedDB; structure, drafts, and the stack in localStorage. Nothing leaves the device.
+            <span style={{ color: '#999' }}>250&nbsp;MB</span> local. Unlimited projects, twelve sources each. Files in IndexedDB; project structure, work, and the stack in localStorage. Nothing leaves the device.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            The storage indicator in the top bar clears sources and files. <span style={{ color: '#999' }}>Drafts are preserved.</span> The action is local and cannot be reversed.
+            The storage indicator in the top bar clears sources and files. <span style={{ color: '#999' }}>Work is preserved.</span> The action is local and cannot be reversed.
           </p>
         </div>
 

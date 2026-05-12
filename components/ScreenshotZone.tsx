@@ -26,13 +26,15 @@ export default function ScreenshotZone({ onCollapse }: { onCollapse: () => void 
       onDragOver={allowDrop} onDrop={handleDrop}
     >
       <div style={{ height: '28px', flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 8px 0 14px', borderBottom: '1px solid #1a1a1a', gap: '4px' }}>
-        <span style={{ flex: 1, fontSize: '10px', color: '#888', letterSpacing: '0.04em', userSelect: 'none' }}>Reference</span>
+        <span style={{ flex: 1, fontSize: '10px', color: '#888', letterSpacing: '0.04em', userSelect: 'none' }}>
+          {src ? (src.label ?? src.raw) : 'Reference'}
+        </span>
         <IconBtn onClick={onCollapse} title="Collapse"><CollapseIcon /></IconBtn>
       </div>
 
       {!src && (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.02em' }}>Drop image</span>
+          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.02em' }}>No source loaded</span>
         </div>
       )}
       {src?.fileType === 'image' && <ImageContent source={src} />}

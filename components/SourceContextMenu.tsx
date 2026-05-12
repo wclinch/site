@@ -1,7 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { useApp } from '@/context/AppContext'
-import { INBOX_ID } from '@/context/AppContext'
 import type { RenameSourceDetail } from './SourceItem'
 
 export default function SourceContextMenu() {
@@ -9,7 +8,6 @@ export default function SourceContextMenu() {
     contextMenu, setContextMenu,
     allSources, selectedIds, projects,
     removeSource, removeSelected, moveSourceToProject,
-    inStack, addToStack, removeFromStack, atStackLimit,
   } = useApp()
 
   const [confirmDeleteSrcId, setConfirmDeleteSrcId] = useState<string | null>(null)
@@ -29,9 +27,11 @@ export default function SourceContextMenu() {
 
   const isMulti = selectedIds.size > 1
 
+  // Source belongs to exactly one project. Move targets are every other
+  // project. No "pin / unpin" anymore — being in a project IS being on
+  // the project's stack.
   const homeProj = projects.find(p => p.sources.some(s => s.id === src.id))
-  const namedProjects = projects.filter(p => p.id !== INBOX_ID)
-  const isInInbox = homeProj?.id === INBOX_ID
+  const moveTargetsAll = projects.filter(p => p.id !== homeProj?.id)
 
   function handleRename() {
     const detail: RenameSourceDetail = { srcId: src!.id, currentLabel: src!.label ?? src!.raw }
@@ -62,18 +62,12 @@ export default function SourceContextMenu() {
     letterSpacing: '0.04em', fontFamily: 'inherit',
   }
 
-  // All possible move targets
-  const allTargets = [
-    ...(isInInbox ? [] : [{ id: INBOX_ID, name: 'Unprojected' }]),
-    ...namedProjects.filter(p => p.id !== homeProj?.id),
-  ]
-
   const q = projSearch.trim().toLowerCase()
   const moveTargets = q
-    ? allTargets.filter(t => t.name.toLowerCase().includes(q))
-    : allTargets
+    ? moveTargetsAll.filter(t => t.name.toLowerCase().includes(q))
+    : moveTargetsAll
 
-  const showSearch = allTargets.length > 3
+  const showSearch = moveTargetsAll.length > 3
 
   return (
     <div
@@ -96,41 +90,10 @@ export default function SourceContextMenu() {
             Rename
           </button>
           <div style={{ height: '1px', background: '#1e1e1e' }} />
-          {(() => {
-            const pinned = inStack(src.id)
-            const disabled = !pinned && atStackLimit
-            return (
-              <>
-                <button
-                  onClick={() => {
-                    if (pinned) removeFromStack(src.id)
-                    else if (!disabled) addToStack(src.id)
-                    setContextMenu(null)
-                  }}
-                  disabled={disabled}
-                  title={disabled ? 'Stack full' : undefined}
-                  style={{
-                    ...menuBtn,
-                    // Same `#777` weight as every other menu item — the
-                    // pinned state is already implied by the label
-                    // ("Unpin from stack" vs "Pin to stack"), no need to
-                    // color it differently from its siblings.
-                    color: disabled ? '#3a3a3a' : '#777',
-                    cursor: disabled ? 'not-allowed' : 'pointer',
-                  }}
-                  onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = '#1e1e1e' }}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-                >
-                  {pinned ? 'Unpin' : 'Pin to stack'}
-                </button>
-                <div style={{ height: '1px', background: '#1e1e1e' }} />
-              </>
-            )
-          })()}
         </>
       )}
 
-      {!isMulti && allTargets.length > 0 && (
+      {!isMulti && moveTargetsAll.length > 0 && (
         <>
           {showSearch && (
             <div style={{ padding: '6px 10px' }}>
@@ -161,9 +124,9 @@ export default function SourceContextMenu() {
                 onClick={() => handleMoveTo(t.id)}
                 style={{ ...menuBtn, color: '#555' }}
                 onMouseEnter={e => { e.currentTarget.style.background = '#1e1e1e'; e.currentTarget.style.color = '#888' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#555' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'none';  e.currentTarget.style.color = '#555' }}
               >
-                → {t.id === INBOX_ID ? 'Unprojected' : t.name.length > 22 ? t.name.slice(0, 20) + '…' : t.name}
+                → {t.name.length > 22 ? t.name.slice(0, 20) + '…' : t.name}
               </button>
             ))}
             {moveTargets.length === 0 && (

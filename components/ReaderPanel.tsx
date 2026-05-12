@@ -20,129 +20,140 @@ export default function ReaderPanel({ pdfOnly = false, onExpandScreenshot, onExp
   const { selectedSource, selectedImageSource, setSelectedId, setSelectedImageId } = useApp()
   const [screenshotFull, setScreenshotFull] = useState(false)
   const [pdfFull, setPdfFull] = useState(false)
-  const [wrongDrop, setWrongDrop] = useState<'screenshot' | 'pdf' | null>(null)
-  const [dragOverZone, setDragOverZone] = useState<'screenshot' | 'pdf' | null>(null)
-  const wrongTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [dragOverZone, setDragOverZone] = useState<'top' | 'bottom' | null>(null)
 
-  function flashWrong(zone: 'screenshot' | 'pdf') {
-    setWrongDrop(zone)
-    if (wrongTimer.current) clearTimeout(wrongTimer.current)
-    wrongTimer.current = setTimeout(() => setWrongDrop(null), 2900)
-  }
-
-  function handlePdfDrop(e: React.DragEvent) {
-    e.preventDefault()
-    const srcId   = e.dataTransfer.getData('application/x-proof-source-id')
-    const srcType = e.dataTransfer.getData('application/x-proof-source-type')
-    if (!srcId) return
-    if (srcType === 'pdf' || srcType === 'url') setSelectedId(srcId)
-    else flashWrong('pdf')
-  }
-
-  function handleImageDrop(e: React.DragEvent) {
+  // Both panes accept any source type. The pane just decides which
+  // `selected*Id` slot the drop writes to; SourceContent below routes
+  // by source.fileType regardless of which pane it's in.
+  function handleTopDrop(e: React.DragEvent) {
     e.preventDefault()
     const srcId = e.dataTransfer.getData('application/x-proof-source-id')
     if (srcId) setSelectedImageId(srcId)
   }
-
+  function handleBottomDrop(e: React.DragEvent) {
+    e.preventDefault()
+    const srcId = e.dataTransfer.getData('application/x-proof-source-id')
+    if (srcId) setSelectedId(srcId)
+  }
   function allowDrop(e: React.DragEvent) {
     if (e.dataTransfer.types.includes('application/x-proof-source-id')) e.preventDefault()
   }
-
-  function handleDragEnter(zone: 'screenshot' | 'pdf') {
+  function handleDragEnter(zone: 'top' | 'bottom') {
     return (e: React.DragEvent) => {
-      if (e.dataTransfer.types.includes('application/x-proof-source-id')) {
-        setDragOverZone(zone)
-      }
+      if (e.dataTransfer.types.includes('application/x-proof-source-id')) setDragOverZone(zone)
     }
   }
+  function handleDragLeave() { setDragOverZone(null) }
 
-  function handleDragLeave() {
-    setDragOverZone(null)
-  }
-
-  // In pdfOnly mode (expanded layout from page.tsx) just show PDF
+  // In pdfOnly mode (expanded layout from page.tsx) show only the bottom
+  // pane in full.
   if (pdfOnly) {
     return (
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
-        onDragOver={allowDrop} onDrop={handlePdfDrop}>
+        onDragOver={allowDrop} onDrop={handleBottomDrop}>
         <Header
-          label="PDF / URL"
+          label={paneLabel(selectedSource, 'bottom')}
           onExpand={onExpandPdf ?? (() => {})}
           isFullscreen={pdfIsFullscreen}
           onCollapse={onCollapsePdf ?? (() => {})}
           onClose={selectedSource ? () => setSelectedId(null) : undefined}
         />
-        <PdfViewer
-          source={selectedSource}
-          wrongMsg={wrongDrop === 'pdf' ? 'Images load in the top pane' : undefined}
-        />
+        <SourceContent source={selectedSource} pane="bottom" />
       </div>
     )
   }
 
-  const showScreenshot = !pdfFull
-  const showPdf        = !screenshotFull
+  const showTop    = !pdfFull
+  const showBottom = !screenshotFull
 
   return (
     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-      {/* Screenshot zone */}
-      {showScreenshot && (
+      {/* Top pane */}
+      {showTop && (
         <div
           style={{
             flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden',
-            background: dragOverZone === 'screenshot' ? 'rgba(92, 168, 160, 0.05)' : 'transparent',
+            background: dragOverZone === 'top' ? 'rgba(255, 255, 255, 0.02)' : 'transparent',
             transition: 'background 0.2s',
           }}
           onDragOver={allowDrop}
-          onDragEnter={handleDragEnter('screenshot')}
+          onDragEnter={handleDragEnter('top')}
           onDragLeave={handleDragLeave}
-          onDrop={(e) => { handleImageDrop(e); setDragOverZone(null) }}
+          onDrop={(e) => { handleTopDrop(e); setDragOverZone(null) }}
         >
           <Header
-            label="Reference"
+            label={paneLabel(selectedImageSource, 'top')}
             onExpand={() => { setScreenshotFull(true); setPdfFull(false) }}
             onExpandExternal={onExpandScreenshot}
             isFullscreen={screenshotFull}
             onCollapse={() => setScreenshotFull(false)}
             onClose={selectedImageSource ? () => setSelectedImageId(null) : undefined}
           />
-          <ImageViewer source={selectedImageSource} />
+          <SourceContent source={selectedImageSource} pane="top" />
         </div>
       )}
 
-      {showScreenshot && showPdf && (
+      {showTop && showBottom && (
         <div style={{ height: '1px', flexShrink: 0, background: '#1a1a1a' }} />
       )}
 
-      {/* PDF zone */}
-      {showPdf && (
+      {/* Bottom pane */}
+      {showBottom && (
         <div
           style={{
             flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden',
-            background: dragOverZone === 'pdf' ? 'rgba(92, 168, 160, 0.05)' : 'transparent',
+            background: dragOverZone === 'bottom' ? 'rgba(255, 255, 255, 0.02)' : 'transparent',
             transition: 'background 0.2s',
           }}
           onDragOver={allowDrop}
-          onDragEnter={handleDragEnter('pdf')}
+          onDragEnter={handleDragEnter('bottom')}
           onDragLeave={handleDragLeave}
-          onDrop={(e) => { handlePdfDrop(e); setDragOverZone(null) }}
+          onDrop={(e) => { handleBottomDrop(e); setDragOverZone(null) }}
         >
           <Header
-            label="PDF / URL"
+            label={paneLabel(selectedSource, 'bottom')}
             onExpand={() => { setPdfFull(true); setScreenshotFull(false) }}
             isFullscreen={pdfFull}
             onCollapse={() => setPdfFull(false)}
             onClose={selectedSource ? () => setSelectedId(null) : undefined}
           />
-          <PdfViewer
-            source={selectedSource}
-            wrongMsg={wrongDrop === 'pdf' ? 'Images load in the top pane' : undefined}
-          />
+          <SourceContent source={selectedSource} pane="bottom" />
         </div>
       )}
 
+    </div>
+  )
+}
+
+// Header label: loaded source's name when present, otherwise the
+// neutral "Reference" label on both panes. Same label on either pane
+// because the panes themselves are interchangeable — the position is
+// the only difference.
+function paneLabel(source: QueuedSource | null, _pane: 'top' | 'bottom'): string {
+  if (!source) return 'Reference'
+  const name = source.label ?? source.raw
+  return name.length > 64 ? name.slice(0, 62) + '…' : name
+}
+
+// Routes a source to the right viewer regardless of which pane it
+// landed in. Both panes accept any source type. Empty-state copy stays
+// pane-agnostic — no prescription about what "should" go where.
+function SourceContent({ source }: { source: QueuedSource | null; pane: 'top' | 'bottom' }) {
+  if (!source) {
+    return (
+      <div style={{ flex: 1, background: '#080808', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <Empty label='No source loaded' />
+      </div>
+    )
+  }
+  if (source.fileType === 'note')  return <NoteEditor source={source} />
+  if (source.fileType === 'url')   return <UrlViewer  source={source} />
+  if (source.fileType === 'pdf')   return <PdfViewer  source={source} />
+  if (source.fileType === 'image') return <ImageViewer source={source} />
+  return (
+    <div style={{ flex: 1, background: '#080808', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <Empty label='Unsupported source type' />
     </div>
   )
 }
@@ -261,14 +272,15 @@ function NoteEditor({ source }: { source: QueuedSource }) {
 
 // ─── Image viewer ─────────────────────────────────────────────────────────────
 
-function ImageViewer({ source, wrongMsg }: { source: ReturnType<typeof useApp>['selectedImageSource']; wrongMsg?: string }) {
+// Image-only renderer. SourceContent guarantees we only reach this with
+// `source.fileType === 'image'`, so no internal type-routing or null
+// guards are needed.
+function ImageViewer({ source }: { source: QueuedSource }) {
   const [imgUrl, setImgUrl] = useState<string | null>(null)
   const prevUrl = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!source || source.fileType !== 'image' || source.status !== 'done') {
-      setImgUrl(null); return
-    }
+    if (source.status !== 'done') { setImgUrl(null); return }
     let cancelled = false
     getFile(source.id).then(file => {
       if (cancelled) return
@@ -279,22 +291,17 @@ function ImageViewer({ source, wrongMsg }: { source: ReturnType<typeof useApp>['
       setImgUrl(url)
     })
     return () => { cancelled = true }
-  }, [source?.id, source?.status])
+  }, [source.id, source.status])
 
   useEffect(() => () => {
     if (prevUrl.current) URL.revokeObjectURL(prevUrl.current)
   }, [])
 
-  if (source?.fileType === 'note') return <NoteEditor source={source} />
-  if (source?.fileType === 'url')  return <UrlViewer  source={source} />
-  if (source?.fileType === 'pdf')  return <PdfViewer  source={source as ReturnType<typeof useApp>['selectedSource']} />
-
   return (
     <div style={{ flex: 1, background: '#080808', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {!source && <Empty label='Drop image' sub='PNG · JPG · WEBP · GIF' />}
-      {source && source.status !== 'done' && <Msg>Loading...</Msg>}
-      {source && source.status === 'done' && !imgUrl && <Msg>Image failed to load.</Msg>}
-      {source && source.status === 'done' && imgUrl && (
+      {source.status !== 'done' && <Msg>Loading...</Msg>}
+      {source.status === 'done' && !imgUrl && <Msg>Image failed to load.</Msg>}
+      {source.status === 'done' && imgUrl && (
         <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
           <img src={imgUrl} alt={source.label ?? source.raw}
             draggable={false}
@@ -308,7 +315,10 @@ function ImageViewer({ source, wrongMsg }: { source: ReturnType<typeof useApp>['
 
 // ─── PDF viewer ───────────────────────────────────────────────────────────────
 
-function PdfViewer({ source, wrongMsg }: { source: ReturnType<typeof useApp>['selectedSource']; wrongMsg?: string }) {
+// PDF-only renderer. SourceContent guarantees `source.fileType === 'pdf'`,
+// so the URL-route fallback and the non-pdf defensive guard from the old
+// version are gone — they can't trigger anymore.
+function PdfViewer({ source }: { source: QueuedSource }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(640)
   const [fileUrl, setFileUrl]   = useState<string | null>(null)
@@ -327,7 +337,7 @@ function PdfViewer({ source, wrongMsg }: { source: ReturnType<typeof useApp>['se
   }, [])
 
   useEffect(() => {
-    if (!source || source.status !== 'done') {
+    if (source.status !== 'done') {
       setFileUrl(null); setNumPages(0); return
     }
     let cancelled = false
@@ -342,30 +352,21 @@ function PdfViewer({ source, wrongMsg }: { source: ReturnType<typeof useApp>['se
       setLoadError(false)
     })
     return () => { cancelled = true }
-  }, [source?.id, source?.status])
+  }, [source.id, source.status])
 
   useEffect(() => () => {
     if (prevUrl.current) URL.revokeObjectURL(prevUrl.current)
   }, [])
 
-  if (source?.fileType === 'url') return <UrlViewer source={source} />
-
-  // Defensive: if the bottom pane somehow ends up with a non-PDF source
-  // (e.g. an image that slipped through stale state), don't hand the
-  // blob to react-pdf — `<Document>` blows up with InvalidPDFException.
-  // Show the empty drop-zone instead.
-  const isNonPdfSource = source && source.fileType && source.fileType !== 'pdf'
-
   return (
     <div ref={containerRef} style={{ flex: 1, overflow: 'auto', background: '#080808', display: 'flex', flexDirection: 'column' }}>
-      {(!source || isNonPdfSource)            && <Empty label={wrongMsg ?? 'Drop PDF or URL'} sub={wrongMsg ? undefined : 'PDF · URL · Draft tracks the active project'} />}
-      {source?.status === 'queued'           && <Msg>Waiting...</Msg>}
-      {source?.status === 'extracting'       && <Msg>Reading document...</Msg>}
-      {source?.status === 'done' && !fileUrl && <Msg>Loading...</Msg>}
-      {source?.status === 'error'            && <Msg>{source.error ?? 'Document failed to load.'}</Msg>}
-      {source?.status === 'done' && loadError && <Msg>PDF could not be parsed.</Msg>}
+      {source.status === 'queued'           && <Msg>Waiting...</Msg>}
+      {source.status === 'extracting'       && <Msg>Reading document...</Msg>}
+      {source.status === 'done' && !fileUrl && <Msg>Loading...</Msg>}
+      {source.status === 'error'            && <Msg>{source.error ?? 'Document failed to load.'}</Msg>}
+      {source.status === 'done' && loadError && <Msg>PDF could not be parsed.</Msg>}
 
-      {source?.status === 'done' && fileUrl && !loadError && !isNonPdfSource && (
+      {source.status === 'done' && fileUrl && !loadError && (
         <div>
           <Document
             file={fileUrl}
@@ -459,8 +460,8 @@ function Empty({ label, sub }: { label: string; sub?: string }) {
       gap: '12px',
       padding: '32px 24px',
     }}>
-      <span style={{ fontSize: '14px', color: '#888', letterSpacing: '0.02em', fontWeight: 400 }}>{label}</span>
-      {sub && <span style={{ fontSize: '12px', color: '#666', letterSpacing: '0.02em', textAlign: 'center', lineHeight: 1.6 }}>{sub}</span>}
+      <span style={{ fontSize: '14px', color: '#555', letterSpacing: '0.02em', fontWeight: 400 }}>{label}</span>
+      {sub && <span style={{ fontSize: '12px', color: '#3a3a3a', letterSpacing: '0.02em', textAlign: 'center', lineHeight: 1.6 }}>{sub}</span>}
     </div>
   )
 }

@@ -1,35 +1,43 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { useApp } from '@/context/AppContext'
-import { INBOX_ID } from '@/context/AppContext'
-import SourceItem from './SourceItem'
 import SourceStack from './SourceStack'
+
+// Project-scoped sidebar.
+//
+// Top: new-project input + add-source / add-URL actions.
+// Middle: flat list of projects. Clicking one switches the active
+//         project; the Stack section at the bottom then mirrors that
+//         project's sources. There is no separate "floating sources"
+//         tier — every source lives inside exactly one project.
+// Bottom: SourceStack (active project's sources) + Clock.
+
+const SOURCE_DRAG_TYPE  = 'application/x-proof-source-id'
+const PROJECT_DRAG_TYPE = 'application/x-proof-project-id'
 
 export default function SourcePanel({ width }: { width: number | string }) {
   const {
     projects, activeId, allSources,
-    uploadFiles, moveSource, moveSourceToProject, moveProject, addUrl,
+    uploadFiles, moveSourceToProject, moveProject, addUrl,
     createProject, switchProject, updateProject, deleteProject,
-    namedProjectCount, atProjectLimit,
+    namedProjectCount,
   } = useApp()
 
-  // ── New project input ──────────────────────────────────────────────────────
-  const [creatingProj, setCreatingProj] = useState(false)
-  const [newProjName, setNewProjName]   = useState('')
-  // Inline duplicate-name error rendered right under the input — matches
-  // the "Already added" pattern used for file/URL drops, instead of a
-  // disconnected top-bar toast.
-  const [newProjDupErr, setNewProjDupErr] = useState<string | null>(null)
+  // ── New-project input + inline dup error ─────────────────────────────────
+  const [creatingProj, setCreatingProj]     = useState(false)
+  const [newProjName,  setNewProjName]      = useState('')
+  const [newProjDupErr, setNewProjDupErr]   = useState<string | null>(null)
   const newProjRef = useRef<HTMLInputElement>(null)
 
-  // ── Project folder state ───────────────────────────────────────────────────
-  const [expanded, setExpanded]           = useState<Set<string>>(new Set())
-  const [editingProjId, setEditingProjId] = useState<string | null>(null)
-  const [projNameInput, setProjNameInput] = useState('')
-  const [menuProjId, setMenuProjId]       = useState<string | null>(null)
-  const [menuPos, setMenuPos]             = useState<{ top: number; left: number } | null>(null)
+  // ── Project row state ────────────────────────────────────────────────────
+  const [editingProjId, setEditingProjId]   = useState<string | null>(null)
+  const [projNameInput, setProjNameInput]   = useState('')
+  const [menuProjId,    setMenuProjId]      = useState<string | null>(null)
+  const [menuPos,       setMenuPos]         = useState<{ top: number; left: number } | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
-  const [dropTargetId, setDropTargetId]   = useState<string | null>(null) // folder being hovered during drag
+  const [dropTargetId,  setDropTargetId]    = useState<string | null>(null) // project being hovered during a source drag
+  const [draggingProjId, setDraggingProjId] = useState<string | null>(null)
+  const [projLiveOrder,  setProjLiveOrder]  = useState<string[] | null>(null)
 
   useEffect(() => {
     if (!menuProjId) return
@@ -43,31 +51,24 @@ export default function SourcePanel({ width }: { width: number | string }) {
     return () => window.removeEventListener('mousedown', onDown)
   }, [menuProjId])
 
-  // ── Source panel state ─────────────────────────────────────────────────────
-  const [dragOver, setDragOver]   = useState(false)
+  // ── Action-row state ─────────────────────────────────────────────────────
   const [addHover, setAddHover]   = useState(false)
+  const [dragOver, setDragOver]   = useState(false)
   const [addingUrl, setAddingUrl] = useState(false)
-  const [urlInput, setUrlInput]   = useState('')
+  const [urlInput,  setUrlInput]  = useState('')
   const urlInputRef = useRef<HTMLInputElement>(null)
-  const [filterInput, setFilterInput] = useState('')
-  const [filter, setFilter]           = useState('')
-  const [dupMsg, setDupMsg]           = useState(false)
-  const [draggingId, setDraggingId]   = useState<string | null>(null)
-  const [liveOrder, setLiveOrder]     = useState<string[] | null>(null)
-  // Project reorder is a parallel system to source reorder — separate
-  // dataTransfer type, separate live-order so dragging one doesn't
-  // interfere with the other.
-  const [draggingProjId, setDraggingProjId] = useState<string | null>(null)
-  const [projLiveOrder,  setProjLiveOrder]  = useState<string[] | null>(null)
-  const [clockOpen, setClockOpen]     = useState(false)
-  const folderDropHandled             = useRef(false)
+  const [dupMsg, setDupMsg]       = useState(false)
+  const [clockOpen, setClockOpen] = useState(false)
 
-  const fileRef   = useRef<HTMLInputElement>(null)
-  const filterRef = useRef<HTMLInputElement>(null)
-  const listRef   = useRef<HTMLDivElement>(null)
-  const dupTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const fileRef  = useRef<HTMLInputElement>(null)
+  const dupTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => { if (dupTimer.current) clearTimeout(dupTimer.current) }, [])
+
+  const hasActive = activeId !== null
 
   function handleUpload(files: FileList | File[]) {
+    if (!hasActive) return
     const list = Array.from(files).filter(f =>
       f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf') ||
       f.type.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(f.name)
@@ -81,85 +82,43 @@ export default function SourcePanel({ width }: { width: number | string }) {
     uploadFiles(files)
   }
 
-  useEffect(() => {
-    const t = setTimeout(() => setFilter(filterInput), 150)
-    return () => clearTimeout(t)
-  }, [filterInput])
-
-  useEffect(() => () => { if (dupTimer.current) clearTimeout(dupTimer.current) }, [])
-
-  function handleItemDragStart(id: string) {
-    setDraggingId(id)
-    // Build liveOrder from the source's home project
-    const homeProjSources = projects.find(p => p.sources.some(s => s.id === id))?.sources ?? []
-    setLiveOrder(homeProjSources.map(s => s.id))
-  }
-
-  function handleItemDragEnd() {
-    if (!folderDropHandled.current && draggingId && liveOrder) {
-      const toIndex = liveOrder.indexOf(draggingId)
-      if (toIndex !== -1) moveSource(draggingId, toIndex)
+  // ── New-project commit ───────────────────────────────────────────────────
+  function handleCreateProject() {
+    const name = newProjName.trim()
+    if (!name) {
+      setCreatingProj(false); setNewProjName(''); setNewProjDupErr(null); return
     }
-    folderDropHandled.current = false
-    setDraggingId(null)
-    setLiveOrder(null)
-    setDropTargetId(null)
-  }
-
-  function handleListDragOver(e: React.DragEvent) {
-    if (!draggingId || !liveOrder || !listRef.current) return
-    if (e.dataTransfer.types.includes('Files')) return
-    if (dropTargetId) return  // hovering a folder — don't reorder
-    e.preventDefault()
-    // Skip the dragging item itself when picking the insert slot —
-    // otherwise insertIdx is in liveOrder-space (which still includes the
-    // dragging item) while the splice is against `without` (which doesn't),
-    // and the off-by-one makes drags past a neighbour feel sticky.
-    const items = Array.from(listRef.current.querySelectorAll<HTMLElement>('[data-src-id]'))
-      .filter(el => el.dataset.srcId !== draggingId)
-    const without = liveOrder.filter(id => id !== draggingId)
-    let insertIdx = without.length
-    for (let i = 0; i < items.length; i++) {
-      const rect = items[i].getBoundingClientRect()
-      if (e.clientY < rect.top + rect.height * 0.5) { insertIdx = i; break }
+    const dup = projects.some(p => p.name.trim().toLowerCase() === name.toLowerCase())
+    if (dup) {
+      setNewProjDupErr(`"${name}" already exists.`)
+      setTimeout(() => newProjRef.current?.select(), 0)
+      setTimeout(() => setNewProjDupErr(null), 2500)
+      return
     }
-    const next = [...without]
-    next.splice(insertIdx, 0, draggingId)
-    if (next.join() !== liveOrder.join()) setLiveOrder(next)
+    const ok = createProject(name)
+    if (ok) { setCreatingProj(false); setNewProjName(''); setNewProjDupErr(null) }
   }
 
-  function handleListDrop(e: React.DragEvent) {
-    if (e.dataTransfer.types.includes('Files')) return
-    e.stopPropagation()
+  function commitRename(projId: string, fallback: string) {
+    updateProject(projId, { name: projNameInput.trim() || fallback })
+    setEditingProjId(null)
   }
 
-  // ── Project (folder) reorder ───────────────────────────────────────────────
-  //
-  // Uses a separate dataTransfer type from source drags so a folder being
-  // reordered never gets misread as "drop source into folder" and vice
-  // versa. Live order updates as the user hovers over other folder
-  // headers; commit on drag end via moveProject.
-  const PROJ_DRAG_TYPE = 'application/x-proof-project-id'
-
+  // ── Project drag (reorder) ───────────────────────────────────────────────
   function handleProjDragStart(projId: string, e: React.DragEvent) {
     e.stopPropagation()
-    e.dataTransfer.setData(PROJ_DRAG_TYPE, projId)
+    e.dataTransfer.setData(PROJECT_DRAG_TYPE, projId)
     e.dataTransfer.effectAllowed = 'move'
     setDraggingProjId(projId)
-    setProjLiveOrder(namedProjects.map(p => p.id))
+    setProjLiveOrder(projects.map(p => p.id))
   }
 
   function handleProjDragOverHeader(targetProjId: string, e: React.DragEvent) {
     if (!draggingProjId || !projLiveOrder) return
     if (targetProjId === draggingProjId) return
-    if (!e.dataTransfer.types.includes(PROJ_DRAG_TYPE)) return
+    if (!e.dataTransfer.types.includes(PROJECT_DRAG_TYPE)) return
     e.preventDefault()
     e.stopPropagation()
-    // Work entirely in `without`-space so the splice index matches the
-    // array we're splicing into. Computing targetIdx against projLiveOrder
-    // (which still contains the dragging item) caused an off-by-one when
-    // dragging downward past a neighbour — items wouldn't swap until the
-    // cursor crossed deep past their midpoint.
     const without = projLiveOrder.filter(id => id !== draggingProjId)
     const targetIdx = without.indexOf(targetProjId)
     if (targetIdx === -1) return
@@ -180,108 +139,33 @@ export default function SourcePanel({ width }: { width: number | string }) {
     setProjLiveOrder(null)
   }
 
-  function handleFolderDragOver(projId: string, e: React.DragEvent) {
-    if (!e.dataTransfer.types.includes('application/x-proof-source-id')) return
+  // ── Project as drop target for source move ───────────────────────────────
+  function handleProjSourceDragOver(projId: string, e: React.DragEvent) {
+    if (!e.dataTransfer.types.includes(SOURCE_DRAG_TYPE)) return
     e.preventDefault()
     e.stopPropagation()
     setDropTargetId(projId)
   }
-
-  function handleFolderDrop(projId: string, e: React.DragEvent) {
+  function handleProjSourceDrop(projId: string, e: React.DragEvent) {
+    if (!e.dataTransfer.types.includes(SOURCE_DRAG_TYPE)) return
     e.preventDefault()
     e.stopPropagation()
-    const srcId = e.dataTransfer.getData('application/x-proof-source-id')
-    if (srcId) {
-      moveSourceToProject(srcId, projId)
-      folderDropHandled.current = true
-    }
+    const srcId = e.dataTransfer.getData(SOURCE_DRAG_TYPE)
+    if (srcId) moveSourceToProject(srcId, projId)
     setDropTargetId(null)
   }
 
-  function handleInboxDrop(e: React.DragEvent) {
-    if (e.dataTransfer.types.includes('Files')) return
-    e.preventDefault()
-    e.stopPropagation()
-    const srcId = e.dataTransfer.getData('application/x-proof-source-id')
-    if (srcId) {
-      moveSourceToProject(srcId, INBOX_ID)
-      folderDropHandled.current = true
-    }
-    setDropTargetId(null)
-  }
+  // ── Render ───────────────────────────────────────────────────────────────
 
-  function commitRename(projId: string, fallback: string) {
-    updateProject(projId, { name: projNameInput.trim() || fallback })
-    setEditingProjId(null)
-  }
-
-  function handleCreateProject() {
-    const name = newProjName.trim()
-    if (!name) {
-      setCreatingProj(false)
-      setNewProjName('')
-      setNewProjDupErr(null)
-      return
-    }
-    // Pre-check duplicate ourselves so we can render an inline error;
-    // createProject also guards silently in case it's called elsewhere.
-    // At-cap rejection still uses the top-bar warn() because there's no
-    // input to attach an inline message to.
-    const dup = projects.some(p =>
-      p.id !== INBOX_ID && p.name.trim().toLowerCase() === name.toLowerCase()
-    )
-    if (dup) {
-      setNewProjDupErr(`"${name}" already exists.`)
-      setTimeout(() => newProjRef.current?.select(), 0)
-      // Auto-clear so the message reads as transient feedback, not a
-      // persistent banner sitting under the input.
-      setTimeout(() => setNewProjDupErr(null), 2500)
-      return
-    }
-    const ok = createProject(name)
-    if (ok) {
-      setCreatingProj(false)
-      setNewProjName('')
-      setNewProjDupErr(null)
-    }
-  }
-
-  const q = filter.trim().toLowerCase()
-  const namedProjects = projects.filter(p => p.id !== INBOX_ID)
-  const inboxProject  = projects.find(p => p.id === INBOX_ID)
-  const inboxSources  = inboxProject?.sources ?? []
-
-  function filterSources(srcs: typeof allSources) {
-    if (!q) return srcs
-    return srcs.filter(s => (s.label || s.raw).toLowerCase().includes(q))
-  }
-
-  const visibleInbox = filterSources(
-    liveOrder && draggingId && inboxProject?.sources.some(s => s.id === draggingId)
-      ? liveOrder.map(id => inboxSources.find(s => s.id === id)).filter(Boolean) as typeof inboxSources
-      : inboxSources
+  const visibleProjects = (draggingProjId && projLiveOrder
+    ? projLiveOrder.map(id => projects.find(p => p.id === id)).filter(Boolean) as typeof projects
+    : projects
   )
-
-  const hasAnySources = allSources.length > 0
-
-  const shell: React.CSSProperties = {
-    marginTop: '10px', marginRight: '10px', marginBottom: '0', marginLeft: '10px',
-    padding: '11px 14px',
-    background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: '4px',
-    display: 'flex', alignItems: 'center', flexShrink: 0, transition: 'border-color 0.15s',
-  }
-
-  const ROW_STYLE: React.CSSProperties = {
-    display: 'block', width: '100%', textAlign: 'left',
-    background: 'none', border: 'none', padding: '9px 14px',
-    cursor: 'pointer', fontSize: '12px', color: '#777',
-    letterSpacing: '0.02em', fontFamily: 'inherit',
-  }
 
   return (
     <div style={{ width, flexShrink: 0, height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-      {/* Create project row */}
+      {/* + New project row */}
       {!clockOpen && (
         <div style={{ height: '36px', flexShrink: 0, borderBottom: '1px solid #1a1a1a', display: 'flex', alignItems: 'center', padding: '0 14px', gap: '6px' }}>
           {creatingProj ? (
@@ -295,30 +179,24 @@ export default function SourcePanel({ width }: { width: number | string }) {
                 if (e.key === 'Enter') handleCreateProject()
                 if (e.key === 'Escape') { setCreatingProj(false); setNewProjName(''); setNewProjDupErr(null) }
               }}
-              // Skip auto-commit on blur while the dup error is showing —
-              // otherwise tabbing away closes the input and loses the
-              // message before the user reads it.
               onBlur={() => { if (!newProjDupErr) handleCreateProject() }}
               style={{
                 flex: 1, background: 'transparent', border: 'none', outline: 'none',
-                fontSize: '12px', color: '#ccc', fontFamily: 'inherit',
-                letterSpacing: '0.02em',
+                fontSize: '12px', color: '#ccc', fontFamily: 'inherit', letterSpacing: '0.02em',
               }}
             />
           ) : (
             <button
-              onClick={() => { if (!atProjectLimit) setCreatingProj(true) }}
-              disabled={atProjectLimit}
-              title={atProjectLimit ? 'Project limit reached. Three maximum.' : undefined}
+              onClick={() => setCreatingProj(true)}
               style={{
                 background: 'none', border: 'none', padding: 0,
-                cursor: atProjectLimit ? 'not-allowed' : 'pointer',
-                fontSize: '12px', color: atProjectLimit ? '#2a2a2a' : '#444',
-                fontFamily: 'inherit',
-                letterSpacing: '0.02em', display: 'flex', alignItems: 'center', gap: '5px',
+                cursor: 'pointer',
+                fontSize: '12px', color: '#444',
+                fontFamily: 'inherit', letterSpacing: '0.02em',
+                display: 'flex', alignItems: 'center', gap: '5px',
               }}
-              onMouseEnter={e => { if (!atProjectLimit) e.currentTarget.style.color = '#888' }}
-              onMouseLeave={e => { if (!atProjectLimit) e.currentTarget.style.color = '#444' }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#888')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#444')}
             >
               <span style={{ fontSize: '14px', lineHeight: 1 }}>+</span>
               <span>New project</span>
@@ -326,26 +204,17 @@ export default function SourcePanel({ width }: { width: number | string }) {
           )}
           <span style={{
             marginLeft: 'auto', fontSize: '10px',
-            color: atProjectLimit ? '#a55' : '#3a3a3a',
+            color: '#3a3a3a',
             letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums',
           }}>
-            {namedProjectCount} / 3
+            {namedProjectCount}
           </span>
         </div>
       )}
 
-      {/* Inline duplicate-name validation — bare muted text, no surface
-          or divider, auto-dismisses after a couple seconds (timer wired
-          where the error is set). Matches the unobtrusive inline copy
-          used elsewhere for transient validation. */}
+      {/* Inline dup-project warning */}
       {!clockOpen && newProjDupErr && (
         <div style={{
-          // padding-top is bigger than padding-bottom because the "Add
-          // file" box below has its own marginTop:10 (from `shell`). The
-          // visible gap below the message = padding-bottom + 10, so we
-          // give padding-top an extra 10 to match — making the text sit
-          // visually centered between the divider above and the Add file
-          // box below rather than biased toward the divider.
           padding: '16px 14px 6px', fontSize: '11px', color: '#666',
           letterSpacing: '0.02em', lineHeight: 1,
         }}>
@@ -355,35 +224,46 @@ export default function SourcePanel({ width }: { width: number | string }) {
 
       {!clockOpen && (
         <>
-          {/* Add file */}
+          {/* Add source */}
           <div
-            onDragOver={e => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragOver(true) } }}
+            onDragOver={e => { if (hasActive && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragOver(true) } }}
             onDragLeave={() => setDragOver(false)}
             onDrop={e => {
               e.preventDefault(); setDragOver(false)
+              if (!hasActive) return
               const valid = Array.from(e.dataTransfer.files).filter(f =>
                 f.type === 'application/pdf' || f.name.endsWith('.pdf') ||
                 f.type.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(f.name))
               if (valid.length) handleUpload(valid)
             }}
-            onClick={() => fileRef.current?.click()}
+            onClick={() => { if (hasActive) fileRef.current?.click() }}
             onMouseEnter={() => setAddHover(true)}
             onMouseLeave={() => setAddHover(false)}
-            style={{ ...shell, background: dragOver ? '#141414' : addHover ? '#111' : '#0d0d0d', borderColor: dragOver ? '#333' : addHover ? '#252525' : '#1a1a1a', cursor: 'pointer' }}
+            style={{
+              margin: '10px 10px 0', padding: '11px 14px',
+              background: !hasActive ? '#0b0b0b' : dragOver ? '#141414' : addHover ? '#111' : '#0d0d0d',
+              border: `1px solid ${!hasActive ? '#161616' : dragOver ? '#333' : addHover ? '#252525' : '#1a1a1a'}`,
+              borderRadius: '4px',
+              display: 'flex', alignItems: 'center', flexShrink: 0,
+              cursor: hasActive ? 'pointer' : 'not-allowed',
+              transition: 'border-color 0.15s, background 0.15s',
+              opacity: hasActive ? 1 : 0.55,
+            }}
           >
             <span style={{ fontSize: '11px', color: '#777', letterSpacing: '0.04em', flex: 1 }}>
-              {dragOver ? 'Drop source' : 'Add source'}
+              {!hasActive ? 'Add source' : dragOver ? 'Release to add' : 'Add source'}
             </span>
           </div>
           <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif" multiple style={{ display: 'none' }}
             onChange={e => { if (e.target.files?.length) { handleUpload(e.target.files); e.target.value = '' } }}
           />
 
+          {/* Add URL */}
           {addingUrl ? (
             <div style={{
               margin: '8px 10px 0', padding: '11px 14px',
               background: '#0d0d0d', border: '1px solid #333', borderRadius: '4px',
-              display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0,
+              display: 'flex', alignItems: 'center', flexShrink: 0,
             }}>
               <input
                 ref={urlInputRef}
@@ -409,7 +289,10 @@ export default function SourcePanel({ width }: { width: number | string }) {
               />
             </div>
           ) : (
-            <UrlBtn onClick={() => { setAddingUrl(true); setTimeout(() => urlInputRef.current?.focus(), 0) }} />
+            <UrlBtn
+              disabled={!hasActive}
+              onClick={() => { if (hasActive) { setAddingUrl(true); setTimeout(() => urlInputRef.current?.focus(), 0) } }}
+            />
           )}
 
           {dupMsg && (
@@ -418,119 +301,37 @@ export default function SourcePanel({ width }: { width: number | string }) {
             </div>
           )}
 
-          {/* Source list */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
-            <div style={{ ...shell, cursor: 'text', padding: '11px 14px', marginTop: '16px' }} onClick={() => filterRef.current?.focus()}>
-              <input
-                ref={filterRef} className="sp-input"
-                value={filterInput} onChange={e => setFilterInput(e.target.value)}
-                placeholder="Filter"
-                style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', fontFamily: 'inherit', letterSpacing: '0.02em', color: '#555' }}
-              />
-              {filterInput && (
-                <button onClick={e => { e.stopPropagation(); setFilterInput(''); setFilter('') }}
-                  style={{ background: 'none', border: 'none', padding: '0 0 0 6px', cursor: 'pointer', color: '#666', fontSize: '13px', lineHeight: 1, display: 'flex', alignItems: 'center' }}
-                >×</button>
-              )}
-            </div>
+          {/* Project list — flat, clickable, draggable */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, marginTop: '16px' }}>
+            <div style={{ height: '1px', background: '#1a1a1a', margin: '0 10px 10px' }} />
 
-            {/* Divider between filter and the source/project list */}
-            <div style={{ height: '1px', background: '#1a1a1a', margin: '14px 10px 0' }} />
-
-            <div
-              ref={listRef}
-              style={{ flex: 1, overflowY: 'auto', marginTop: '10px' }}
-              onDragOver={e => {
-                if (draggingId && !e.dataTransfer.types.includes('Files')) {
-                  handleListDragOver(e)
-                }
-              }}
-              onDrop={handleListDrop}
-            >
-              {/* Inbox / floating area */}
-              {visibleInbox.length === 0 && namedProjects.length === 0 ? (
-                <div style={{ padding: '6px 16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <span style={{ fontSize: '11px', color: '#555', lineHeight: 1.7 }}>No sources yet.</span>
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {projects.length === 0 ? (
+                <div style={{ padding: '6px 16px', fontSize: '11px', color: '#555', lineHeight: 1.7 }}>
+                  Create a project to begin.
                 </div>
               ) : (
-                <div
-                  onDragOver={e => {
-                    if (!e.dataTransfer.types.includes('application/x-proof-source-id')) return
-                    e.preventDefault(); e.stopPropagation()
-                    setDropTargetId(INBOX_ID)
-                  }}
-                  onDragLeave={e => {
-                    if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDropTargetId(null)
-                  }}
-                  onDrop={e => { handleInboxDrop(e); setDropTargetId(null) }}
-                  style={{
-                    minHeight: dropTargetId === INBOX_ID ? '32px' : '0',
-                    background: dropTargetId === INBOX_ID ? 'rgba(92,168,160,0.05)' : 'transparent',
-                    transition: 'background 0.12s',
-                  }}
-                >
-                  {visibleInbox.map(src => (
-                    <div key={src.id} style={{ opacity: src.id === draggingId ? 0.35 : 1, transition: 'opacity 0.1s' }}>
-                      <SourceItem
-                        src={src}
-                        onDragStart={handleItemDragStart}
-                        onDragEnd={handleItemDragEnd}
-                      />
-                    </div>
-                  ))}
-                  {visibleInbox.length === 0 && namedProjects.length > 0 && draggingId && dropTargetId === INBOX_ID && (
-                    <div style={{ padding: '8px 16px', fontSize: '11px', color: '#888', letterSpacing: '0.03em' }}>
-                      Drop to unproject
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {q && inboxSources.length > 0 && visibleInbox.length === 0 && (
-                <div style={{ padding: '6px 16px', fontSize: '12px', color: '#555' }}>No results</div>
-              )}
-
-              {/* Named project folders — render in liveOrder while a folder
-                  is being dragged so the user sees the new position before
-                  release. */}
-              {(draggingProjId && projLiveOrder
-                ? projLiveOrder.map(id => namedProjects.find(p => p.id === id)).filter(Boolean) as typeof namedProjects
-                : namedProjects
-              ).map(proj => {
-                const isActive    = proj.id === activeId
-                const isCollapsed = !expanded.has(proj.id)
-                const projSrcs    = proj.sources
-                const visibleSrcs = liveOrder && draggingId && projSrcs.some(s => s.id === draggingId)
-                  ? liveOrder.map(id => projSrcs.find(s => s.id === id)).filter(Boolean) as typeof projSrcs
-                  : filterSources(projSrcs)
-                const isDropTarget = dropTargetId === proj.id
-                const isDraggingMe = draggingProjId === proj.id
-
-                return (
-                  <div key={proj.id} style={{ opacity: isDraggingMe ? 0.35 : 1, transition: 'opacity 0.1s' }}>
-                    {/* Folder header */}
+                visibleProjects.map(proj => {
+                  const isActive     = proj.id === activeId
+                  const isDropTarget = dropTargetId === proj.id
+                  const isDraggingMe = draggingProjId === proj.id
+                  const srcCount     = proj.sources.length
+                  return (
                     <div
-                      draggable
+                      key={proj.id}
+                      draggable={editingProjId !== proj.id}
                       onDragStart={e => handleProjDragStart(proj.id, e)}
                       onDragEnd={handleProjDragEnd}
-                      onClick={e => {
-                        // Suppress the click toggle when finishing a drag —
-                        // browsers fire onClick after onDragEnd in some cases.
-                        if (draggingProjId) return
-                        e.stopPropagation()
-                        switchProject(proj.id)
-                        setExpanded(s => { const n = new Set(s); isCollapsed ? n.add(proj.id) : n.delete(proj.id); return n })
-                      }}
                       onDragOver={e => {
-                        // Project drag → reorder. Source drag → drop-into-folder.
-                        if (e.dataTransfer.types.includes(PROJ_DRAG_TYPE)) {
+                        if (e.dataTransfer.types.includes(PROJECT_DRAG_TYPE)) {
                           handleProjDragOverHeader(proj.id, e)
-                        } else {
-                          handleFolderDragOver(proj.id, e)
+                        } else if (e.dataTransfer.types.includes(SOURCE_DRAG_TYPE)) {
+                          handleProjSourceDragOver(proj.id, e)
                         }
                       }}
                       onDragLeave={() => setDropTargetId(null)}
-                      onDrop={e => handleFolderDrop(proj.id, e)}
+                      onDrop={e => handleProjSourceDrop(proj.id, e)}
+                      onClick={() => { if (draggingProjId) return; if (editingProjId !== proj.id) switchProject(proj.id) }}
                       onContextMenu={e => {
                         e.preventDefault(); e.stopPropagation()
                         setConfirmDeleteId(null)
@@ -538,33 +339,19 @@ export default function SourcePanel({ width }: { width: number | string }) {
                         setMenuPos({ top: e.clientY, left: e.clientX })
                       }}
                       style={{
-                        display: 'flex', alignItems: 'center', gap: '6px',
+                        display: 'flex', alignItems: 'center', gap: '8px',
                         padding: '7px 16px 7px 14px',
-                        background: isDropTarget ? 'rgba(92,168,160,0.06)' : isActive ? '#0f0f0f' : 'transparent',
-                        borderBottom: isDropTarget ? '1px solid rgba(92,168,160,0.15)' : '1px solid transparent',
-                        cursor: 'pointer',
-                        transition: 'background 0.12s',
+                        cursor: editingProjId === proj.id ? 'text' : 'pointer',
                         userSelect: 'none',
-                        marginTop: '2px',
+                        background:
+                          isDropTarget ? '#0f1414'
+                          : isActive   ? '#0f0f0f'
+                          : 'transparent',
+                        borderLeft: isActive ? '2px solid #444' : '2px solid transparent',
+                        opacity: isDraggingMe ? 0.35 : 1,
+                        transition: 'background 0.1s, border-color 0.1s, opacity 0.1s',
                       }}
-                      onMouseEnter={e => { if (!isActive && !isDropTarget) e.currentTarget.style.background = '#0a0a0a' }}
-                      onMouseLeave={e => { if (!isActive && !isDropTarget) e.currentTarget.style.background = 'transparent' }}
                     >
-                      {/* Chevron */}
-                      <button
-                        onClick={e => { e.stopPropagation(); setExpanded(s => { const n = new Set(s); isCollapsed ? n.add(proj.id) : n.delete(proj.id); return n }) }}
-                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', lineHeight: 0, flexShrink: 0 }}
-                      >
-                        <svg width="8" height="6" viewBox="0 0 8 6" fill="none"
-                          stroke={isActive ? '#888' : '#444'} strokeWidth="1.2"
-                          strokeLinecap="round" strokeLinejoin="round"
-                          style={{ transition: 'transform 0.15s', transform: isCollapsed ? 'rotate(-90deg)' : 'none' }}
-                        >
-                          <path d="M1 1.5l3 3 3-3" />
-                        </svg>
-                      </button>
-
-                      {/* Name / rename input */}
                       {editingProjId === proj.id ? (
                         <input
                           autoFocus
@@ -580,47 +367,34 @@ export default function SourcePanel({ width }: { width: number | string }) {
                           }}
                           style={{
                             flex: 1, background: 'transparent', border: 'none', outline: 'none',
-                            fontSize: '11px', color: '#ccc', fontFamily: 'inherit',
+                            fontSize: '12px', color: '#ccc', fontFamily: 'inherit',
                             padding: 0, letterSpacing: '0.04em',
                           }}
                         />
                       ) : (
-                        <span
-                          onClick={() => switchProject(proj.id)}
-                          style={{
-                            flex: 1, fontSize: '11px', letterSpacing: '0.04em',
-                            color: isActive ? '#bbb' : '#555',
+                        <>
+                          <span style={{
+                            flex: 1, minWidth: 0,
+                            fontSize: '12px', letterSpacing: '0.04em',
+                            color: isActive ? '#ccc' : '#777',
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                            transition: 'color 0.12s',
-                          }}
-                        >
-                          {proj.name}
-                        </span>
+                            transition: 'color 0.1s',
+                          }}>
+                            {proj.name}
+                          </span>
+                          <span style={{
+                            fontSize: '10px', color: '#3a3a3a',
+                            fontVariantNumeric: 'tabular-nums',
+                            letterSpacing: '0.04em',
+                          }}>
+                            {srcCount}
+                          </span>
+                        </>
                       )}
                     </div>
-
-                    {/* Folder contents */}
-                    {!isCollapsed && (
-                      <div style={{ paddingLeft: '8px' }}>
-                        {visibleSrcs.length === 0 && !q && (
-                          <div style={{ padding: '6px 16px 8px', fontSize: '11px', color: '#3a3a3a', letterSpacing: '0.02em' }}>
-                            Empty
-                          </div>
-                        )}
-                        {visibleSrcs.map(src => (
-                          <div key={src.id} style={{ opacity: src.id === draggingId ? 0.35 : 1, transition: 'opacity 0.1s' }}>
-                            <SourceItem
-                              src={src}
-                              onDragStart={handleItemDragStart}
-                              onDragEnd={handleItemDragEnd}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+                  )
+                })
+              )}
             </div>
           </div>
         </>
@@ -657,21 +431,29 @@ export default function SourcePanel({ width }: { width: number | string }) {
               onMouseEnter={e => (e.currentTarget.style.background = '#1a1a1a')}
               onMouseLeave={e => (e.currentTarget.style.background = 'none')}
             >
-              {confirmDeleteId === proj.id ? 'Confirm?' : 'Delete'}
+              {confirmDeleteId === proj.id ? 'Confirm' : 'Delete'}
             </button>
           </div>
         )
       })()}
 
-      {/* Source Stack — pinned ingestion queue. Sits at the bottom of the
-          sidebar, above the Clock, so a quick drop-from-anywhere lands in
-          a predictable place. Hidden while the clock fills the sidebar. */}
+      {/* Stack — active project's sources. Hidden while the clock fills the
+          sidebar. */}
       <SourceStack hidden={clockOpen} />
 
       <Clock open={clockOpen} onToggle={() => setClockOpen(o => !o)} />
     </div>
   )
 }
+
+const ROW_STYLE: React.CSSProperties = {
+  display: 'block', width: '100%', textAlign: 'left',
+  background: 'none', border: 'none', padding: '9px 14px',
+  cursor: 'pointer', fontSize: '12px', color: '#777',
+  letterSpacing: '0.02em', fontFamily: 'inherit',
+}
+
+// ─── Clock + helpers (unchanged from prior version) ──────────────────────
 
 function Clock({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const [now, setNow]   = useState(new Date())
@@ -803,19 +585,21 @@ function ClockCollapseIcon() {
   return <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 1V4H1" /><path d="M10 4H7V1" /><path d="M7 10V7H10" /><path d="M1 7H4V10" /></svg>
 }
 
-function UrlBtn({ onClick }: { onClick: () => void }) {
+function UrlBtn({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
   const [hov, setHov] = useState(false)
   return (
     <div
-      onClick={onClick}
+      onClick={() => { if (!disabled) onClick() }}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
         margin: '8px 10px 0', padding: '11px 14px',
-        background: hov ? '#111' : '#0d0d0d',
-        border: `1px solid ${hov ? '#252525' : '#1a1a1a'}`,
+        background: disabled ? '#0b0b0b' : hov ? '#111' : '#0d0d0d',
+        border: `1px solid ${disabled ? '#161616' : hov ? '#252525' : '#1a1a1a'}`,
         borderRadius: '4px', display: 'flex', alignItems: 'center',
-        cursor: 'pointer', transition: 'background 0.15s, border-color 0.15s', flexShrink: 0,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.55 : 1,
+        transition: 'background 0.15s, border-color 0.15s', flexShrink: 0,
       }}
     >
       <span style={{ fontSize: '11px', color: '#777', letterSpacing: '0.04em', flex: 1 }}>Add URL</span>

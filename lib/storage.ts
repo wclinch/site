@@ -4,11 +4,14 @@ const STORAGE_KEY  = 'proof-v3-projects'
 export const ACTIVE_KEY          = 'proof-v3-active'
 export const SELECTED_KEY        = 'proof-v3-selected'
 export const SELECTED_IMAGE_KEY  = 'proof-v3-selected-image'
-// Source Stack — the pinned ingestion queue at the bottom of the sidebar.
-// Stores an ordered list of source IDs (NOT sources themselves); the
-// resolved sources are derived from `allSources` so deletes flow through
-// automatically. Capped at STACK_LIMIT to keep the panel scrollable.
+// Legacy localStorage key from the pre-refactor model where the stack
+// was a separately-stored pinned-ID list. The new project-scoped model
+// derives the stack from the active project's sources directly, so this
+// key is no longer written. Exported only so AppContext can wipe stale
+// entries on first load after the migration.
 export const STACK_KEY           = 'proof-v3-stack'
+// Per-project source cap. 12 was the old "stack" limit; reusing it here
+// because the panel is sized for ~12 rows visible without scroll.
 export const STACK_LIMIT         = 12
 
 export function uid(): string {

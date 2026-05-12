@@ -42,7 +42,7 @@ export default function ProjectBar() {
         <StorageBadge />
         <span style={{ width: '1px', height: '12px', background: '#222' }} />
         <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.04em', fontVariantNumeric: 'tabular-nums' }}>
-          {namedProjectCount} / 3 projects
+          {namedProjectCount} {namedProjectCount === 1 ? 'project' : 'projects'}
         </span>
         <span style={{ width: '1px', height: '12px', background: '#222' }} />
         {/* Quiet support hook. mailto: opens the user's default mail

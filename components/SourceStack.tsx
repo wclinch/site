@@ -27,9 +27,10 @@ const DRAG_TYPE = 'application/x-proof-source-id'
 export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
   const {
     stackSources, stackLimit, atStackLimit,
-    addToStack, removeFromStack, clearStack, reorderStack,
-    setSelectedId, setSelectedImageId,
-    selectedId, selectedImageId, allSources,
+    addToStack, reorderStack,
+    setSelectedId, setSelectedImageId, setContextMenu,
+    selectedId, selectedImageId, allSources, patchSource,
+    activeId,
   } = useApp()
 
   // Open by default — the stack is part of the primary working surface,
@@ -42,8 +43,39 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
   // flips the preference so the next row-click loads it into the other
   // pane. Persisted only for the session — collapses on reload.
   const [paneOverrides, setPaneOverrides] = useState<Record<string, 'top' | 'bottom'>>({})
+  // In-place rename state. Set by the `proof:rename-source` custom event
+  // dispatched from SourceContextMenu when the user chooses Rename.
+  // Cleared by Enter (commit) or Escape / blur (cancel).
+  const [renameId,    setRenameId]    = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
   const dragSrcIdRef = useRef<string | null>(null)
   const listRef     = useRef<HTMLDivElement>(null)
+
+  // SourceContextMenu fires this when the user clicks Rename — we toggle
+  // the matching row into edit mode. The previous SourceItem-based
+  // source list owned this listener; with sources rendered only in the
+  // stack now, the stack owns it.
+  useEffect(() => {
+    function onRename(e: Event) {
+      const { srcId, currentLabel } = (e as CustomEvent<{ srcId: string; currentLabel: string }>).detail
+      setRenameId(srcId)
+      setRenameValue(currentLabel ?? '')
+    }
+    window.addEventListener('proof:rename-source', onRename as EventListener)
+    return () => window.removeEventListener('proof:rename-source', onRename as EventListener)
+  }, [])
+
+  function commitRename() {
+    if (!renameId) return
+    const trimmed = renameValue.trim()
+    if (trimmed) patchSource('', renameId, { label: trimmed })
+    setRenameId(null)
+    setRenameValue('')
+  }
+  function cancelRename() {
+    setRenameId(null)
+    setRenameValue('')
+  }
 
   // A source "looks like an image" if its fileType says so OR its
   // filename ends in a known image extension. The filename check covers
@@ -159,20 +191,6 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
         {stackSources.length} / {stackLimit}
       </span>
       <span style={{ flex: 1 }} />
-      {open && stackSources.length > 0 && (
-        <button
-          onClick={e => { e.stopPropagation(); clearStack() }}
-          title="Clear stack"
-          style={{
-            background: 'none', border: 'none', padding: '2px 6px',
-            cursor: 'pointer', fontSize: '10px', color: '#444',
-            letterSpacing: '0.06em', fontFamily: 'inherit',
-            textTransform: 'uppercase', borderRadius: '2px',
-          }}
-          onMouseEnter={e => (e.currentTarget.style.color = '#aaa')}
-          onMouseLeave={e => (e.currentTarget.style.color = '#444')}
-        >Clear</button>
-      )}
       <HeaderIconBtn onClick={() => setOpen(o => !o)} title={open ? 'Collapse stack' : 'Expand stack'}>
         {open ? <CollapseIcon /> : <ExpandIcon />}
       </HeaderIconBtn>
@@ -226,8 +244,10 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
             transition: 'color 0.12s',
           }}>
             {dragOver
-              ? 'Drop to pin'
-              : 'Pinned working set. Click to load into the viewer.'}
+              ? 'Release to add to project'
+              : activeId
+                ? 'This project has no sources.'
+                : 'No active project.'}
           </div>
         ) : (
           stackSources.map((src, i) => {
@@ -237,11 +257,12 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
             const isDraggingMe = dragSrcIdRef.current === src.id
             const showSlotBefore = reorderIdx === i && !isDraggingMe
             const pane = effectivePane(src)
-            // Only PDFs and URLs can be sent to either pane. Anything
-            // that looks like an image is locked to the top pane (sending
-            // a PNG to the PDF viewer crashes <Document>); notes are
-            // locked to the bottom one.
-            const canToggle = !looksLikeImage(src) && (src.fileType === 'pdf' || src.fileType === 'url')
+            // Both panes accept every source type now (SourceContent
+            // routes by fileType internally), so the arrow toggles for
+            // any source. Defaults stay sensible — images land top,
+            // PDFs / URLs / notes land bottom — but the user can flip
+            // any row to the other pane.
+            const canToggle = true
             return (
               <div key={src.id}>
                 {showSlotBefore && <DropSlot />}
@@ -250,9 +271,21 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
                   isActive={isActive}
                   pane={pane}
                   canToggle={canToggle}
+                  renaming={renameId === src.id}
+                  renameValue={renameValue}
+                  onRenameChange={setRenameValue}
+                  onRenameCommit={commitRename}
+                  onRenameCancel={cancelRename}
                   onClick={() => openSrcInEffectivePane(src)}
                   onToggleArrow={() => togglePane(src)}
-                  onRemove={() => removeFromStack(src.id)}
+                  // Right-click opens SourceContextMenu (mounted in
+                  // app/app/page.tsx). The menu's "Remove" item is the
+                  // only path to delete a source from the stack now —
+                  // no more × button.
+                  onContextMenu={e => {
+                    e.preventDefault(); e.stopPropagation()
+                    setContextMenu({ srcId: src.id, x: e.clientX, y: e.clientY })
+                  }}
                   onDragStart={e => {
                     dragSrcIdRef.current = src.id
                     e.dataTransfer.setData(DRAG_TYPE, src.id)
@@ -287,16 +320,23 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
 // ─── Row ────────────────────────────────────────────────────────────────────
 
 function StackRow({
-  src, isActive, pane, canToggle, onClick, onToggleArrow, onRemove,
+  src, isActive, pane, canToggle,
+  renaming, renameValue, onRenameChange, onRenameCommit, onRenameCancel,
+  onClick, onToggleArrow, onContextMenu,
   onDragStart, onDragEnd, onDragOverRow,
 }: {
   src: QueuedSource
   isActive: boolean
   pane: 'top' | 'bottom'
   canToggle: boolean
+  renaming: boolean
+  renameValue: string
+  onRenameChange: (v: string) => void
+  onRenameCommit: () => void
+  onRenameCancel: () => void
   onClick: () => void
   onToggleArrow: () => void
-  onRemove: () => void
+  onContextMenu: (e: React.MouseEvent) => void
   onDragStart: (e: React.DragEvent) => void
   onDragEnd: () => void
   onDragOverRow: (e: React.DragEvent) => void
@@ -305,55 +345,62 @@ function StackRow({
 
   return (
     <div
-      draggable
+      draggable={!renaming}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onDragOver={onDragOverRow}
-      onClick={onClick}
+      onClick={() => { if (!renaming) onClick() }}
+      onContextMenu={onContextMenu}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
-      title={`${src.label || src.raw} — loads into ${pane === 'top' ? 'top' : 'bottom'} pane`}
+      title={renaming ? undefined : `${src.label || src.raw} — loads into ${pane === 'top' ? 'top' : 'bottom'} pane`}
       style={{
         display: 'flex', alignItems: 'center', gap: '8px',
         padding: '6px 10px 6px 14px',
-        cursor: 'pointer', userSelect: 'none',
+        cursor: renaming ? 'text' : 'pointer', userSelect: 'none',
         background: isActive ? '#111' : hov ? '#0d0d0d' : 'transparent',
         borderLeft: isActive ? '2px solid #444' : '2px solid transparent',
         transition: 'background 0.1s, border-color 0.1s',
       }}
     >
       <PaneArrow
-        pane={pane} dim={!isActive} interactive={canToggle}
-        onClick={e => { e.stopPropagation(); if (canToggle) onToggleArrow() }}
+        pane={pane} dim={!isActive} interactive={canToggle && !renaming}
+        onClick={e => { e.stopPropagation(); if (canToggle && !renaming) onToggleArrow() }}
         title={canToggle
           ? `Loads into ${pane === 'top' ? 'top' : 'bottom'} pane — click to flip`
           : `Loads into ${pane === 'top' ? 'top' : 'bottom'} pane`}
       />
-      <span style={{
-        flex: 1, minWidth: 0,
-        fontSize: '11px', letterSpacing: '0.02em',
-        // Match SourceItem's label brightness (#ccc) so a source in the
-        // Stack reads as the same "weight" of thing as it does in the
-        // main list above. Same brightness across active / idle / hover —
-        // the row's background + left-border carry the state difference.
-        color: '#ccc',
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-      }}>
-        {src.label || src.raw}
-      </span>
+      {renaming ? (
+        <input
+          autoFocus
+          value={renameValue}
+          onChange={e => onRenameChange(e.target.value)}
+          onFocus={e => e.target.select()}
+          onClick={e => e.stopPropagation()}
+          onBlur={onRenameCommit}
+          onKeyDown={e => {
+            e.stopPropagation()
+            if (e.key === 'Enter')  onRenameCommit()
+            if (e.key === 'Escape') onRenameCancel()
+          }}
+          style={{
+            flex: 1, minWidth: 0,
+            background: 'transparent', border: 'none', outline: 'none',
+            fontSize: '11px', color: '#ccc', fontFamily: 'inherit',
+            padding: 0, letterSpacing: '0.02em',
+          }}
+        />
+      ) : (
+        <span style={{
+          flex: 1, minWidth: 0,
+          fontSize: '11px', letterSpacing: '0.02em',
+          color: '#ccc',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {src.label || src.raw}
+        </span>
+      )}
       <TypeBadge kind={badgeKind(src)} />
-      <button
-        onClick={e => { e.stopPropagation(); onRemove() }}
-        title="Unpin"
-        style={{
-          background: 'none', border: 'none', padding: '0 2px',
-          cursor: 'pointer', lineHeight: 1, color: '#444',
-          fontSize: '12px', borderRadius: '2px',
-          opacity: hov ? 1 : 0, transition: 'opacity 0.12s, color 0.12s',
-        }}
-        onMouseEnter={e => (e.currentTarget.style.color = '#888')}
-        onMouseLeave={e => (e.currentTarget.style.color = '#444')}
-      >×</button>
     </div>
   )
 }

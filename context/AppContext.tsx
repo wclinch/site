@@ -10,8 +10,15 @@ import { storeFile, deleteFile, getFile, storeContent, getContent, deleteContent
 import { extractContent } from '@/lib/extract'
 import { wouldExceedLimit, STORAGE_LIMIT_BYTES } from '@/lib/storage-limit'
 
-export const INBOX_ID = '__inbox__'
-export const PROJECT_LIMIT = 3
+// Legacy id from the pre-refactor "floating sources" model. Kept exported
+// only so old persisted state can be migrated on load — no new code
+// should reference it. New model: every source lives in exactly one
+// project, and there's no inbox.
+export const INBOX_ID      = '__inbox__'
+// No project ceiling — users can create as many projects as the 250 MB
+// storage cap allows. PROJECT_LIMIT and `atProjectLimit` remain in the
+// surface for API stability but always read as "no limit reached".
+export const PROJECT_LIMIT = Number.POSITIVE_INFINITY
 
 interface ContextMenu     { srcId: string; x: number; y: number }
 interface ProjContextMenu { projId: string; x: number; y: number }
@@ -33,12 +40,16 @@ interface AppState {
   selectedSource: QueuedSource | null
   selectedImageId: string | null
   selectedImageSource: QueuedSource | null
-  // Source Stack — pinned ordered list of source IDs and the resolved sources.
-  // `inStack(id)` is a cheap membership check used by SourceItem.
+  // Stack is now project-scoped: it IS the active project's source list.
+  // `stackSources` = active project's sources (in order). `stackIds` is
+  // derived from that. `addToStack` / `removeFromStack` / `clearStack` are
+  // semantic aliases for source operations against the active project —
+  // sources can't exist without a project anymore, so "pinning" is just
+  // "adding to the active project."
   stackIds: string[]
   stackSources: QueuedSource[]
-  stackLimit: number
-  atStackLimit: boolean
+  stackLimit: number          // max sources per project
+  atStackLimit: boolean       // active project at the cap
   inStack: (id: string) => boolean
   namedProjectCount: number
   atProjectLimit: boolean
@@ -76,30 +87,18 @@ interface AppState {
   createProject: (name?: string) => boolean
   switchProject: (id: string) => void
   deleteProject: (id: string) => void
-  // Stack actions. `addToStack` is a no-op when already present or at the cap
-  // (with a toast); `openInPane` resolves which pane to send the source to
-  // based on file type — image → top, everything else → bottom reader.
+  // Stack actions — aliases over the project-scoped source ops.
+  // `addToStack` is the entry point for drag-source-into-stack: if the
+  // source is already in the active project, no-op; otherwise it's
+  // moved from its current project into the active one.
   addToStack: (id: string) => void
-  removeFromStack: (id: string) => void
-  clearStack: () => void
+  removeFromStack: (id: string) => void   // alias for removeSource
+  clearStack: () => void                   // clears the active project
   reorderStack: (fromIndex: number, toIndex: number) => void
   openInPane: (id: string) => void
 }
 
 const AppContext = createContext<AppState | null>(null)
-
-function makeInbox(): Project {
-  return {
-    id: INBOX_ID,
-    name: '',
-    sources: [],
-    draft: '',
-    draftTitle: '',
-    fragments: [],
-    scratchpad: '',
-    projectDraft: '',
-  }
-}
 
 // Dispatches a transient warning toast (consumed by app/app/page.tsx).
 function warn(msg: string) {
@@ -108,28 +107,24 @@ function warn(msg: string) {
 }
 
 // Fires after any IDB write/delete so storage-aware UI (the badge) can re-poll.
-// `navigator.storage.estimate()` is approximate and lags briefly after deletes,
-// so listeners should be tolerant of the first reading being slightly stale.
 function notifyStorageChanged() {
   if (typeof window === 'undefined') return
   window.dispatchEvent(new Event('proof-storage-changed'))
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [mounted, setMounted]           = useState(false)
-  const [projects, setProjects]         = useState<Project[]>([])
-  const [activeId, setActiveId]         = useState<string | null>(null)
-  const [selectedId, setSelectedId]         = useState<string | null>(null)
+  const [mounted, setMounted]                 = useState(false)
+  const [projects, setProjects]               = useState<Project[]>([])
+  const [activeId, setActiveId]               = useState<string | null>(null)
+  const [selectedId, setSelectedId]           = useState<string | null>(null)
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null)
-  const [stackIds, setStackIds]             = useState<string[]>([])
-  const [selectedIds, setSelectedIds]       = useState<Set<string>>(new Set())
-  const [anchorId, setAnchorId]         = useState<string | null>(null)
-  const [showProjects, setShowProjects] = useState(false)
-  const [contextMenu, setContextMenu]     = useState<ContextMenu | null>(null)
+  const [selectedIds, setSelectedIds]         = useState<Set<string>>(new Set())
+  const [anchorId, setAnchorId]               = useState<string | null>(null)
+  const [showProjects, setShowProjects]       = useState(false)
+  const [contextMenu, setContextMenu]         = useState<ContextMenu | null>(null)
   const [projContextMenu, setProjContextMenu] = useState<ProjContextMenu | null>(null)
 
-  const projectsRef    = useRef<Project[]>([])
-
+  const projectsRef = useRef<Project[]>([])
   const activeIdRef = useRef(activeId)
   useEffect(() => { activeIdRef.current = activeId }, [activeId])
 
@@ -161,52 +156,63 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const saved = loadProjects()
+    let fixed: Project[] = []
+
     if (saved.length) {
-      let fixed = saved.map(proj => ({
+      // Normalize statuses: anything that was mid-extract when the app last
+      // closed gets re-queued so we don't render it as "extracting" forever.
+      fixed = saved.map(proj => ({
         ...proj,
         sources: proj.sources.map(src =>
           src.status === 'extracting' ? { ...src, status: 'queued' as const } : src
         ),
       }))
-      // Ensure inbox project always exists
-      if (!fixed.some(p => p.id === INBOX_ID)) {
-        fixed = [makeInbox(), ...fixed]
+
+      // Migration from the pre-refactor "inbox" model. If a legacy inbox
+      // project exists with sources, fold them into the first named
+      // project (or create a "Default" project if there are none), then
+      // drop the inbox entirely. New model: no floating sources.
+      const inbox = fixed.find(p => p.id === INBOX_ID)
+      let named   = fixed.filter(p => p.id !== INBOX_ID)
+      if (inbox && inbox.sources.length > 0) {
+        if (named.length > 0) {
+          named = named.map((p, i) =>
+            i === 0 ? { ...p, sources: [...p.sources, ...inbox.sources] } : p
+          )
+        } else {
+          const def = newProject(1)
+          def.name    = 'Default'
+          def.sources = inbox.sources
+          named = [def]
+        }
       }
+      fixed = named
       setProjects(fixed)
 
-      const savedActive   = localStorage.getItem(ACTIVE_KEY)
-      const match         = fixed.find(p => p.id === savedActive) ?? fixed.find(p => p.id !== INBOX_ID) ?? fixed[0]
-      setActiveId(match.id)
-      const savedSelected = localStorage.getItem(SELECTED_KEY)
-      const allSrc = fixed.flatMap(p => p.sources)
-      if (savedSelected && allSrc.find(s => s.id === savedSelected)) {
-        setSelectedId(savedSelected)
-      }
-      const savedSelectedImage = localStorage.getItem(SELECTED_IMAGE_KEY)
-      if (savedSelectedImage && allSrc.find(s => s.id === savedSelectedImage)) {
-        setSelectedImageId(savedSelectedImage)
-      }
-      // Hydrate the source stack, dropping any IDs that no longer
-      // resolve to a live source (e.g. project deleted between sessions).
-      try {
-        const raw = localStorage.getItem(STACK_KEY)
-        const parsed = raw ? (JSON.parse(raw) as unknown) : null
-        if (Array.isArray(parsed)) {
-          const valid = parsed
-            .filter((id): id is string => typeof id === 'string')
-            .filter(id => allSrc.some(s => s.id === id))
-            .slice(0, STACK_LIMIT)
-          if (valid.length) setStackIds(valid)
-        }
-      } catch {}
+      // Drop any orphaned stack-key entry from the previous model — the
+      // active project's sources are the stack now and no separate list
+      // is read.
+      try { localStorage.removeItem(STACK_KEY) } catch {}
 
+      // Hydrate active project + viewer selection from prior session.
+      const savedActive = localStorage.getItem(ACTIVE_KEY)
+      const match       = fixed.find(p => p.id === savedActive) ?? fixed[0] ?? null
+      setActiveId(match?.id ?? null)
+
+      const allSrc = fixed.flatMap(p => p.sources)
+      const savedSelected      = localStorage.getItem(SELECTED_KEY)
+      const savedSelectedImage = localStorage.getItem(SELECTED_IMAGE_KEY)
+      if (savedSelected      && allSrc.find(s => s.id === savedSelected))      setSelectedId(savedSelected)
+      if (savedSelectedImage && allSrc.find(s => s.id === savedSelectedImage)) setSelectedImageId(savedSelectedImage)
+
+      // Re-extract PDF content for any source that's `done` but missing
+      // its parsed body in IDB (e.g. interrupted extraction in a prior
+      // session). Notes / images / URLs are skipped.
       ;(async () => {
         for (const proj of fixed) {
           for (const src of proj.sources) {
             if (src.status !== 'done') continue
-            if (src.fileType === 'image') continue
-            if (src.fileType === 'note')  continue
-            if (src.fileType === 'url')   continue
+            if (src.fileType === 'image' || src.fileType === 'note' || src.fileType === 'url') continue
             try {
               let content = await getContent(src.id) as import('@/lib/types').DocContent | null
               if (!content) {
@@ -216,11 +222,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   storeContent(src.id, content).catch(() => {})
                 }
               }
-              if (content) {
-                patchSource(proj.id, src.id, { content })
-              } else {
-                patchSource(proj.id, src.id, { status: 'queued' as const, error: null })
-              }
+              if (content) patchSource(proj.id, src.id, { content })
+              else         patchSource(proj.id, src.id, { status: 'queued' as const, error: null })
             } catch {
               patchSource(proj.id, src.id, { status: 'queued' as const, error: null })
             }
@@ -228,65 +231,62 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       })()
     } else {
-      const inbox = makeInbox()
-      setProjects([inbox])
-      setActiveId(inbox.id)
+      // No prior state. activeId stays null until the user creates a project.
+      setProjects([])
+      setActiveId(null)
     }
     setMounted(true)
   }, [])
 
   useEffect(() => {
     projectsRef.current = projects
-    if (projects.length) saveProjects(projects)
-  }, [projects])
+    // Persist on every change AFTER mount — including empty arrays. The
+    // previous `if (projects.length)` skipped the save when the user
+    // deleted the last project, so the stale list survived in
+    // localStorage and the deleted project resurrected on hard reload.
+    if (mounted) saveProjects(projects)
+  }, [projects, mounted])
 
   useEffect(() => {
     function onBeforeUnload() {
-      if (projectsRef.current.length) saveProjects(projectsRef.current)
+      // Save on unload regardless of length so a final delete-the-last-
+      // project before close also persists.
+      saveProjects(projectsRef.current)
     }
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [])
 
-  useEffect(() => { if (activeId) localStorage.setItem(ACTIVE_KEY, activeId) }, [activeId])
+  useEffect(() => {
+    if (activeId) localStorage.setItem(ACTIVE_KEY, activeId)
+    else          localStorage.removeItem(ACTIVE_KEY)
+  }, [activeId])
   useEffect(() => {
     if (selectedId) localStorage.setItem(SELECTED_KEY, selectedId)
-    else localStorage.removeItem(SELECTED_KEY)
+    else            localStorage.removeItem(SELECTED_KEY)
   }, [selectedId])
   useEffect(() => {
     if (selectedImageId) localStorage.setItem(SELECTED_IMAGE_KEY, selectedImageId)
-    else localStorage.removeItem(SELECTED_IMAGE_KEY)
+    else                 localStorage.removeItem(SELECTED_IMAGE_KEY)
   }, [selectedImageId])
-  useEffect(() => {
-    if (stackIds.length) localStorage.setItem(STACK_KEY, JSON.stringify(stackIds))
-    else localStorage.removeItem(STACK_KEY)
-  }, [stackIds])
 
   // ─── Derived ────────────────────────────────────────────────────────────────
 
   const activeProject       = projects.find(p => p.id === activeId) ?? null
   const sources             = activeProject?.sources ?? []
   const allSources          = projects.flatMap(p => p.sources)
-  const selectedSource      = allSources.find(s => s.id === selectedId) ?? null
+  const selectedSource      = allSources.find(s => s.id === selectedId)      ?? null
   const selectedImageSource = allSources.find(s => s.id === selectedImageId) ?? null
-  const namedProjectCount   = projects.filter(p => p.id !== INBOX_ID).length
+  const namedProjectCount   = projects.length
   const atProjectLimit      = namedProjectCount >= PROJECT_LIMIT
 
-  // Resolved stack — drops IDs that no longer have a source (project
-  // deleted, source removed, etc). Order preserved.
-  const stackSources: QueuedSource[] = stackIds
-    .map(id => allSources.find(s => s.id === id))
-    .filter((s): s is QueuedSource => !!s)
-  const atStackLimit = stackIds.length >= STACK_LIMIT
-  const inStack = (id: string) => stackIds.includes(id)
-
-  // Stale ID flush: if a stacked source disappears (delete, project
-  // delete), prune it from `stackIds` so localStorage stays clean.
-  useEffect(() => {
-    if (!mounted || !stackIds.length) return
-    const valid = stackIds.filter(id => allSources.some(s => s.id === id))
-    if (valid.length !== stackIds.length) setStackIds(valid)
-  }, [allSources, mounted, stackIds])
+  // Stack = active project's sources. No separate storage, no separate
+  // ordering — switching projects swaps the stack instantly because it's
+  // a direct reference to `activeProject.sources`.
+  const stackSources: QueuedSource[] = sources
+  const stackIds   : string[]        = sources.map(s => s.id)
+  const atStackLimit                 = sources.length >= STACK_LIMIT
+  const inStack    = (id: string)    => sources.some(s => s.id === id)
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -428,25 +428,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }))
   }
 
-  // Reorder named projects within the projects array. Inbox stays where
-  // it is (it's not user-visible in the project list); only the named
-  // projects shuffle. `toIndex` is an index into the named-projects view,
-  // i.e. 0 means "first folder", not "first project array slot".
   function moveProject(projId: string, toIndex: number) {
-    if (projId === INBOX_ID) return
     setProjects(ps => {
-      const named = ps.filter(p => p.id !== INBOX_ID)
-      const from  = named.findIndex(p => p.id === projId)
+      const from = ps.findIndex(p => p.id === projId)
       if (from === -1) return ps
-      const arr = [...named]
+      const arr = [...ps]
       const [item] = arr.splice(from, 1)
       const clamped = Math.max(0, Math.min(toIndex, arr.length))
       arr.splice(clamped, 0, item)
-      // Stitch inbox back in at its original position.
-      const inboxIdx = ps.findIndex(p => p.id === INBOX_ID)
-      const out = [...arr]
-      if (inboxIdx !== -1) out.splice(inboxIdx, 0, ps[inboxIdx])
-      return out
+      return arr
     })
   }
 
@@ -454,16 +444,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setProjects(ps => {
       const src = ps.flatMap(p => p.sources).find(s => s.id === srcId)
       if (!src) return ps
-      // No-op guard: if the source already lives in the target project,
-      // bail. Without this, .map() would hit the remove branch first and
-      // never reach the add branch (each project takes a single arm of
-      // the if/else chain), so the source gets stripped and never
-      // re-attached — which is the "drag one floating source onto
-      // another and it disappears" bug, since dropping an inbox source
-      // on another inbox source bubbles up to handleInboxDrop and asks
-      // to move the source it already owns back into inbox.
+      // No-op if the source already lives in the target project.
       const currentProj = ps.find(p => p.sources.some(s => s.id === srcId))
       if (currentProj?.id === targetProjId) return ps
+      // Target project must have room.
+      const target = ps.find(p => p.id === targetProjId)
+      if (target && target.sources.length >= STACK_LIMIT) {
+        warn(`Project full. ${STACK_LIMIT} sources maximum.`)
+        return ps
+      }
       return ps.map(p => {
         if (p.sources.some(s => s.id === srcId)) {
           return { ...p, sources: p.sources.filter(s => s.id !== srcId) }
@@ -482,7 +471,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const MAX_FILE_MB = 100
 
   async function uploadFiles(files: FileList | File[], targetProjId?: string) {
-    const projId = targetProjId ?? INBOX_ID
+    const projId = targetProjId ?? activeIdRef.current
+    if (!projId) { warn('Create a project first.'); return }
 
     const isImage = (f: File) =>
       f.type.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(f.name)
@@ -496,6 +486,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const currentAllSources = projectsRef.current.flatMap(p => p.sources)
     list = list.filter(f => !currentAllSources.some(s => s.label === f.name))
     if (!list.length) return
+
+    // Per-project source cap.
+    const targetProj  = projectsRef.current.find(p => p.id === projId)
+    const room        = STACK_LIMIT - (targetProj?.sources.length ?? 0)
+    if (room <= 0) { warn(`Project full. ${STACK_LIMIT} sources maximum.`); return }
+    if (list.length > room) list = list.slice(0, room)
 
     // 250 MB cap: reject the whole batch if it would push storage over the limit.
     const batchBytes = list.reduce((sum, f) => sum + f.size, 0)
@@ -524,9 +520,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       try {
         await storeFile(src.id, file)
-        // Fire the storage event the moment the file lands in IDB — not
-        // after PDF extraction (which can take a couple of seconds and
-        // would make the badge feel laggy for the user).
         notifyStorageChanged()
         if (src.fileType === 'image') {
           patchSource(projId, src.id, { status: 'done' })
@@ -573,8 +566,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (selectedImageId === srcId) setSelectedImageId(null)
     setSelectedIds(new Set())
     setAnchorId(null)
-    // Fire the storage-changed event only after both IDB deletes complete,
-    // so the badge re-poll sees the freed bytes (otherwise the estimate is stale).
     Promise.allSettled([deleteFile(srcId), deleteContent(srcId)])
       .then(notifyStorageChanged)
   }
@@ -595,7 +586,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   function createNote(targetProjId?: string) {
-    const projId = targetProjId ?? INBOX_ID
+    const projId = targetProjId ?? activeIdRef.current
+    if (!projId) { warn('Create a project first.'); return }
+    const projNow = projectsRef.current.find(p => p.id === projId)
+    if (projNow && projNow.sources.length >= STACK_LIMIT) {
+      warn(`Project full. ${STACK_LIMIT} sources maximum.`)
+      return
+    }
     const note = newNote()
     setProjects(ps => ps.map(p =>
       p.id !== projId ? p : { ...p, sources: [...p.sources, note] }
@@ -603,30 +600,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   async function addUrl(url: string, targetProjId?: string) {
-    const projId = targetProjId ?? INBOX_ID
+    const projId = targetProjId ?? activeIdRef.current
+    if (!projId) { warn('Create a project first.'); return }
+    const projNow = projectsRef.current.find(p => p.id === projId)
+    if (projNow && projNow.sources.length >= STACK_LIMIT) {
+      warn(`Project full. ${STACK_LIMIT} sources maximum.`)
+      return
+    }
     const src = newUrlSource(url)
     setProjects(ps => ps.map(p =>
       p.id !== projId ? p : { ...p, sources: [...p.sources, src] }
     ))
-    // Title fetch removed — local-only mode. Hostname-derived label
-    // is already set inside newUrlSource().
   }
 
   function createProject(name?: string): boolean {
-    // Enforce 3-project ceiling.
-    if (namedProjectCount >= PROJECT_LIMIT) {
-      warn(`Project limit reached. ${PROJECT_LIMIT} maximum.`)
-      return false
-    }
-    // Duplicate-name guard — silent. The caller surfaces the message
-    // inline next to the input that triggered it; using the top-bar
-    // warn() toast here would be inconsistent with the rest of the
-    // app's inline validation pattern (see `dupMsg` for "Already added"
-    // on file/URL drops).
+    // No project-count ceiling — only the 250 MB storage cap and the
+    // 12-source per-project cap bound the workspace.
     const trimmed = name?.trim() ?? ''
     if (trimmed) {
       const dup = projects.some(p =>
-        p.id !== INBOX_ID && p.name.trim().toLowerCase() === trimmed.toLowerCase()
+        p.name.trim().toLowerCase() === trimmed.toLowerCase()
       )
       if (dup) return false
     }
@@ -635,42 +628,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setProjects(ps => [...ps, p])
     setActiveId(p.id)
     setSelectedId(null)
+    setSelectedImageId(null)
     return true
   }
 
   function switchProject(id: string) {
+    if (id === activeId) return
     setActiveId(id)
+    // Drop viewer state when the active project changes — the previously
+    // selected source belonged to a different project and shouldn't keep
+    // showing in the panes.
     setSelectedId(null)
+    setSelectedImageId(null)
+    setSelectedIds(new Set())
+    setAnchorId(null)
   }
 
   function deleteProject(id: string) {
-    if (id === INBOX_ID) return
+    // Reap the project's source files from IDB so storage isn't leaked.
+    const doomed    = projects.find(p => p.id === id)
+    if (!doomed) return
+    const sourceIds = doomed.sources.map(s => s.id)
 
-    // Reap the project's source files from IDB. Without this, deleting a
-    // project would leak its PDFs/images — the UI forgets them but the
-    // bytes stay on disk, so the storage badge wouldn't budge and the
-    // 250 MB cap would slowly fill with orphaned data.
-    //
-    // We delete by source id for every source the project owned. Notes
-    // and URLs have no IDB entry; deleteFile/deleteContent on a missing
-    // key is a successful no-op, so the broad sweep is safe.
-    const doomed   = projects.find(p => p.id === id)
-    const sourceIds = doomed?.sources.map(s => s.id) ?? []
-
-    const updated = projects.filter(p => p.id !== id)
+    const remaining = projects.filter(p => p.id !== id)
+    setProjects(remaining)
     setSelectedId(null)
+    setSelectedImageId(null)
     setSelectedIds(new Set())
-    if (!updated.some(p => p.id !== INBOX_ID)) {
-      // Only inbox left — that's fine, just keep it
-      setProjects(updated)
-      setActiveId(INBOX_ID)
+    setAnchorId(null)
+
+    if (activeId === id) {
+      // Move to first remaining project if any, else clear active state.
+      setActiveId(remaining[0]?.id ?? null)
       setShowProjects(false)
-    } else {
-      setProjects(updated)
-      if (activeId === id) {
-        const next = updated.find(p => p.id !== INBOX_ID) ?? updated[0]
-        setActiveId(next.id)
-      }
     }
 
     if (sourceIds.length) {
@@ -680,58 +670,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // ─── Source stack actions ───────────────────────────────────────────────────
+  // ─── Stack actions (aliases over project-scoped source ops) ───────────────
 
+  // Drag-source-into-stack semantics: if the source already lives in the
+  // active project, no-op. If it lives in another project, move it into
+  // the active project (respecting the cap).
   function addToStack(id: string) {
-    if (!allSources.some(s => s.id === id)) return
-    setStackIds(prev => {
-      if (prev.includes(id)) return prev
-      if (prev.length >= STACK_LIMIT) {
-        warn(`Source stack full (${STACK_LIMIT}). Remove one to add more.`)
-        return prev
-      }
-      return [...prev, id]
-    })
+    const projId = activeIdRef.current
+    if (!projId) return
+    moveSourceToProject(id, projId)
   }
 
+  // Unpinning IS removing the source in the new model — there's no
+  // separate "pinned" set to detach from, so the only meaningful
+  // operation is to delete it from the project (and IDB).
   function removeFromStack(id: string) {
-    setStackIds(prev => prev.filter(x => x !== id))
-    // Also evict it from whichever viewer pane it was open in. The user's
-    // intent when unpinning is "I'm done with this for now" — leaving the
-    // source still loaded in the center column contradicts that. The
-    // source itself stays (only the pin is dropped + the viewer is
-    // cleared); use removeSource to actually delete it.
-    if (selectedId === id) setSelectedId(null)
-    if (selectedImageId === id) setSelectedImageId(null)
+    removeSource(id)
   }
 
+  // Empty out the active project. Removes every source + reaps IDB.
   function clearStack() {
-    // Same intent as removeFromStack — if any stacked source is currently
-    // loaded in the center column, close it. Anything not in the stack
-    // stays where it is.
-    const stackSet = new Set(stackIds)
-    if (selectedId && stackSet.has(selectedId)) setSelectedId(null)
-    if (selectedImageId && stackSet.has(selectedImageId)) setSelectedImageId(null)
-    setStackIds([])
+    const proj = projects.find(p => p.id === activeIdRef.current)
+    if (!proj || proj.sources.length === 0) return
+    const ids = proj.sources.map(s => s.id)
+    setProjects(ps => ps.map(p => p.id === proj.id ? { ...p, sources: [] } : p))
+    setSelectedId(null)
+    setSelectedImageId(null)
+    setSelectedIds(new Set())
+    setAnchorId(null)
+    Promise.allSettled(ids.flatMap(sid => [deleteFile(sid), deleteContent(sid)]))
+      .then(notifyStorageChanged)
   }
 
   function reorderStack(fromIndex: number, toIndex: number) {
-    setStackIds(prev => {
-      if (fromIndex === toIndex) return prev
-      if (fromIndex < 0 || fromIndex >= prev.length) return prev
-      if (toIndex   < 0 || toIndex   >  prev.length) return prev
-      const next = [...prev]
+    const proj = projects.find(p => p.id === activeIdRef.current)
+    if (!proj) return
+    if (fromIndex === toIndex) return
+    if (fromIndex < 0 || fromIndex >= proj.sources.length) return
+    if (toIndex   < 0 || toIndex   >  proj.sources.length) return
+    setProjects(ps => ps.map(p => {
+      if (p.id !== proj.id) return p
+      const next = [...p.sources]
       const [moved] = next.splice(fromIndex, 1)
       next.splice(toIndex > fromIndex ? toIndex - 1 : toIndex, 0, moved)
-      return next
-    })
+      return { ...p, sources: next }
+    }))
   }
 
-  // Click-to-load behavior for the stack: images go into the top
-  // screenshot pane, everything else (PDF / URL / note) into the bottom
-  // reader. Two routes because the viewers are type-bound — the user's
-  // "toggle" between top and bottom is really "load the right pane for
-  // this source's type."
   function openInPane(id: string) {
     const src = allSources.find(s => s.id === id)
     if (!src) return
@@ -767,5 +752,4 @@ export function useApp(): AppState {
   return ctx
 }
 
-// Re-exported for components that just need the cap value.
 export { STORAGE_LIMIT_BYTES }

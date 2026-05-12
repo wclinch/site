@@ -12,7 +12,7 @@ const BASE = 'https://proof-kxfz.onrender.com'
 
 // One canonical description, reused everywhere — keeps OG / Twitter / OG
 // image / landing all telling the same story instead of three.
-const DESCRIPTION = 'A local-first, source-native workspace for reading and writing. PDFs, images, and web pages alongside the draft. One window, on the device. No account. No cloud.'
+const DESCRIPTION = 'A local-first, source-native workspace for reading and writing. PDFs, images, and web pages alongside the project work. One window, on the device. No account. No cloud.'
 const TAGLINE     = 'Site — Structured for thought.'
 
 export const metadata: Metadata = {

@@ -31,7 +31,7 @@ export default function DraftPanel() {
   }
 
   function handleExport(fmt: 'txt' | 'md') {
-    const name = activeProject?.name ?? 'draft'
+    const name = activeProject?.name ?? 'work'
     const slug = name.replace(/\s+/g, '-').toLowerCase()
     const blob = new Blob([text.trim()], { type: 'text/plain' })
     const a    = document.createElement('a')
@@ -55,7 +55,7 @@ export default function DraftPanel() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <span style={{ fontSize: '10px', color: '#888', letterSpacing: '0.04em' }}>
-          Draft
+          Work
         </span>
 
         {hasContent && (
@@ -98,7 +98,7 @@ export default function DraftPanel() {
               requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = start + 1 })
             }
           }}
-          placeholder="Draft."
+          placeholder=""
           style={{
             width: '100%', minHeight: '100%',
             background: 'transparent', border: 'none', outline: 'none',
@@ -139,7 +139,7 @@ export default function DraftPanel() {
               onMouseEnter={e => (e.currentTarget.style.background = '#1a1a1a')}
               onMouseLeave={e => (e.currentTarget.style.background = 'none')}
             >
-              {confirmClear ? 'Confirm' : 'Clear draft'}
+              {confirmClear ? 'Confirm' : 'Clear'}
             </button>
           </div>
         </>

@@ -23,7 +23,7 @@ export default function Privacy() {
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Storage basis</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
             PDFs and images: <code style={{ color: '#999' }}>IndexedDB</code>.
-            Project structure, draft text, source labels, URL references, and the pinned stack: <code style={{ color: '#999' }}>localStorage</code>.
+            Project structure, work text, source labels, URL references, and the pinned stack: <code style={{ color: '#999' }}>localStorage</code>.
             Both reside on the device.
           </p>
         </div>
@@ -51,7 +51,7 @@ export default function Privacy() {
             Sources and projects are removed individually from within the workspace. Two bulk operations:
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Storage indicator</span> — clears sources and files. Draft text and project shells are preserved.
+            <span style={{ color: '#999' }}>Storage indicator</span> — clears sources and files. Work and project shells are preserved.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
             <span style={{ color: '#999' }}>Site → Reset Site Data…</span> (desktop menu) — full reset at the application session layer. Removes all browser-side state.
