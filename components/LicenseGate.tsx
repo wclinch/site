@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { validateLicense, saveLicense } from '@/lib/license'
+import { validateLicense } from '@/lib/license'
 
 // Full-screen license entry. Renders in place of the workspace when the
 // app boots without a cached license. Restrained, on-brand chrome —
@@ -153,29 +153,6 @@ export default function LicenseGate({ onActivated }: { onActivated: () => void }
             Lost your key? Email support.
           </a>
 
-          {/* TEMPORARY DEV BYPASS — remove before paid launch. Lets you
-              skip past the gate without a real key while iterating. The
-              skip writes a sentinel license entry to localStorage so
-              subsequent launches don't re-prompt. */}
-          <button
-            onClick={() => {
-              saveLicense({ key: '__dev_skip__', validatedAt: new Date().toISOString() })
-              onActivated()
-            }}
-            title="Skip activation (temporary)"
-            style={{
-              marginLeft: 'auto',
-              background: 'none', border: 'none',
-              fontSize: '11px', color: '#333',
-              letterSpacing: '0.02em', fontFamily: 'inherit',
-              cursor: 'pointer',
-              transition: 'color 0.15s',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#888')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#333')}
-          >
-            Skip
-          </button>
         </div>
 
         {/* Footnote */}
