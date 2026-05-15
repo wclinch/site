@@ -4,7 +4,7 @@ import { MetadataRoute } from 'next'
 // is emitted; web build is unaffected.
 export const dynamic = 'force-static'
 
-const BASE = 'https://proof-kxfz.onrender.com'
+const BASE = 'https://site.app' // TODO: update to production domain
 
 export default function sitemap(): MetadataRoute.Sitemap {
   return [

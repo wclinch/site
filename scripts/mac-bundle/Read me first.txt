@@ -1,4 +1,4 @@
-Site v0.1.0 — macOS
+Site v1.0.0-beta.1 — macOS
 
 Install
   Drag Site.app into the Applications folder.

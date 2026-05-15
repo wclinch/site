@@ -13,6 +13,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ['/admin', '/api/'],
       },
     ],
-    sitemap: 'https://proof-kxfz.onrender.com/sitemap.xml',
+    sitemap: 'https://site.app/sitemap.xml', // TODO: update to production domain
   }
 }

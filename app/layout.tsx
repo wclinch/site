@@ -8,7 +8,7 @@ const dmMono = DM_Mono({
   display: 'swap',
 })
 
-const BASE = 'https://proof-kxfz.onrender.com'
+const BASE = 'https://site.app' // TODO: update to production domain before deploying web build
 
 // One canonical description, reused everywhere — keeps OG / Twitter / OG
 // image / landing all telling the same story instead of three.

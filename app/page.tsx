@@ -72,6 +72,33 @@ export default function Home() {
           </div>
         </section>
 
+        {/* Beta Access */}
+        <section style={{ borderTop: '1px solid #111', maxWidth: '620px', width: '100%', margin: '0 auto', padding: '64px 24px' }}>
+          <div style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', marginBottom: '32px' }}>
+            Beta Access
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+            <div>
+              <div style={{ fontSize: '24px', color: '#bbb', fontWeight: 500, letterSpacing: '-0.01em', marginBottom: '10px' }}>
+                Site Beta Access
+              </div>
+              <p style={{ fontSize: '13px', color: '#777', lineHeight: 1.8, margin: '0 0 6px' }}>
+                One-time purchase. No subscription.
+              </p>
+              <p style={{ fontSize: '13px', color: '#777', lineHeight: 1.8, margin: '0 0 6px' }}>
+                Includes Site V1 during beta.
+              </p>
+              <p style={{ fontSize: '13px', color: '#777', lineHeight: 1.8, margin: '0 0 6px' }}>
+                250&nbsp;MB uploaded Sources. Saved Sites do not count toward storage.
+              </p>
+            </div>
+            {/* TODO: replace href with Polar.sh one-time checkout URL */}
+            <a href="https://polar.sh" className="cta-link" style={{ alignSelf: 'flex-start' }}>
+              Buy Beta Access →
+            </a>
+          </div>
+        </section>
+
         {/* Footer CTA */}
         <section style={{ borderTop: '1px solid #111', maxWidth: '620px', width: '100%', margin: '0 auto', padding: '64px 24px' }}>
           <p style={{ fontSize: '13px', color: '#666', lineHeight: 1.75, margin: '0 0 28px' }}>
