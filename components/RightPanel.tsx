@@ -44,8 +44,11 @@ const BROWSER_URL_KEY  = 'proof-v3-browser-url'
 const BROWSER_HOME_KEY = 'proof-v3-browser-home'
 
 function readSavedHome(): boolean {
-  if (typeof window === 'undefined') return false
-  try { return localStorage.getItem(BROWSER_HOME_KEY) === 'true' } catch { return false }
+  if (typeof window === 'undefined') return true
+  try {
+    const v = localStorage.getItem(BROWSER_HOME_KEY)
+    return v === null ? true : v === 'true'  // null = first launch → show home
+  } catch { return true }
 }
 function readSavedUrl(): string {
   if (typeof window === 'undefined') return ''
