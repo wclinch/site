@@ -3,7 +3,7 @@ import dynamic           from 'next/dynamic'
 import { AppProvider }   from '@/context/AppContext'
 import ProjectBar        from '@/components/ProjectBar'
 import SourcePanel       from '@/components/SourcePanel'
-import DraftPanel        from '@/components/DraftPanel'
+import RightPanel        from '@/components/RightPanel'
 import SourceContextMenu from '@/components/SourceContextMenu'
 import LicenseGate       from '@/components/LicenseGate'
 import { useApp }        from '@/context/AppContext'
@@ -11,11 +11,10 @@ import { useState, useEffect } from 'react'
 import { loadLicense }   from '@/lib/license'
 
 // pdfjs-dist uses DOMMatrix at module init — must not run during SSR
-const ReaderPanel    = dynamic(() => import('@/components/ReaderPanel'),    { ssr: false })
-const ScreenshotZone = dynamic(() => import('@/components/ScreenshotZone'), { ssr: false })
+const ReaderPanel = dynamic(() => import('@/components/ReaderPanel'), { ssr: false })
 
-const DEF_SOURCE = '20%'
-const DEF_DRAFT  = '40%'
+const DEF_SOURCE  = '20%'
+const DEF_BROWSER = '40%'
 
 function StorageWarning() {
   const [msg, setMsg] = useState<string | null>(null)
@@ -51,8 +50,6 @@ function StorageWarning() {
 
 function Layout() {
   const { mounted } = useApp()
-  const [screenshotExpanded, setScreenshotExpanded] = useState(false)
-  const [pdfFullscreen, setPdfFullscreen] = useState(false)
 
   if (!mounted) {
     return (
@@ -65,41 +62,12 @@ function Layout() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#080808' }}>
       <ProjectBar />
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-
-        {/* Left 20%: source list */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', paddingRight: '5px' }}>
         <SourcePanel width={DEF_SOURCE} />
-        <div style={{ width: '1px', flexShrink: 0, background: '#222' }} />
-
-        {pdfFullscreen ? (
-          /* PDF FULLSCREEN: pdf takes full height, draft alongside */
-          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-            <ReaderPanel pdfOnly pdfIsFullscreen onCollapsePdf={() => setPdfFullscreen(false)} />
-            <div style={{ width: '1px', flexShrink: 0, background: '#333' }} />
-            <DraftPanel />
-          </div>
-        ) : screenshotExpanded ? (
-          /* SCREENSHOT EXPANDED: screenshot spans full top 60%, PDF + draft side-by-side at bottom 40% */
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <ScreenshotZone onCollapse={() => setScreenshotExpanded(false)} />
-            <div style={{ height: '1px', flexShrink: 0, background: '#1a1a1a' }} />
-            <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-              <ReaderPanel pdfOnly onExpandPdf={() => { setScreenshotExpanded(false); setPdfFullscreen(true) }} />
-              <div style={{ width: '1px', flexShrink: 0, background: '#333' }} />
-              <DraftPanel />
-            </div>
-          </div>
-        ) : (
-          /* DEFAULT: screenshot+PDF stacked in center 40%, draft in right 40% */
-          <>
-            <ReaderPanel onExpandScreenshot={() => setScreenshotExpanded(true)} />
-            <div style={{ width: '1px', flexShrink: 0, background: '#333' }} />
-            <div style={{ width: DEF_DRAFT, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              <DraftPanel />
-            </div>
-          </>
-        )}
-
+        <ReaderPanel />
+        <div style={{ width: DEF_BROWSER, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <RightPanel />
+        </div>
       </div>
       <SourceContextMenu />
     </div>
@@ -114,7 +82,10 @@ function GatedShell() {
   // the context is cheap to mount and gives the gate a real header
   // strip instead of a bare modal floating in space.
   const [licensed, setLicensed] = useState<boolean | null>(null)
-  useEffect(() => { setLicensed(loadLicense() !== null) }, [])
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') { setLicensed(true); return }
+    setLicensed(loadLicense() !== null)
+  }, [])
 
   if (licensed === null) {
     return (

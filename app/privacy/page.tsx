@@ -15,16 +15,17 @@ export default function Privacy() {
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Summary</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Data resides on the device. No account. No telemetry. No transmission.
+            Everything stays on the device. No account. No telemetry. No transmission.
           </p>
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Storage basis</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            PDFs and images: <code style={{ color: '#999' }}>IndexedDB</code>.
-            Project structure, work text, source labels, URL references, and the pinned stack: <code style={{ color: '#999' }}>localStorage</code>.
-            Both reside on the device.
+            Uploaded Sources (PDFs and images): <code style={{ color: '#999' }}>IndexedDB</code>.
+            Stack contents, open Sources, and the Research URL: <code style={{ color: '#999' }}>localStorage</code>.
+            Saved Sites store metadata only and do not use file storage.
+            All data resides on the device.
           </p>
         </div>
 
@@ -38,23 +39,17 @@ export default function Privacy() {
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Network</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            One outbound request: license-key validation against <code style={{ color: '#999' }}>api.polar.sh</code> on first activation. The key is the only payload. The result is cached locally; the application does not contact the endpoint again.
-          </p>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Network traffic from embedded web pages originates with the page being viewed.
+            The application itself makes no outbound requests. All network traffic originates with pages you navigate to in the Research panel.
           </p>
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Deletion</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Sources and projects are removed individually from within the workspace. Two bulk operations:
+            Sources and sites are removed individually from within the workspace.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Storage indicator</span> — clears sources and files. Work and project shells are preserved.
-          </p>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Site → Reset Site Data…</span> (desktop menu) — full reset at the application session layer. Removes all browser-side state.
+            <span style={{ color: '#999' }}>Site → Reset Site Data…</span> (desktop menu) — full reset. Removes all local files, Stack contents, and Research state.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
             Both operations are local and cannot be reversed.

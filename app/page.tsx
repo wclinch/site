@@ -14,11 +14,11 @@ export default function Home() {
           </div>
 
           <h1 style={{ fontSize: '32px', fontWeight: 500, color: '#bbb', lineHeight: 1.25, margin: '0 0 20px', letterSpacing: '-0.01em' }}>
-            Structured for thought.
+            Files and the live web. One window.
           </h1>
 
           <p style={{ fontSize: '15px', color: '#777', lineHeight: 1.8, margin: '0 0 40px', maxWidth: '480px' }}>
-            A source-native workspace for reading and writing. PDFs, images, and web pages on one side. Work on the other. One window, on the device.
+            Open files alongside a live browser. Save pages, read documents, and return to exactly where you left off.
           </p>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
@@ -36,11 +36,9 @@ export default function Home() {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
             {([
-              ['Sources', 'PDFs, images, and web pages. Drop into the sidebar or paste a URL. Floating by default; organized into projects on demand.'],
-              ['Stack',   'A pinned working set at the base of the sidebar. Click any source to load it into the viewer. The pane arrow flips a PDF or URL to the image pane when needed.'],
-              ['Viewer',  'A split surface. Images above. PDFs and URLs below. Either pane fullscreens.'],
-              ['Work',    'Each project owns its own writing surface. Saves to local storage as you type. Switch projects to load that project\'s work.'],
-              ['Export',  'Plain text or Markdown. From the work menu.'],
+              ['Stack',    'The left column. Sources (files) on the top half, Sites (saved pages) on the bottom.'],
+              ['Source',   'The center column. Two stacked panels — Source 1 and Source 2. Each opens a file from the Stack independently.'],
+              ['Research', 'The right column. A live browser with a URL bar. Save the current page to Sites.'],
             ] as const).map(([title, body]) => (
               <div key={title} style={{ display: 'flex', gap: '24px' }}>
                 <div style={{ width: '4px', flexShrink: 0, background: '#1a1a1a', borderRadius: '2px', alignSelf: 'stretch' }} />
@@ -62,13 +60,13 @@ export default function Home() {
             <div>
               <div style={{ fontSize: '20px', color: '#bbb', fontWeight: 500, marginBottom: '6px', letterSpacing: '-0.01em' }}>250&nbsp;MB</div>
               <div style={{ fontSize: '13px', color: '#777', lineHeight: 1.7 }}>
-                Local storage. Files in IndexedDB; structure and project work in localStorage. Nothing transmitted.
+                Uploaded Sources in IndexedDB. Saved Sites store metadata only and do not count toward storage.
               </div>
             </div>
             <div>
-              <div style={{ fontSize: '20px', color: '#bbb', fontWeight: 500, marginBottom: '6px', letterSpacing: '-0.01em' }}>Reset, contained</div>
+              <div style={{ fontSize: '20px', color: '#bbb', fontWeight: 500, marginBottom: '6px', letterSpacing: '-0.01em' }}>Resume in place</div>
               <div style={{ fontSize: '13px', color: '#777', lineHeight: 1.7 }}>
-                The storage indicator clears sources and files. Project work is preserved.
+                Quit and reopen. The Stack, open files, and Research URL all restore automatically.
               </div>
             </div>
           </div>
@@ -77,7 +75,7 @@ export default function Home() {
         {/* Footer CTA */}
         <section style={{ borderTop: '1px solid #111', maxWidth: '620px', width: '100%', margin: '0 auto', padding: '64px 24px' }}>
           <p style={{ fontSize: '13px', color: '#666', lineHeight: 1.75, margin: '0 0 28px' }}>
-            Files, projects, and work remain on the device. No server. No account. No sync.
+            Files, saved pages, and your place in Research stay on the device. No server. No account. No sync.
           </p>
           <a href="/app" className="text-cta">Open App →</a>
         </section>
@@ -86,7 +84,7 @@ export default function Home() {
 
       <footer style={{ borderTop: '1px solid #111', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', maxWidth: '620px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
         <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.08em' }}>
-          Local · 250&nbsp;MB
+          Beta · 250&nbsp;MB Sources
         </span>
         <div style={{ display: 'flex', gap: '20px' }}>
           <a href="/about"   className="footer-link">About</a>

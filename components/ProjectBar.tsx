@@ -1,10 +1,7 @@
 'use client'
-import { useApp } from '@/context/AppContext'
 import StorageBadge from './StorageBadge'
 
 export default function ProjectBar() {
-  const { namedProjectCount } = useApp()
-
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -40,10 +37,6 @@ export default function ProjectBar() {
         WebkitAppRegion: 'no-drag',
       } as React.CSSProperties}>
         <StorageBadge />
-        <span style={{ width: '1px', height: '12px', background: '#222' }} />
-        <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.04em', fontVariantNumeric: 'tabular-nums' }}>
-          {namedProjectCount} {namedProjectCount === 1 ? 'project' : 'projects'}
-        </span>
         <span style={{ width: '1px', height: '12px', background: '#222' }} />
         {/* Quiet support hook. mailto: opens the user's default mail
             client — no tracking, no contact form, no server. Same

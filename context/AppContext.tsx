@@ -2,13 +2,14 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
 import type { Project, QueuedSource, Clip, Fragment } from '@/lib/types'
 import {
-  ACTIVE_KEY, SELECTED_KEY, SELECTED_IMAGE_KEY, STACK_KEY, STACK_LIMIT,
+  ACTIVE_KEY, SELECTED_KEY, SELECTED_KEY_2, STACK_KEY, STACK_LIMIT,
   newProject, newSource, newNote, newUrlSource,
   loadProjects, saveProjects,
 } from '@/lib/storage'
 import { storeFile, deleteFile, getFile, storeContent, getContent, deleteContent } from '@/lib/idb'
 import { extractContent } from '@/lib/extract'
 import { wouldExceedLimit, STORAGE_LIMIT_BYTES } from '@/lib/storage-limit'
+
 
 // Legacy id from the pre-refactor "floating sources" model. Kept exported
 // only so old persisted state can be migrated on load — no new code
@@ -28,6 +29,7 @@ interface AppState {
   projects: Project[]
   activeId: string | null
   selectedId: string | null
+  selectedId2: string | null
   selectedIds: Set<string>
   anchorId: string | null
   showProjects: boolean
@@ -38,8 +40,7 @@ interface AppState {
   sources: QueuedSource[]
   allSources: QueuedSource[]
   selectedSource: QueuedSource | null
-  selectedImageId: string | null
-  selectedImageSource: QueuedSource | null
+  selectedSource2: QueuedSource | null
   // Stack is now project-scoped: it IS the active project's source list.
   // `stackSources` = active project's sources (in order). `stackIds` is
   // derived from that. `addToStack` / `removeFromStack` / `clearStack` are
@@ -56,7 +57,7 @@ interface AppState {
   // setters
   setShowProjects: (v: boolean | ((prev: boolean) => boolean)) => void
   setSelectedId: (id: string | null) => void
-  setSelectedImageId: (id: string | null) => void
+  setSelectedId2: (id: string | null) => void
   setSelectedIds: (ids: Set<string>) => void
   setAnchorId: (id: string | null) => void
   setContextMenu: (m: ContextMenu | null) => void
@@ -83,10 +84,12 @@ interface AppState {
   removeSource: (srcId: string) => void
   removeSelected: () => void
   createNote: (targetProjId?: string) => void
-  addUrl: (url: string, targetProjId?: string) => Promise<void>
+  addUrl: (url: string, targetProjId?: string, label?: string) => Promise<void>
   createProject: (name?: string) => boolean
   switchProject: (id: string) => void
   deleteProject: (id: string) => void
+  resumeSession: (id: string) => void
+  lastActiveId: string | null
   // Stack actions — aliases over the project-scoped source ops.
   // `addToStack` is the entry point for drag-source-into-stack: if the
   // source is already in the active project, no-op; otherwise it's
@@ -117,12 +120,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects]               = useState<Project[]>([])
   const [activeId, setActiveId]               = useState<string | null>(null)
   const [selectedId, setSelectedId]           = useState<string | null>(null)
-  const [selectedImageId, setSelectedImageId] = useState<string | null>(null)
+  const [selectedId2, setSelectedId2]         = useState<string | null>(null)
   const [selectedIds, setSelectedIds]         = useState<Set<string>>(new Set())
   const [anchorId, setAnchorId]               = useState<string | null>(null)
   const [showProjects, setShowProjects]       = useState(false)
   const [contextMenu, setContextMenu]         = useState<ContextMenu | null>(null)
   const [projContextMenu, setProjContextMenu] = useState<ProjContextMenu | null>(null)
+  // Read last active session ID at mount time (before we clear it). Used by
+  // SessionOverlay to pre-select the "Resume last session" target.
+  const [lastActiveId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    try { return localStorage.getItem(ACTIVE_KEY) } catch { return null }
+  })
 
   const projectsRef = useRef<Project[]>([])
   const activeIdRef = useRef(activeId)
@@ -191,19 +200,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       // Drop any orphaned stack-key entry from the previous model — the
       // active project's sources are the stack now and no separate list
-      // is read.
+      // is read. Also drop the legacy two-pane image-selection key —
+      // the center column is a single Source pane now, no separate
+      // "image pane" state.
       try { localStorage.removeItem(STACK_KEY) } catch {}
+      try { localStorage.removeItem('proof-v3-selected-image') } catch {}
 
-      // Hydrate active project + viewer selection from prior session.
-      const savedActive = localStorage.getItem(ACTIVE_KEY)
-      const match       = fixed.find(p => p.id === savedActive) ?? fixed[0] ?? null
-      setActiveId(match?.id ?? null)
-
-      const allSrc = fixed.flatMap(p => p.sources)
-      const savedSelected      = localStorage.getItem(SELECTED_KEY)
-      const savedSelectedImage = localStorage.getItem(SELECTED_IMAGE_KEY)
-      if (savedSelected      && allSrc.find(s => s.id === savedSelected))      setSelectedId(savedSelected)
-      if (savedSelectedImage && allSrc.find(s => s.id === savedSelectedImage)) setSelectedImageId(savedSelectedImage)
+      // Auto-restore the last active project (or fall back to the first one)
+      // and its saved Source selection.
+      const restoredId = fixed.find(p => p.id === lastActiveId)?.id ?? fixed[0].id
+      setActiveId(restoredId)
+      try {
+        const restoredSources = fixed.find(p => p.id === restoredId)?.sources ?? []
+        const savedSel = localStorage.getItem(SELECTED_KEY)
+        if (savedSel && restoredSources.find(s => s.id === savedSel)) setSelectedId(savedSel)
+        const savedSel2 = localStorage.getItem(SELECTED_KEY_2)
+        if (savedSel2 && restoredSources.find(s => s.id === savedSel2)) setSelectedId2(savedSel2)
+      } catch {}
 
       // Re-extract PDF content for any source that's `done` but missing
       // its parsed body in IDB (e.g. interrupted extraction in a prior
@@ -231,9 +244,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       })()
     } else {
-      // No prior state. activeId stays null until the user creates a project.
-      setProjects([])
-      setActiveId(null)
+      // First launch — auto-create a silent default workspace.
+      const def = newProject(1)
+      def.name = 'Workspace'
+      setProjects([def])
+      setActiveId(def.id)
     }
     setMounted(true)
   }, [])
@@ -266,17 +281,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     else            localStorage.removeItem(SELECTED_KEY)
   }, [selectedId])
   useEffect(() => {
-    if (selectedImageId) localStorage.setItem(SELECTED_IMAGE_KEY, selectedImageId)
-    else                 localStorage.removeItem(SELECTED_IMAGE_KEY)
-  }, [selectedImageId])
+    if (selectedId2) localStorage.setItem(SELECTED_KEY_2, selectedId2)
+    else             localStorage.removeItem(SELECTED_KEY_2)
+  }, [selectedId2])
 
   // ─── Derived ────────────────────────────────────────────────────────────────
 
   const activeProject       = projects.find(p => p.id === activeId) ?? null
   const sources             = activeProject?.sources ?? []
   const allSources          = projects.flatMap(p => p.sources)
-  const selectedSource      = allSources.find(s => s.id === selectedId)      ?? null
-  const selectedImageSource = allSources.find(s => s.id === selectedImageId) ?? null
+  const selectedSource      = allSources.find(s => s.id === selectedId)  ?? null
+  const selectedSource2     = allSources.find(s => s.id === selectedId2) ?? null
   const namedProjectCount   = projects.length
   const atProjectLimit      = namedProjectCount >= PROJECT_LIMIT
 
@@ -496,7 +511,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // 250 MB cap: reject the whole batch if it would push storage over the limit.
     const batchBytes = list.reduce((sum, f) => sum + f.size, 0)
     if (await wouldExceedLimit(batchBytes)) {
-      warn('Storage limit reached.')
+      warn('Storage limit reached. Remove uploaded Sources to add more.')
       return
     }
 
@@ -508,6 +523,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setProjects(ps => ps.map(p =>
       p.id !== projId ? p : { ...p, sources: [...p.sources, ...newSources] }
     ))
+
+    // Open the first new source in the Source pane immediately so the
+    // user sees the result of their upload without an extra click.
+    if (newSources.length > 0) setSelectedId(newSources[0].id)
 
     for (let i = 0; i < list.length; i++) {
       const file = list[i]
@@ -562,12 +581,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...p,
       sources: p.sources.filter(s => s.id !== srcId),
     })))
-    if (selectedId === srcId) setSelectedId(null)
-    if (selectedImageId === srcId) setSelectedImageId(null)
+    if (selectedId  === srcId) setSelectedId(null)
+    if (selectedId2 === srcId) setSelectedId2(null)
     setSelectedIds(new Set())
     setAnchorId(null)
-    Promise.allSettled([deleteFile(srcId), deleteContent(srcId)])
-      .then(notifyStorageChanged)
+    Promise.allSettled([deleteFile(srcId), deleteContent(srcId)]).then(notifyStorageChanged)
   }
 
   function removeSelected() {
@@ -576,8 +594,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...p,
       sources: p.sources.filter(s => !selectedIds.has(s.id)),
     })))
-    if (selectedId && selectedIds.has(selectedId)) setSelectedId(null)
-    if (selectedImageId && selectedIds.has(selectedImageId)) setSelectedImageId(null)
+    if (selectedId  && selectedIds.has(selectedId))  setSelectedId(null)
+    if (selectedId2 && selectedIds.has(selectedId2)) setSelectedId2(null)
     const ids = Array.from(selectedIds)
     Promise.allSettled(ids.flatMap(id => [deleteFile(id), deleteContent(id)]))
       .then(notifyStorageChanged)
@@ -599,7 +617,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ))
   }
 
-  async function addUrl(url: string, targetProjId?: string) {
+  async function addUrl(url: string, targetProjId?: string, label?: string) {
     const projId = targetProjId ?? activeIdRef.current
     if (!projId) { warn('Create a project first.'); return }
     const projNow = projectsRef.current.find(p => p.id === projId)
@@ -607,10 +625,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       warn(`Project full. ${STACK_LIMIT} sources maximum.`)
       return
     }
-    const src = newUrlSource(url)
+    const src = newUrlSource(url, label)
     setProjects(ps => ps.map(p =>
       p.id !== projId ? p : { ...p, sources: [...p.sources, src] }
     ))
+    // URLs do not open in the center Source pane — that pane is for
+    // documents only. Save behavior stays as-is: the source lands in
+    // the Stack, the right Browser keeps showing whatever it had.
   }
 
   function createProject(name?: string): boolean {
@@ -628,18 +649,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setProjects(ps => [...ps, p])
     setActiveId(p.id)
     setSelectedId(null)
-    setSelectedImageId(null)
     return true
   }
 
   function switchProject(id: string) {
     if (id === activeId) return
     setActiveId(id)
-    // Drop viewer state when the active project changes — the previously
-    // selected source belonged to a different project and shouldn't keep
-    // showing in the panes.
     setSelectedId(null)
-    setSelectedImageId(null)
+    setSelectedIds(new Set())
+    setAnchorId(null)
+  }
+
+  // Restores a session and its saved Source selection. Used by
+  // SessionOverlay's "Resume last session" and saved-session list.
+  function resumeSession(id: string) {
+    setActiveId(id)
+    const sessionSources = projectsRef.current.find(p => p.id === id)?.sources ?? []
+    try {
+      const savedSel = localStorage.getItem(SELECTED_KEY)
+      if (savedSel && sessionSources.find(s => s.id === savedSel)) setSelectedId(savedSel)
+      else setSelectedId(null)
+    } catch {
+      setSelectedId(null)
+    }
     setSelectedIds(new Set())
     setAnchorId(null)
   }
@@ -653,7 +685,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const remaining = projects.filter(p => p.id !== id)
     setProjects(remaining)
     setSelectedId(null)
-    setSelectedImageId(null)
+    setSelectedId2(null)
     setSelectedIds(new Set())
     setAnchorId(null)
 
@@ -695,7 +727,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const ids = proj.sources.map(s => s.id)
     setProjects(ps => ps.map(p => p.id === proj.id ? { ...p, sources: [] } : p))
     setSelectedId(null)
-    setSelectedImageId(null)
     setSelectedIds(new Set())
     setAnchorId(null)
     Promise.allSettled(ids.flatMap(sid => [deleteFile(sid), deleteContent(sid)]))
@@ -720,26 +751,55 @@ export function AppProvider({ children }: { children: ReactNode }) {
   function openInPane(id: string) {
     const src = allSources.find(s => s.id === id)
     if (!src) return
-    if (src.fileType === 'image') setSelectedImageId(id)
-    else setSelectedId(id)
+    // URL/web sources belong to the right Browser, not the center
+    // Source pane. Hand them off to the research view if Electron
+    // exposes one; in the web build, fall back to opening externally.
+    // Documents (PDF/note/image) load into the center Source pane.
+    if (src.fileType === 'url') {
+      const url = src.url ?? src.raw
+      const dev = process.env.NODE_ENV === 'development'
+      if (dev) console.log('[Stack site click]', { id, label: src.label ?? src.raw })
+      if (dev) console.log('[Stack site click] resolved URL →', url)
+      if (typeof window === 'undefined') return
+      if (window.electronAPI?.research?.navigate) {
+        // Hand off to RightPanel so the single navigateUrl pipeline
+        // runs: it pre-positions the WebContentsView before sending
+        // the navigate IPC, which is what avoids the "loads only on
+        // Ctrl-R" race. Don't call research.navigate directly here —
+        // that would send loadURL first, defeating the bounds order.
+        if (dev) console.log('[Stack site click] dispatch proof:browser-navigate')
+        window.dispatchEvent(new CustomEvent('proof:browser-navigate', { detail: url }))
+        return
+      }
+      window.open(url, '_blank', 'noopener,noreferrer')
+      return
+    }
+    // Smart routing: fill the first empty pane, otherwise replace Source 1.
+    if (!selectedId || selectedId === id) {
+      setSelectedId(id)
+    } else if (!selectedId2 || selectedId2 === id) {
+      setSelectedId2(id)
+    } else {
+      setSelectedId(id)
+    }
   }
 
   // ─── Context value ──────────────────────────────────────────────────────────
 
   const value: AppState = {
-    mounted, projects, activeId, selectedId, selectedIds, anchorId,
+    mounted, projects, activeId, selectedId, selectedId2, selectedIds, anchorId,
     showProjects, contextMenu, projContextMenu,
-    activeProject, sources, allSources, selectedSource, selectedImageId, selectedImageSource,
+    activeProject, sources, allSources, selectedSource, selectedSource2,
     stackIds, stackSources, stackLimit: STACK_LIMIT, atStackLimit, inStack,
     namedProjectCount, atProjectLimit,
-    setShowProjects, setSelectedId, setSelectedImageId, setSelectedIds, setAnchorId,
+    setShowProjects, setSelectedId, setSelectedId2, setSelectedIds, setAnchorId,
     setContextMenu, setProjContextMenu,
     setProjects, updateProject, patchSource, moveSource, moveSourceToProject, moveProject,
     addClip, removeClip, updateClip, reorderClips,
     addFragment, insertFragment, removeFragment, updateFragment, moveFragment, clearFragments,
     uploadFiles, retrySource,
     removeSource, removeSelected,
-    createNote, addUrl, createProject, switchProject, deleteProject,
+    createNote, addUrl, createProject, switchProject, deleteProject, resumeSession, lastActiveId,
     addToStack, removeFromStack, clearStack, reorderStack, openInPane,
   }
 

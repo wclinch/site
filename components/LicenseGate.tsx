@@ -58,7 +58,7 @@ export default function LicenseGate({ onActivated }: { onActivated: () => void }
           letterSpacing: '0.1em', textTransform: 'uppercase',
           marginBottom: '20px',
         }}>
-          License
+          Beta Access
         </div>
 
         {/* Heading */}
@@ -67,7 +67,7 @@ export default function LicenseGate({ onActivated }: { onActivated: () => void }
           lineHeight: 1.3, letterSpacing: '-0.01em',
           margin: '0 0 14px',
         }}>
-          Enter the license key.
+          Enter your license key.
         </h1>
 
         {/* Body */}
@@ -76,7 +76,7 @@ export default function LicenseGate({ onActivated }: { onActivated: () => void }
           margin: '0 0 24px',
         }}>
           A license key was issued at purchase. Paste it below to activate this device.
-          Validation runs once. The application is offline afterward.
+          Validation runs once; the app works offline after that.
         </p>
 
         {/* Input */}
@@ -160,7 +160,7 @@ export default function LicenseGate({ onActivated }: { onActivated: () => void }
           marginTop: '36px',
           fontSize: '11px', color: '#444', lineHeight: 1.7,
         }}>
-          One key per purchase. Activation contacts Polar once; no further transmissions.
+          One-time purchase. No subscription. Activation contacts Polar once; no further transmissions.
         </p>
 
       </div>

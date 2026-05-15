@@ -5,7 +5,7 @@ import { ImageResponse } from 'next/og'
 // route handlers. Node generation produces the same PNG with no functional
 // difference for the marketing site.
 export const dynamic     = 'force-static'
-export const alt         = 'Site — Structured for thought.'
+export const alt         = 'Site — Files and the live web. One window.'
 export const size        = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
@@ -35,10 +35,10 @@ export default function Image() {
           Site
         </div>
         <div style={{ fontSize: '28px', color: '#555', fontWeight: 300, display: 'flex', lineHeight: 1.4 }}>
-          Structured for thought.
+          Files and the live web. One window.
         </div>
         <div style={{ fontSize: '18px', color: '#333', display: 'flex', marginTop: '4px' }}>
-          A source-native workspace. Local-first. No account.
+          A local workspace beside a live browser. No account.
         </div>
       </div>
 

@@ -140,7 +140,7 @@ export default function StorageBadge() {
         onClick={() => setOpen(true)}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
-        title={`${usedMb.toFixed(2)} MB of ${limitMb} MB used`}
+        title={`Uploaded Sources: ${usedMb.toFixed(2)} MB of ${limitMb} MB. Saved Sites do not count.`}
         style={{
           background: 'none', border: 'none', padding: 0, cursor: 'pointer',
           fontSize: '11px', color, letterSpacing: '0.04em',

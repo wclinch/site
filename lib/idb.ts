@@ -1,7 +1,7 @@
 const DB_NAME       = 'proof-files'
 const PDF_STORE     = 'pdfs'
 const CONTENT_STORE = 'contents'
-const VERSION       = 3
+const VERSION       = 5   // v4 added visualclips store; v5 removes it
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -10,6 +10,7 @@ function openDb(): Promise<IDBDatabase> {
       const db = req.result
       if (!db.objectStoreNames.contains(PDF_STORE))     db.createObjectStore(PDF_STORE)
       if (!db.objectStoreNames.contains(CONTENT_STORE)) db.createObjectStore(CONTENT_STORE)
+      if (db.objectStoreNames.contains('visualclips'))  db.deleteObjectStore('visualclips')
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror   = () => reject(req.error)
@@ -92,19 +93,22 @@ export async function clearAllStored(): Promise<void> {
 // reports.
 export async function getStoredFilesSize(): Promise<number> {
   const db = await openDb()
-  return new Promise((resolve, reject) => {
-    let total = 0
-    const req = db.transaction(PDF_STORE, 'readonly').objectStore(PDF_STORE).openCursor()
-    req.onsuccess = () => {
-      const cursor = req.result
-      if (cursor) {
-        const val = cursor.value as Blob | undefined
-        if (val && typeof val.size === 'number') total += val.size
-        cursor.continue()
-      } else {
-        resolve(total)
+  async function sumStore(store: string): Promise<number> {
+    return new Promise((resolve, reject) => {
+      let total = 0
+      const req = db.transaction(store, 'readonly').objectStore(store).openCursor()
+      req.onsuccess = () => {
+        const cursor = req.result
+        if (cursor) {
+          const val = cursor.value as Blob | undefined
+          if (val && typeof val.size === 'number') total += val.size
+          cursor.continue()
+        } else {
+          resolve(total)
+        }
       }
-    }
-    req.onerror = () => reject(req.error)
-  })
+      req.onerror = () => reject(req.error)
+    })
+  }
+  return sumStore(PDF_STORE)
 }

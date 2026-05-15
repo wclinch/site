@@ -10,7 +10,7 @@
 // after the local-only refactor (everything lives in IndexedDB), so the
 // ~200ms static-load start beats a 2s Node-server boot for desktop UX.
 
-const { app, BrowserWindow, Menu, dialog, shell, protocol, nativeImage } = require('electron')
+const { app, BrowserWindow, Menu, dialog, shell, protocol, nativeImage, ipcMain, WebContentsView } = require('electron')
 const path  = require('path')
 const fs    = require('fs')
 
@@ -108,7 +108,122 @@ const MIME = {
   '.wasm': 'application/wasm',
 }
 
-let mainWindow = null
+let mainWindow    = null
+let researchView  = null
+let researchState = { url: '', title: '', loading: false, canGoBack: false, canGoForward: false }
+
+function setupResearchBrowser(win) {
+  researchView = new WebContentsView({
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      partition: 'persist:site-research',
+    },
+  })
+  win.contentView.addChildView(researchView)
+  researchView.setBounds({ x: 0, y: 0, width: 0, height: 0 })
+
+  const wc = researchView.webContents
+
+  // Strip the "Electron/<ver>" token from the user agent string so
+  // sites that UA-sniff (Canva, some Google properties, occasionally
+  // Notion) don't reject us as an "old or unsupported browser."
+  // We keep the real Chromium version intact — only the Electron
+  // identifier is removed — so feature detection still matches what
+  // the underlying Chromium can actually do.
+  const defaultUA = wc.getUserAgent()
+  const cleanUA   = defaultUA.replace(/\sElectron\/[^\s]+/i, '')
+  if (cleanUA !== defaultUA) {
+    if (isDev) console.log('[main:research] UA →', cleanUA)
+    wc.setUserAgent(cleanUA)
+  }
+
+  // Only allow http/https navigations inside the research view.
+  wc.on('will-navigate', (event, url) => {
+    try {
+      const { protocol: p } = new URL(url)
+      if (p !== 'https:' && p !== 'http:') event.preventDefault()
+    } catch { event.preventDefault() }
+  })
+
+  function syncNavState() {
+    researchState.canGoBack    = wc.navigationHistory.canGoBack()
+    researchState.canGoForward = wc.navigationHistory.canGoForward()
+  }
+
+  wc.on('did-navigate', (_e, url) => {
+    researchState.url = url
+    syncNavState()
+    win.webContents.send('research:url-changed', url, researchState.canGoBack, researchState.canGoForward)
+  })
+  wc.on('did-navigate-in-page', (_e, url) => {
+    researchState.url = url
+    syncNavState()
+    win.webContents.send('research:url-changed', url, researchState.canGoBack, researchState.canGoForward)
+  })
+  wc.on('page-title-updated', (_e, title) => {
+    researchState.title = title
+    win.webContents.send('research:title-changed', title)
+  })
+  wc.on('did-start-loading', () => {
+    if (isDev) console.log('[main:research] did-start-loading')
+    researchState.loading = true
+    win.webContents.send('research:loading-changed', true)
+  })
+  wc.on('did-stop-loading', () => {
+    if (isDev) console.log('[main:research] did-stop-loading')
+    researchState.loading = false
+    syncNavState()
+    win.webContents.send('research:loading-changed', false)
+    win.webContents.send('research:can-navigate', researchState.canGoBack, researchState.canGoForward)
+  })
+  wc.on('did-finish-load', () => {
+    if (isDev) console.log('[main:research] did-finish-load', wc.getURL())
+  })
+  wc.on('did-fail-load', (_e, errCode, errDesc, url) => {
+    if (isDev) console.log('[main:research] did-fail-load', { errCode, errDesc, url })
+  })
+
+  ipcMain.on('research:navigate',   (_e, url)  => {
+    if (!researchView || wc.isDestroyed()) return
+    if (isDev) console.log('[main:research] received research:navigate →', url)
+    if (isDev) console.log('[main:research] loadURL called')
+    wc.loadURL(url).catch(err => {
+      if (isDev) console.log('[main:research] loadURL rejected', err?.message)
+    })
+  })
+  ipcMain.on('research:set-bounds', (_e, rect) => {
+    if (!researchView) return
+    const [cw, ch] = win.getContentSize()
+    const iW = rect.innerWidth  || cw
+    const iH = rect.innerHeight || ch
+    const sx = cw / iW
+    const sy = ch / iH
+    const x = Math.round(rect.x      * sx)
+    const y = Math.round(rect.y      * sy)
+    const w = Math.round(rect.width  * sx)
+    const h = Math.round(rect.height * sy)
+    if (isDev) console.log('[main:set-bounds] renderer:', { x: rect.x, y: rect.y, w: rect.width, h: rect.height, iW, iH }, '→ applied:', { x, y, w, h })
+    researchView.setBounds({ x, y, width: w, height: h })
+  })
+  ipcMain.on('research:go-back',    () => { if (!wc.isDestroyed() && wc.navigationHistory.canGoBack())    wc.navigationHistory.goBack() })
+  ipcMain.on('research:go-forward', () => { if (!wc.isDestroyed() && wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward() })
+  ipcMain.on('research:reload',     () => { if (!wc.isDestroyed()) wc.reload() })
+  ipcMain.handle('research:get-state', () => ({ ...researchState }))
+
+  win.on('closed', () => {
+    ipcMain.removeAllListeners('research:navigate')
+    ipcMain.removeAllListeners('research:set-bounds')
+    ipcMain.removeAllListeners('research:go-back')
+    ipcMain.removeAllListeners('research:go-forward')
+    ipcMain.removeAllListeners('research:reload')
+    ipcMain.removeHandler('research:get-state')
+    researchView  = null
+    researchState = { url: '', title: '', loading: false, canGoBack: false, canGoForward: false }
+  })
+}
 
 function createWindow() {
   // Window icon (mostly relevant on Linux/Windows — macOS uses the Dock icon).
@@ -181,6 +296,8 @@ function createWindow() {
     // click "Open App →" to enter the workspace itself.
     mainWindow.loadURL('site://localhost/')
   }
+
+  setupResearchBrowser(mainWindow)
 }
 
 // Native "Reset Site Data" — the bulletproof escape hatch. Runs at the
