@@ -111,6 +111,10 @@ const MIME = {
 let mainWindow    = null
 let researchView  = null
 let researchState = { url: '', title: '', loading: false, canGoBack: false, canGoForward: false }
+// True while macOS fullscreen enter/leave animation is in progress.
+// Used to suppress zero-bounds IPC messages that would wipe Chromium's
+// scroll position mid-animation (the renderer re-fires after transition).
+let inFullscreenTransition = false
 
 function setupResearchBrowser(win) {
   researchView = new WebContentsView({
@@ -124,6 +128,23 @@ function setupResearchBrowser(win) {
   })
   win.contentView.addChildView(researchView)
   researchView.setBounds({ x: 0, y: 0, width: 0, height: 0 })
+
+  // Guard scroll position across fullscreen transitions.  macOS animates
+  // windowed↔fullscreen, during which the renderer's ResizeObserver fires
+  // with intermediate (sometimes zero) rect values.  A zero set-bounds call
+  // collapses the WebContentsView, which causes Chromium to drop scroll
+  // state.  We suppress zero-bounds messages while the animation is running
+  // and ping the renderer afterwards so it re-measures at the final size.
+  win.on('will-enter-full-screen', () => { inFullscreenTransition = true })
+  win.on('will-leave-full-screen', () => { inFullscreenTransition = true })
+  win.on('enter-full-screen',      () => {
+    inFullscreenTransition = false
+    win.webContents.send('research:recalc-bounds')
+  })
+  win.on('leave-full-screen',      () => {
+    inFullscreenTransition = false
+    win.webContents.send('research:recalc-bounds')
+  })
 
   const wc = researchView.webContents
 
@@ -205,6 +226,11 @@ function setupResearchBrowser(win) {
     const y = Math.round(rect.y      * sy)
     const w = Math.round(rect.width  * sx)
     const h = Math.round(rect.height * sy)
+    // Drop zero-dimension updates during fullscreen transition — applying
+    // 0×0 bounds mid-animation collapses the WebContentsView and Chromium
+    // discards scroll state.  The post-transition recalc-bounds ping will
+    // deliver correct bounds once the window settles.
+    if (inFullscreenTransition && (w === 0 || h === 0)) return
     if (isDev) console.log('[main:set-bounds] renderer:', { x: rect.x, y: rect.y, w: rect.width, h: rect.height, iW, iH }, '→ applied:', { x, y, w, h })
     researchView.setBounds({ x, y, width: w, height: h })
   })

@@ -32,5 +32,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('research:can-navigate', fn)
       return () => ipcRenderer.removeListener('research:can-navigate', fn)
     },
+    onBoundsRecalc: (cb) => {
+      const fn = () => cb()
+      ipcRenderer.on('research:recalc-bounds', fn)
+      return () => ipcRenderer.removeListener('research:recalc-bounds', fn)
+    },
   },
 })

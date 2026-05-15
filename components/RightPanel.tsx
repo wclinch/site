@@ -30,6 +30,7 @@ declare global {
         onTitleChanged:   (cb: (title: string) => void) => () => void
         onLoadingChanged: (cb: (loading: boolean) => void) => () => void
         onCanNavigate:    (cb: (back: boolean, fwd: boolean) => void) => () => void
+        onBoundsRecalc:   (cb: () => void) => () => void
       }
     }
   }
@@ -158,6 +159,20 @@ export default function RightPanel() {
     // navigateUrl only touches refs/setters/global APIs, so the
     // first-render closure stays correct across re-renders.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // After a fullscreen enter/leave transition the main process sends
+  // research:recalc-bounds.  We dispatch a synthetic resize so sendBounds
+  // re-measures the viewport div with the settled post-transition rect.
+  // Two rAFs ensure the layout engine has committed the new dimensions
+  // before getBoundingClientRect is called.
+  useEffect(() => {
+    const unsub = window.electronAPI?.research?.onBoundsRecalc?.(() => {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        window.dispatchEvent(new Event('resize'))
+      }))
+    })
+    return () => unsub?.()
   }, [])
 
   useEffect(() => {
