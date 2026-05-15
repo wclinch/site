@@ -1,5 +1,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+html, body { overflow: hidden; }
+
 html { color-scheme: dark; }
 
 body {
@@ -106,6 +108,9 @@ button, nav, label { user-select: none; }
 .rpv-core__page-layer { box-shadow: 0 2px 12px rgba(0,0,0,0.4); }
 .rpv-search__highlight { background: rgba(100,180,255,0.35) !important; }
 .rpv-search__highlight--current { background: rgba(100,180,255,0.65) !important; }
+
+/* Research tab strip — hide scrollbar, keep scrollability */
+.tab-strip::-webkit-scrollbar { display: none; }
 
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; }

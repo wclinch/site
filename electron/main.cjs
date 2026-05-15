@@ -1,35 +1,10 @@
-// Electron main process for the Site desktop app.
-//
-// In dev mode we load `http://localhost:3000/app` from the live `next dev`
-// server (full HMR). In packaged mode we serve the static export under
-// `out/` via a custom `site://` protocol — `loadFile` alone doesn't handle
-// Next's trailing-slash routing (e.g. `/about/` -> `/about/index.html`)
-// or absolute asset paths the way HTTP does. The protocol bridges that gap.
-//
-// Why not full Next.js server in Electron? This app has no SSR/API routes
-// after the local-only refactor (everything lives in IndexedDB), so the
-// ~200ms static-load start beats a 2s Node-server boot for desktop UX.
-
 const { app, BrowserWindow, Menu, dialog, shell, protocol, nativeImage, ipcMain, WebContentsView } = require('electron')
-const path  = require('path')
-const fs    = require('fs')
+const path = require('path')
+const fs   = require('fs')
 
-// `app.isPackaged` flips to `true` in our dev setup because
-// scripts/rename-electron-dev.mjs renames the Electron binary to "Site" to
-// fix the Dock label — and Electron decides default-app vs packaged based
-// on argv[0] being literally "Electron". Once renamed, defaultApp is
-// undefined → isPackaged is true → dev would silently use the production
-// `site://` protocol and 404 on every route. The npm dev script sets
-// SITE_DEV=1 so we can detect dev reliably regardless of the rename.
-const isDev = process.env.SITE_DEV === '1' || !app.isPackaged
-
-// The static export lives next to main.cjs once packaged (electron-builder
-// copies the project root). In dev (unpackaged) we resolve from the repo.
+const isDev   = process.env.SITE_DEV === '1' || !app.isPackaged
 const OUT_DIR = path.join(__dirname, '..', 'out')
 
-// In dev, electron-builder's `productName` and bundle icon aren't applied —
-// the running process is just `Electron.app/Contents/MacOS/Electron`. Force
-// the Dock label + icon ourselves so it matches the packaged build.
 app.setName('Site')
 if (process.platform === 'darwin' && isDev) {
   const iconPath = path.join(__dirname, '..', 'build', 'icon.png')
@@ -38,55 +13,26 @@ if (process.platform === 'darwin' && isDev) {
   }
 }
 
-// Reserve `site://` before app-ready so it inherits standard-URL behaviour
-// (relative paths, fetch support, secure context). Required by Electron.
 protocol.registerSchemesAsPrivileged([
   { scheme: 'site', privileges: { standard: true, secure: true, supportFetchAPI: true } },
 ])
 
-// Map an incoming pathname to a real file under `out/`. Tries the literal
-// path first, then `<path>/index.html` (Next trailingSlash convention), then
-// falls back to the root document so client-side routing handles unknowns.
-//
-// Anything that resolves outside OUT_DIR is rejected (returns null) — the
-// caller then renders a 404. `path.join(OUT_DIR, '../../etc/passwd')` would
-// otherwise escape the sandbox; even though only our own renderer can
-// navigate site:// URLs today, defense-in-depth is cheap here.
 function resolveStatic(pathname) {
   const clean = pathname.replace(/^\/+/, '').replace(/\?.*$/, '')
-
-  // Reject any pathname that walks out of OUT_DIR. We resolve to absolute
-  // and check the prefix — `path.resolve('out', '../../x')` collapses the
-  // `..` segments so the final string is definitive.
   function safeUnder(p) {
-    const abs = path.resolve(p)
+    const abs  = path.resolve(p)
     const root = path.resolve(OUT_DIR)
     return abs === root || abs.startsWith(root + path.sep) ? abs : null
   }
-
-  // Exact file (e.g. `_next/static/...`, `pdf.worker.min.mjs`)
   const direct = safeUnder(path.join(OUT_DIR, clean))
   if (direct && fs.existsSync(direct) && fs.statSync(direct).isFile()) return direct
-
-  // Directory route — Next emits `<route>/index.html`
   const withIndex = safeUnder(path.join(OUT_DIR, clean, 'index.html'))
   if (withIndex && fs.existsSync(withIndex)) return withIndex
-
-  // Same path without trailing slash variations
-  const trimmed = clean.replace(/\/$/, '')
-  const trimmedHtml = safeUnder(path.join(OUT_DIR, `${trimmed}.html`))
+  const trimmedHtml = safeUnder(path.join(OUT_DIR, `${clean.replace(/\/$/, '')}.html`))
   if (trimmedHtml && fs.existsSync(trimmedHtml)) return trimmedHtml
-
-  // Fallback to the workspace entry — keeps a hard refresh on an unknown
-  // route from showing a blank page. Always under OUT_DIR by construction.
   return path.join(OUT_DIR, 'app', 'index.html')
 }
 
-// Map file extensions to MIME types. `net.fetch` on a file:// URL doesn't
-// always set Content-Type correctly for every extension we ship — and when
-// an HTML page comes back as `application/octet-stream`, Chromium renders
-// the raw bytes as plain text (which is how the RSC flight payload ended
-// up bleeding into the visible UI in earlier builds).
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js':   'application/javascript; charset=utf-8',
@@ -95,73 +41,110 @@ const MIME = {
   '.json': 'application/json; charset=utf-8',
   '.svg':  'image/svg+xml',
   '.png':  'image/png',
-  '.jpg':  'image/jpeg',
-  '.jpeg': 'image/jpeg',
+  '.jpg':  'image/jpeg', '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
   '.gif':  'image/gif',
   '.ico':  'image/x-icon',
-  '.woff': 'font/woff',
-  '.woff2':'font/woff2',
-  '.ttf':  'font/ttf',
+  '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf',
   '.txt':  'text/plain; charset=utf-8',
   '.xml':  'application/xml; charset=utf-8',
   '.wasm': 'application/wasm',
 }
 
-let mainWindow    = null
-let researchView  = null
-let researchState = { url: '', title: '', loading: false, canGoBack: false, canGoForward: false }
-// True while macOS fullscreen enter/leave animation is in progress.
-// Used to suppress zero-bounds IPC messages that would wipe Chromium's
-// scroll position mid-animation (the renderer re-fires after transition).
-let inFullscreenTransition = false
+// ─── Per-panel state ──────────────────────────────────────────────────────────
+//
+// Each Research panel (A and B) is completely independent: its own tab views,
+// tab states, active tab, bounds, and pending-navigate queue.
 
-function setupResearchBrowser(win) {
-  researchView = new WebContentsView({
+function makePanel() {
+  return {
+    tabViews:    new Map(),   // id → WebContentsView
+    tabStates:   new Map(),   // id → { url, title, loading, canGoBack, canGoForward }
+    activeTabId: null,
+    lastBounds:  null,        // most recent valid { x, y, width, height }
+    pendingUrl:  null,        // URL deferred until bounds are known
+    pendingTimer: null,
+  }
+}
+
+let mainWindow = null
+const MAX_TABS = 20
+const panels   = { A: makePanel() }
+
+// Global flags — affect both panels the same way.
+let windowReady           = false
+let inFullscreenTransition = false
+let isMinimized            = false
+
+// ─── Panel helpers ────────────────────────────────────────────────────────────
+
+function emitTabsChanged(win, pid) {
+  const panel = panels[pid]
+  const tabs  = []
+  for (const [id, state] of panel.tabStates) tabs.push({ id, ...state })
+  win.webContents.send('research:tabs-changed', pid, tabs, panel.activeTabId)
+}
+
+function labelFromUrl(url) {
+  try {
+    const u = new URL(url)
+    if (u.hostname === 'www.google.com' && u.pathname === '/search') {
+      return u.searchParams.get('q') ?? u.hostname.replace(/^www\./, '')
+    }
+    return u.hostname.replace(/^www\./, '')
+  } catch {
+    return url.slice(0, 60)
+  }
+}
+
+function showActiveView(win, pid) {
+  const panel = panels[pid]
+  if (!panel.activeTabId) return
+  const view = panel.tabViews.get(panel.activeTabId)
+  if (!view || view.webContents.isDestroyed()) return
+  try { win.contentView.removeChildView(view) } catch {}
+  win.contentView.addChildView(view)
+  if (panel.lastBounds) view.setBounds(panel.lastBounds)
+  try { view.webContents.focus() } catch {}
+}
+
+function tryFirePending(win, pid) {
+  const panel = panels[pid]
+  if (!panel.pendingUrl || !windowReady || !panel.lastBounds) return
+  const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
+  if (!view || view.webContents.isDestroyed()) return
+  if (panel.pendingTimer) clearTimeout(panel.pendingTimer)
+  panel.pendingTimer = setTimeout(() => {
+    panel.pendingTimer = null
+    const u = panel.pendingUrl
+    if (!u) return
+    panel.pendingUrl = null
+    const v = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
+    if (!v || v.webContents.isDestroyed()) return
+    showActiveView(win, pid)
+    v.webContents.loadURL(u).catch(err => console.log(`[${pid}] loadURL error:`, err?.message))
+  }, 80)
+}
+
+function createTabView(win, pid, id) {
+  const panel = panels[pid]
+  const view  = new WebContentsView({
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
-      partition: 'persist:site-research',
+      partition: `persist:site-research-${pid}`,
     },
   })
-  win.contentView.addChildView(researchView)
-  researchView.setBounds({ x: 0, y: 0, width: 0, height: 0 })
+  win.contentView.addChildView(view)
+  view.setBounds({ x: 0, y: 0, width: 0, height: 0 })
 
-  // Guard scroll position across fullscreen transitions.  macOS animates
-  // windowed↔fullscreen, during which the renderer's ResizeObserver fires
-  // with intermediate (sometimes zero) rect values.  A zero set-bounds call
-  // collapses the WebContentsView, which causes Chromium to drop scroll
-  // state.  We suppress zero-bounds messages while the animation is running
-  // and ping the renderer afterwards so it re-measures at the final size.
-  win.on('will-enter-full-screen', () => { inFullscreenTransition = true })
-  win.on('will-leave-full-screen', () => { inFullscreenTransition = true })
-  win.on('enter-full-screen',      () => {
-    inFullscreenTransition = false
-    win.webContents.send('research:recalc-bounds')
-  })
-  win.on('leave-full-screen',      () => {
-    inFullscreenTransition = false
-    win.webContents.send('research:recalc-bounds')
-  })
-
-  const wc = researchView.webContents
-
-  // Strip the "Electron/<ver>" token from the user agent string so
-  // sites that UA-sniff (Canva, some Google properties, occasionally
-  // Notion) don't reject us as an "old or unsupported browser."
-  // We keep the real Chromium version intact — only the Electron
-  // identifier is removed — so feature detection still matches what
-  // the underlying Chromium can actually do.
+  const wc        = view.webContents
   const defaultUA = wc.getUserAgent()
   const cleanUA   = defaultUA.replace(/\sElectron\/[^\s]+/i, '')
-  if (cleanUA !== defaultUA) {
-    if (isDev) console.log('[main:research] UA →', cleanUA)
-    wc.setUserAgent(cleanUA)
-  }
+  if (cleanUA !== defaultUA) wc.setUserAgent(cleanUA)
 
-  // Only allow http/https navigations inside the research view.
   wc.on('will-navigate', (event, url) => {
     try {
       const { protocol: p } = new URL(url)
@@ -169,173 +152,378 @@ function setupResearchBrowser(win) {
     } catch { event.preventDefault() }
   })
 
-  function syncNavState() {
-    researchState.canGoBack    = wc.navigationHistory.canGoBack()
-    researchState.canGoForward = wc.navigationHistory.canGoForward()
+  const state = { url: '', title: '', loading: false, canGoBack: false, canGoForward: false }
+  panel.tabStates.set(id, state)
+
+  function syncNav() {
+    state.canGoBack    = wc.navigationHistory.canGoBack()
+    state.canGoForward = wc.navigationHistory.canGoForward()
+  }
+  function sendTabUpdated() {
+    win.webContents.send('research:tab-updated', pid, id, { ...state })
   }
 
   wc.on('did-navigate', (_e, url) => {
-    researchState.url = url
-    syncNavState()
-    win.webContents.send('research:url-changed', url, researchState.canGoBack, researchState.canGoForward)
+    state.url = url; syncNav(); sendTabUpdated()
+    if (id === panel.activeTabId)
+      win.webContents.send('research:url-changed', pid, url, state.canGoBack, state.canGoForward)
   })
   wc.on('did-navigate-in-page', (_e, url) => {
-    researchState.url = url
-    syncNavState()
-    win.webContents.send('research:url-changed', url, researchState.canGoBack, researchState.canGoForward)
+    state.url = url; syncNav(); sendTabUpdated()
+    if (id === panel.activeTabId)
+      win.webContents.send('research:url-changed', pid, url, state.canGoBack, state.canGoForward)
   })
   wc.on('page-title-updated', (_e, title) => {
-    researchState.title = title
-    win.webContents.send('research:title-changed', title)
+    state.title = title; sendTabUpdated()
+    if (id === panel.activeTabId)
+      win.webContents.send('research:title-changed', pid, title)
   })
   wc.on('did-start-loading', () => {
-    if (isDev) console.log('[main:research] did-start-loading')
-    researchState.loading = true
-    win.webContents.send('research:loading-changed', true)
+    state.loading = true; sendTabUpdated()
+    if (id === panel.activeTabId) {
+      win.webContents.send('research:loading-changed', pid, true)
+      if (!(inFullscreenTransition || isMinimized)) showActiveView(win, pid)
+    }
   })
   wc.on('did-stop-loading', () => {
-    if (isDev) console.log('[main:research] did-stop-loading')
-    researchState.loading = false
-    syncNavState()
-    win.webContents.send('research:loading-changed', false)
-    win.webContents.send('research:can-navigate', researchState.canGoBack, researchState.canGoForward)
+    state.loading = false; syncNav(); sendTabUpdated()
+    if (id === panel.activeTabId) {
+      win.webContents.send('research:loading-changed', pid, false)
+      win.webContents.send('research:can-navigate',    pid, state.canGoBack, state.canGoForward)
+    }
   })
-  wc.on('did-finish-load', () => {
-    if (isDev) console.log('[main:research] did-finish-load', wc.getURL())
+  wc.on('did-fail-load', (_e, code) => { if (code === -3) return })
+
+  panel.tabViews.set(id, view)
+  return view
+}
+
+function switchToTab(win, pid, id) {
+  const panel = panels[pid]
+  if (!panel.tabViews.has(id)) return
+  // Hide the previously active tab.
+  if (panel.activeTabId && panel.activeTabId !== id && panel.tabViews.has(panel.activeTabId)) {
+    panel.tabViews.get(panel.activeTabId).setBounds({ x: 0, y: 0, width: 0, height: 0 })
+  }
+  panel.activeTabId = id
+  if (!(inFullscreenTransition || isMinimized)) showActiveView(win, pid)
+  const state = panel.tabStates.get(id) || { url: '', title: '', loading: false, canGoBack: false, canGoForward: false }
+  win.webContents.send('research:url-changed',     pid, state.url, state.canGoBack, state.canGoForward)
+  win.webContents.send('research:title-changed',   pid, state.title)
+  win.webContents.send('research:loading-changed', pid, state.loading)
+  win.webContents.send('research:can-navigate',    pid, state.canGoBack, state.canGoForward)
+  emitTabsChanged(win, pid)
+}
+
+// ─── IPC setup ────────────────────────────────────────────────────────────────
+
+function setupResearchBrowser(win) {
+  // Create one initial tab for the single Research panel.
+  const initId = `tab-A-${Date.now()}`
+  createTabView(win, 'A', initId)
+  panels['A'].activeTabId = initId
+  emitTabsChanged(win, 'A')
+
+  win.on('will-enter-full-screen', () => { inFullscreenTransition = true })
+  win.on('will-leave-full-screen', () => { inFullscreenTransition = true })
+  win.on('enter-full-screen', () => {
+    inFullscreenTransition = false
+    win.webContents.send('research:recalc-bounds')
   })
-  wc.on('did-fail-load', (_e, errCode, errDesc, url) => {
-    if (isDev) console.log('[main:research] did-fail-load', { errCode, errDesc, url })
+  win.on('leave-full-screen', () => {
+    inFullscreenTransition = false
+    win.webContents.send('research:recalc-bounds')
+  })
+  win.on('minimize', () => { isMinimized = true })
+  win.on('restore',  () => {
+    isMinimized = false
+    win.webContents.send('research:recalc-bounds')
   })
 
-  ipcMain.on('research:navigate',   (_e, url)  => {
-    if (!researchView || wc.isDestroyed()) return
-    if (isDev) console.log('[main:research] received research:navigate →', url)
-    if (isDev) console.log('[main:research] loadURL called')
-    wc.loadURL(url).catch(err => {
-      if (isDev) console.log('[main:research] loadURL rejected', err?.message)
-    })
+  // ── navigate ──────────────────────────────────────────────────────────────
+  ipcMain.on('research:navigate', (_e, pid, url) => {
+    const panel = panels[pid]
+    if (!panel) return
+
+    if (panel.tabViews.size === 0) {
+      const id = `tab-${pid}-${Date.now()}`
+      createTabView(win, pid, id)
+      panel.activeTabId = id
+      const s = panel.tabStates.get(id)
+      if (s) { s.url = url; s.title = labelFromUrl(url); s.loading = true }
+      emitTabsChanged(win, pid)
+      showActiveView(win, pid)
+      if (windowReady && panel.lastBounds) {
+        panel.tabViews.get(id).webContents.loadURL(url).catch(err =>
+          console.log(`[${pid}] loadURL error:`, err?.message))
+      } else {
+        panel.pendingUrl = url
+        if (windowReady) win.webContents.send('research:recalc-bounds')
+      }
+      return
+    }
+
+    const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
+    if (!view || view.webContents.isDestroyed()) return
+
+    const sN = panel.tabStates.get(panel.activeTabId)
+    if (sN) { sN.url = url; sN.title = labelFromUrl(url); sN.loading = true }
+    if (panel.activeTabId) win.webContents.send('research:tab-updated', pid, panel.activeTabId, { ...sN })
+
+    showActiveView(win, pid)
+
+    if (!windowReady || !panel.lastBounds) {
+      panel.pendingUrl = url
+      if (windowReady) win.webContents.send('research:recalc-bounds')
+      return
+    }
+    view.webContents.loadURL(url).catch(err => console.log(`[${pid}] loadURL error:`, err?.message))
   })
-  ipcMain.on('research:set-bounds', (_e, rect) => {
-    if (!researchView) return
+
+  // ── set-bounds ─────────────────────────────────────────────────────────────
+  ipcMain.on('research:set-bounds', (_e, pid, rect) => {
+    const panel = panels[pid]
+    if (!panel) return
     const [cw, ch] = win.getContentSize()
     const iW = rect.innerWidth  || cw
     const iH = rect.innerHeight || ch
-    const sx = cw / iW
-    const sy = ch / iH
-    const x = Math.round(rect.x      * sx)
-    const y = Math.round(rect.y      * sy)
-    const w = Math.round(rect.width  * sx)
+    const sx = cw / iW, sy = ch / iH
+    const x = Math.round(rect.x     * sx)
+    const y = Math.round(rect.y     * sy)
+    const w = Math.round(rect.width * sx)
     const h = Math.round(rect.height * sy)
-    // Drop zero-dimension updates during fullscreen transition — applying
-    // 0×0 bounds mid-animation collapses the WebContentsView and Chromium
-    // discards scroll state.  The post-transition recalc-bounds ping will
-    // deliver correct bounds once the window settles.
-    if (inFullscreenTransition && (w === 0 || h === 0)) return
-    if (isDev) console.log('[main:set-bounds] renderer:', { x: rect.x, y: rect.y, w: rect.width, h: rect.height, iW, iH }, '→ applied:', { x, y, w, h })
-    researchView.setBounds({ x, y, width: w, height: h })
+    if ((inFullscreenTransition || isMinimized) && (w === 0 || h === 0)) return
+    if (w > 0 && h > 0) {
+      // Ignore spurious near-zero-x bounds that arrive during layout settling.
+      // Research column can be dragged wide, so only filter clearly invalid
+      // positions (< 10% of content width — less than SourcePanel's ~20%).
+      if (x <= cw / 10) return
+      panel.lastBounds = { x, y, width: w, height: h }
+      const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
+      if (view) view.setBounds({ x, y, width: w, height: h })
+      tryFirePending(win, pid)
+    } else {
+      const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
+      if (view) view.setBounds({ x: 0, y: 0, width: 0, height: 0 })
+    }
   })
-  ipcMain.on('research:go-back',    () => { if (!wc.isDestroyed() && wc.navigationHistory.canGoBack())    wc.navigationHistory.goBack() })
-  ipcMain.on('research:go-forward', () => { if (!wc.isDestroyed() && wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward() })
-  ipcMain.on('research:reload',     () => { if (!wc.isDestroyed()) wc.reload() })
-  ipcMain.handle('research:get-state', () => ({ ...researchState }))
 
+  // ── nav controls ───────────────────────────────────────────────────────────
+  ipcMain.on('research:go-back', (_e, pid) => {
+    const panel = panels[pid]
+    if (!panel) return
+    const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
+    if (!view) return
+    const wc = view.webContents
+    if (!wc.isDestroyed() && wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack()
+  })
+  ipcMain.on('research:go-forward', (_e, pid) => {
+    const panel = panels[pid]
+    if (!panel) return
+    const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
+    if (!view) return
+    const wc = view.webContents
+    if (!wc.isDestroyed() && wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward()
+  })
+  ipcMain.on('research:reload', (_e, pid) => {
+    const panel = panels[pid]
+    if (!panel) return
+    const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
+    if (!view) return
+    const wc = view.webContents
+    if (!wc.isDestroyed()) wc.reload()
+  })
+
+  // ── get-state / get-tabs ───────────────────────────────────────────────────
+  ipcMain.handle('research:get-state', (_e, pid) => {
+    const panel = panels[pid]
+    if (!panel) return { url: '', title: '', loading: false, canGoBack: false, canGoForward: false }
+    const state = panel.activeTabId && panel.tabStates.get(panel.activeTabId)
+    return state ? { ...state } : { url: '', title: '', loading: false, canGoBack: false, canGoForward: false }
+  })
+
+  ipcMain.handle('research:get-tabs', (_e, pid) => {
+    const panel = panels[pid]
+    if (!panel) return { tabs: [], activeTabId: null }
+    const tabs = []
+    for (const [id, state] of panel.tabStates) tabs.push({ id, ...state })
+    return { tabs, activeTabId: panel.activeTabId }
+  })
+
+  // ── new-tab ────────────────────────────────────────────────────────────────
+  ipcMain.on('research:new-tab', (_e, pid, url) => {
+    const panel = panels[pid]
+    if (!panel || panel.tabViews.size >= MAX_TABS) return
+    const id = `tab-${pid}-${Date.now()}`
+    createTabView(win, pid, id)
+    switchToTab(win, pid, id)
+    if (url) {
+      if (panel.lastBounds) {
+        panel.tabViews.get(id).webContents.loadURL(url).catch(() => {})
+      } else {
+        panel.pendingUrl = url
+        win.webContents.send('research:recalc-bounds')
+      }
+    }
+  })
+
+  // ── close-tab ─────────────────────────────────────────────────────────────
+  ipcMain.on('research:close-tab', (_e, pid, id) => {
+    const panel = panels[pid]
+    if (!panel || !panel.tabViews.has(id)) return
+    const view     = panel.tabViews.get(id)
+    const wasActive = id === panel.activeTabId
+
+    win.contentView.removeChildView(view)
+    try { if (!view.webContents.isDestroyed()) view.webContents.close?.() } catch {}
+    panel.tabViews.delete(id)
+    panel.tabStates.delete(id)
+
+    if (panel.tabViews.size === 0) {
+      panel.activeTabId = null
+      emitTabsChanged(win, pid)
+      return
+    }
+    if (wasActive) {
+      const ids = [...panel.tabViews.keys()]
+      switchToTab(win, pid, ids[ids.length - 1])
+    } else {
+      emitTabsChanged(win, pid)
+    }
+  })
+
+  // ── switch-tab ─────────────────────────────────────────────────────────────
+  ipcMain.on('research:switch-tab', (_e, pid, id) => {
+    const panel = panels[pid]
+    if (panel && panel.tabViews.has(id)) switchToTab(win, pid, id)
+  })
+
+  // ── load-workspace ─────────────────────────────────────────────────────────
+  ipcMain.on('research:load-workspace', (_e, tabs) => {
+    const panel      = panels['A']
+    const savedBounds = panel.lastBounds
+
+    if (panel.pendingTimer) { clearTimeout(panel.pendingTimer); panel.pendingTimer = null }
+    panel.pendingUrl = null
+
+    for (const [, view] of panel.tabViews) {
+      try { win.contentView.removeChildView(view) } catch {}
+      try { if (!view.webContents.isDestroyed()) view.webContents.close?.() } catch {}
+    }
+    panel.tabViews.clear()
+    panel.tabStates.clear()
+    panel.activeTabId = null
+    panel.lastBounds  = savedBounds
+
+    const workspaceTabs = Array.isArray(tabs) ? tabs.filter(t => t && t.url) : []
+    const base = Date.now()
+
+    if (workspaceTabs.length === 0) {
+      const id = `tab-A-ws-${base}`
+      createTabView(win, 'A', id)
+      panel.activeTabId = id
+      emitTabsChanged(win, 'A')
+      if (savedBounds && windowReady) showActiveView(win, 'A')
+      return
+    }
+
+    const ids = workspaceTabs.map((_, i) => `tab-A-ws-${base}-${i}`)
+    for (let i = 0; i < workspaceTabs.length; i++) {
+      createTabView(win, 'A', ids[i])
+      const state = panel.tabStates.get(ids[i])
+      if (state) { state.url = workspaceTabs[i].url || ''; state.title = workspaceTabs[i].title || '' }
+    }
+    panel.activeTabId = ids[0]
+    emitTabsChanged(win, 'A')
+
+    const firstUrl = workspaceTabs[0].url
+    if (firstUrl) {
+      if (savedBounds && windowReady) {
+        showActiveView(win, 'A')
+        panel.tabViews.get(ids[0])?.webContents.loadURL(firstUrl).catch(() => {})
+      } else {
+        panel.pendingUrl = firstUrl
+        if (windowReady) win.webContents.send('research:recalc-bounds')
+      }
+    } else if (savedBounds && windowReady) {
+      showActiveView(win, 'A')
+    }
+  })
+
+  // ── cleanup ────────────────────────────────────────────────────────────────
   win.on('closed', () => {
-    ipcMain.removeAllListeners('research:navigate')
-    ipcMain.removeAllListeners('research:set-bounds')
-    ipcMain.removeAllListeners('research:go-back')
-    ipcMain.removeAllListeners('research:go-forward')
-    ipcMain.removeAllListeners('research:reload')
+    const channels = [
+      'research:navigate', 'research:set-bounds',
+      'research:go-back', 'research:go-forward', 'research:reload',
+      'research:new-tab', 'research:close-tab', 'research:switch-tab',
+      'research:load-workspace',
+    ]
+    for (const ch of channels) ipcMain.removeAllListeners(ch)
     ipcMain.removeHandler('research:get-state')
-    researchView  = null
-    researchState = { url: '', title: '', loading: false, canGoBack: false, canGoForward: false }
+    ipcMain.removeHandler('research:get-tabs')
+
+    const panel = panels['A']
+    panel.tabViews.clear()
+    panel.tabStates.clear()
+    panel.activeTabId = null
+    panel.lastBounds  = null
+    panel.pendingUrl  = null
+    if (panel.pendingTimer) { clearTimeout(panel.pendingTimer); panel.pendingTimer = null }
   })
 }
 
+// ─── Window ───────────────────────────────────────────────────────────────────
+
 function createWindow() {
-  // Window icon (mostly relevant on Linux/Windows — macOS uses the Dock icon).
   const iconPath = path.join(__dirname, '..', 'build', 'icon.png')
   const icon = fs.existsSync(iconPath) ? iconPath : undefined
 
   mainWindow = new BrowserWindow({
-    width: 1320,
-    height: 840,
-    minWidth: 900,
-    minHeight: 600,
-    // Explicit even though `true` is the Electron default — keeps the
-    // window resizable + maximizable. Dragging is wired separately via
-    // `-webkit-app-region: drag` on the in-app ProjectBar so the user
-    // can grab anywhere in the top strip to move the window.
-    resizable: true,
-    maximizable: true,
-    fullscreenable: true,
+    width: 1320, height: 840,
+    minWidth: 900, minHeight: 600,
+    resizable: true, maximizable: true, fullscreenable: true,
     backgroundColor: '#0a0a0a',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    title: 'Site',
-    icon,
-    show: false,
+    title: 'Site', icon, show: false,
     webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      // Run the renderer in an OS-level sandbox. With contextIsolation +
-      // no node integration this is belt-and-suspenders: even if a
-      // renderer-side bug let an attacker run arbitrary JS, the process
-      // can only touch what the OS sandbox permits — no fs, no exec.
-      sandbox: true,
-      // Default is true but make it explicit so a future edit can't
-      // silently disable same-origin / mixed-content protections.
-      webSecurity: true,
+      contextIsolation: true, nodeIntegration: false,
+      sandbox: true, webSecurity: true,
       preload: path.join(__dirname, 'preload.cjs'),
     },
   })
 
-  // Avoid the brief white flash before first paint.
-  mainWindow.once('ready-to-show', () => mainWindow.show())
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show()
+    windowReady = true
+    showActiveView(mainWindow, 'A')
+    if (panels.A.pendingUrl) mainWindow.webContents.send('research:recalc-bounds')
+  })
 
-  // External links open in the user's default browser, not a new Electron
-  // window — matters because Site has zero server APIs to gate against.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
     return { action: 'deny' }
   })
 
-  // Refuse top-level navigations to anywhere outside the dev server (in
-  // dev) or the site:// protocol (in packaged). Without this, code or
-  // an embedded page could window.location away to a phishing URL and
-  // host it inside the Site chrome. The link is still openable in the
-  // user's real browser via the system shell.
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    const ok = isDev
-      ? url.startsWith('http://localhost:3000')
-      : url.startsWith('site://')
-    if (!ok) {
-      event.preventDefault()
-      shell.openExternal(url)
-    }
+    const ok = isDev ? url.startsWith('http://localhost:3000') : url.startsWith('site://')
+    if (!ok) { event.preventDefault(); shell.openExternal(url) }
   })
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:3000/')
   } else {
-    // Boot into the landing page — gives the app a real first surface
-    // (branding, "Open App", About/Privacy/Support links) instead of
-    // dropping a fresh user straight into an empty workspace. They
-    // click "Open App →" to enter the workspace itself.
     mainWindow.loadURL('site://localhost/')
   }
 
   setupResearchBrowser(mainWindow)
 }
 
-// Native "Reset Site Data" — the bulletproof escape hatch. Runs at the
-// Electron session layer, which clears IndexedDB, localStorage, cache, and
-// service workers in one shot. The in-app HTML button can also do this,
-// but the native path is guaranteed to work even if the renderer is wedged.
+// ─── Menu / reset ─────────────────────────────────────────────────────────────
+
 async function resetSiteData(browserWindow) {
   const choice = await dialog.showMessageBox(browserWindow ?? null, {
-    type: 'warning',
-    buttons: ['Cancel', 'Reset'],
-    defaultId: 0,
-    cancelId: 0,
+    type: 'warning', buttons: ['Cancel', 'Reset'],
+    defaultId: 0, cancelId: 0,
     message: 'Reset Site data?',
     detail: 'Removes all files, projects, and drafts on the device. Cannot be reversed.',
   })
@@ -354,29 +542,18 @@ function buildMenu() {
     ...(isMac ? [{
       label: app.name,
       submenu: [
-        { role: 'about' },
+        { role: 'about' }, { type: 'separator' },
+        { label: 'Reset Site Data…', click: (_i, w) => resetSiteData(w) },
         { type: 'separator' },
-        {
-          label: 'Reset Site Data…',
-          click: (_item, win) => resetSiteData(win),
-        },
-        { type: 'separator' },
-        { role: 'services' },
-        { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
-        { type: 'separator' },
-        { role: 'quit' },
+        { role: 'services' }, { type: 'separator' },
+        { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' },
+        { type: 'separator' }, { role: 'quit' },
       ],
     }] : []),
     {
       label: 'File',
       submenu: [
-        ...(!isMac ? [{
-          label: 'Reset Site Data…',
-          click: (_item, win) => resetSiteData(win),
-        }, { type: 'separator' }] : []),
+        ...(!isMac ? [{ label: 'Reset Site Data…', click: (_i, w) => resetSiteData(w) }, { type: 'separator' }] : []),
         isMac ? { role: 'close' } : { role: 'quit' },
       ],
     },
@@ -384,15 +561,10 @@ function buildMenu() {
     {
       label: 'View',
       submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
-        { role: 'toggleDevTools' },
+        { role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' },
         { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
-        { type: 'separator' },
-        { role: 'togglefullscreen' },
+        { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' },
+        { type: 'separator' }, { role: 'togglefullscreen' },
       ],
     },
     { role: 'windowMenu' },
@@ -400,40 +572,15 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
+// ─── App lifecycle ────────────────────────────────────────────────────────────
+
 app.whenReady().then(() => {
   if (!isDev) {
     protocol.handle('site', async (request) => {
-      const url = new URL(request.url)
+      const url      = new URL(request.url)
       const filePath = resolveStatic(url.pathname)
-      const ext = path.extname(filePath).toLowerCase()
-      const mime = MIME[ext] || 'application/octet-stream'
-
-      // Read the file ourselves and build a Response with an explicit
-      // Content-Type. Going through `net.fetch(file://)` had a habit of
-      // returning HTML as `application/octet-stream`, which made Chromium
-      // dump the RSC flight payload into the page as visible text.
-      //
-      // We also send a Content-Security-Policy that only permits same-
-      // protocol scripts/styles + the inline blobs Next emits for fonts
-      // and CSS. `frame-src https:` is intentionally permissive because
-      // the URL viewer embeds arbitrary user-chosen websites; we don't
-      // restrict the user's own input. The site:// document itself is
-      // still locked down — a malicious embedded page can't reach back
-      // through the iframe to the parent.
-      // Next.js's static export uses inline <script> tags to stream the
-      // RSC flight payload that bootstraps React hydration. A strict
-      // script-src that excludes 'unsafe-inline' kills hydration and
-      // leaves the user staring at the empty shell (just the ProjectBar
-      // renders — everything below it depends on the client-side React
-      // mounting). 'unsafe-eval' is needed for the same reason: pdf.js
-      // and some Next chunked-module code uses Function() for module
-      // wrapping. We accept the trade-off because the renderer is
-      // already sandboxed (contextIsolation + nodeIntegration:false +
-      // sandbox:true) — CSP here is defense-in-depth, not the primary
-      // boundary.
-      // api.polar.sh allowed for license-key validation only — see
-      // lib/license.ts. This is the single external endpoint the
-      // packaged app ever contacts; documented on the Privacy page.
+      const ext      = path.extname(filePath).toLowerCase()
+      const mime     = MIME[ext] || 'application/octet-stream'
       const csp = [
         "default-src 'self' site:",
         "script-src 'self' site: 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'",
@@ -443,9 +590,7 @@ app.whenReady().then(() => {
         "connect-src 'self' site: blob: data: https://api.polar.sh",
         "worker-src 'self' site: blob:",
         "frame-src https:",
-        "object-src 'none'",
-        "base-uri 'none'",
-        "form-action 'none'",
+        "object-src 'none'", "base-uri 'none'", "form-action 'none'",
       ].join('; ')
       try {
         const body = await fs.promises.readFile(filePath)
@@ -457,7 +602,7 @@ app.whenReady().then(() => {
             'X-Content-Type-Options': 'nosniff',
           },
         })
-      } catch (err) {
+      } catch {
         return new Response(`Not found: ${url.pathname}`, {
           status: 404,
           headers: { 'Content-Type': 'text/plain; charset=utf-8' },
@@ -468,13 +613,7 @@ app.whenReady().then(() => {
 
   buildMenu()
   createWindow()
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-  })
+  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
 })
 
-app.on('window-all-closed', () => {
-  // macOS convention is to keep the app running with no windows open.
-  if (process.platform !== 'darwin') app.quit()
-})
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })

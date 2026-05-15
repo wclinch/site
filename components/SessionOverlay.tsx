@@ -12,10 +12,9 @@ export default function SessionOverlay() {
   // The native WebContentsView persists across renders. Zero its bounds
   // immediately so it doesn't sit on top of this overlay.
   useEffect(() => {
-    window.electronAPI?.research?.setBounds({
-      x: 0, y: 0, width: 0, height: 0,
-      innerWidth: window.innerWidth, innerHeight: window.innerHeight,
-    })
+    const zero = { x: 0, y: 0, width: 0, height: 0, innerWidth: window.innerWidth, innerHeight: window.innerHeight }
+    window.electronAPI?.research?.setBounds('A', zero)
+    window.electronAPI?.research?.setBounds('B', zero)
   }, [])
 
   function generateName(): string {

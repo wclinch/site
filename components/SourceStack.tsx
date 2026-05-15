@@ -68,14 +68,12 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
   }
 
   return (
-    <div style={{
-      flex: 1, minHeight: 0,
-      display: 'flex', flexDirection: 'column',
-      overflow: 'hidden',
-    }}>
-
-      {/* ── Sources (50%) ── */}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <>
+      {/* ── Sources box ── */}
+      <div style={{
+        flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        border: '1px solid #1e1e1e', borderRadius: '4px',
+      }}>
         <SectionHeader title="Sources" />
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 0 8px', display: 'flex', flexDirection: 'column' }}>
           {fileSources.length === 0 ? (
@@ -101,10 +99,11 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
         </div>
       </div>
 
-      <SectionDivider />
-
-      {/* ── Sites (50%) ── */}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* ── Sites box ── */}
+      <div style={{
+        flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        border: '1px solid #1e1e1e', borderRadius: '4px',
+      }}>
         <SectionHeader title="Sites" />
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 0 8px', display: 'flex', flexDirection: 'column' }}>
           {siteSources.length === 0 ? (
@@ -127,8 +126,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
           )}
         </div>
       </div>
-
-    </div>
+    </>
   )
 }
 
@@ -151,9 +149,6 @@ function SectionHeader({ title, action }: { title: string; action?: React.ReactN
   )
 }
 
-function SectionDivider() {
-  return <div style={{ height: '1px', background: '#141414', flexShrink: 0 }} />
-}
 
 function EmptyRow({ text }: { text: string }) {
   return (

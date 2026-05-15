@@ -1,6 +1,6 @@
 'use client'
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
-import type { Project, QueuedSource, Clip, Fragment } from '@/lib/types'
+import type { Project, QueuedSource, Clip, Fragment, SavedResearchTab } from '@/lib/types'
 import {
   ACTIVE_KEY, SELECTED_KEY, SELECTED_KEY_2, STACK_KEY, STACK_LIMIT,
   newProject, newSource, newNote, newUrlSource,
@@ -90,6 +90,11 @@ interface AppState {
   deleteProject: (id: string) => void
   resumeSession: (id: string) => void
   lastActiveId: string | null
+  // Workspace actions
+  switchWorkspace: (id: string) => void
+  newWorkspace: () => void
+  saveWorkspace: (name?: string) => void
+  removeWorkspace: (targetId?: string) => void
   // Stack actions — aliases over the project-scoped source ops.
   // `addToStack` is the entry point for drag-source-into-stack: if the
   // source is already in the active project, no-op; otherwise it's
@@ -133,9 +138,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try { return localStorage.getItem(ACTIVE_KEY) } catch { return null }
   })
 
-  const projectsRef = useRef<Project[]>([])
-  const activeIdRef = useRef(activeId)
+  const projectsRef    = useRef<Project[]>([])
+  const activeIdRef    = useRef(activeId)
+  const selectedIdRef  = useRef<string | null>(null)
+  const selectedId2Ref = useRef<string | null>(null)
   useEffect(() => { activeIdRef.current = activeId }, [activeId])
+  useEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
+  useEffect(() => { selectedId2Ref.current = selectedId2 }, [selectedId2])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -208,13 +217,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       // Auto-restore the last active project (or fall back to the first one)
       // and its saved Source selection.
-      const restoredId = fixed.find(p => p.id === lastActiveId)?.id ?? fixed[0].id
+      const restoredId   = fixed.find(p => p.id === lastActiveId)?.id ?? fixed[0].id
+      const restoredProj = fixed.find(p => p.id === restoredId)
       setActiveId(restoredId)
       try {
-        const restoredSources = fixed.find(p => p.id === restoredId)?.sources ?? []
-        const savedSel = localStorage.getItem(SELECTED_KEY)
-        if (savedSel && restoredSources.find(s => s.id === savedSel)) setSelectedId(savedSel)
-        const savedSel2 = localStorage.getItem(SELECTED_KEY_2)
+        const restoredSources = restoredProj?.sources ?? []
+        // Prefer per-project sel1/sel2; fall back to global localStorage for migration.
+        const savedSel  = restoredProj?.sel1  ?? localStorage.getItem(SELECTED_KEY)
+        const savedSel2 = restoredProj?.sel2  ?? localStorage.getItem(SELECTED_KEY_2)
+        if (savedSel  && restoredSources.find(s => s.id === savedSel))  setSelectedId(savedSel)
         if (savedSel2 && restoredSources.find(s => s.id === savedSel2)) setSelectedId2(savedSel2)
       } catch {}
 
@@ -244,9 +255,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       })()
     } else {
-      // First launch — auto-create a silent default workspace.
+      // First launch — blank Untitled workspace.
       const def = newProject(1)
-      def.name = 'Workspace'
+      def.name = ''
       setProjects([def])
       setActiveId(def.id)
     }
@@ -264,9 +275,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     function onBeforeUnload() {
-      // Save on unload regardless of length so a final delete-the-last-
-      // project before close also persists.
-      saveProjects(projectsRef.current)
+      let researchTabs: SavedResearchTab[] = []
+      try {
+        const raw = JSON.parse(localStorage.getItem('proof-v3-research-tabs') || '[]')
+        researchTabs = Array.isArray(raw)
+          ? raw.filter((t: { url?: string }) => t.url).map((t: { url: string; title?: string }) => ({ url: t.url, title: t.title || '' }))
+          : []
+      } catch {}
+      const curId = activeIdRef.current
+      const snap  = projectsRef.current.map(p => p.id !== curId ? p : {
+        ...p, sel1: selectedIdRef.current, sel2: selectedId2Ref.current, researchTabs,
+      })
+      saveProjects(snap)
     }
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
@@ -748,6 +768,129 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }))
   }
 
+  // ─── Workspace helpers ────────────────────────────────────────────────────────
+
+  function readResearchTabs(): SavedResearchTab[] {
+    try {
+      const raw = JSON.parse(localStorage.getItem('proof-v3-research-tabs') || '[]')
+      return Array.isArray(raw)
+        ? raw.filter((t: { url?: string }) => t.url).map((t: { url: string; title?: string }) => ({ url: t.url, title: t.title || '' }))
+        : []
+    } catch { return [] }
+  }
+
+  function loadResearchTabs(tabs: SavedResearchTab[]) {
+    try {
+      if (tabs.length > 0) {
+        localStorage.setItem('proof-v3-research-tabs', JSON.stringify(
+          tabs.map((t, i) => ({ id: `tab-A-r${i}`, url: t.url }))
+        ))
+      } else {
+        localStorage.removeItem('proof-v3-research-tabs')
+      }
+    } catch {}
+    if (typeof window !== 'undefined') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(window as any).electronAPI?.research?.loadWorkspace?.(tabs)
+    }
+  }
+
+  function saveWorkspace(name?: string) {
+    if (!activeId) return
+    const researchTabs = readResearchTabs()
+    setProjects(ps => ps.map(p => {
+      if (p.id !== activeId) return p
+      return { ...p, sel1: selectedId, sel2: selectedId2, researchTabs, ...(name !== undefined ? { name } : {}) }
+    }))
+  }
+
+  function switchWorkspace(id: string) {
+    if (id === activeId) return
+    const curId   = activeId
+    const curSel1 = selectedId
+    const curSel2 = selectedId2
+    const researchTabs = readResearchTabs()
+
+    // Persist state of the workspace we're leaving
+    setProjects(ps => ps.map(p => p.id === curId ? { ...p, sel1: curSel1, sel2: curSel2, researchTabs } : p))
+
+    const newProj = projects.find(p => p.id === id)
+    setActiveId(id)
+    setSelectedId(newProj?.sel1 ?? null)
+    setSelectedId2(newProj?.sel2 ?? null)
+    setSelectedIds(new Set())
+    setAnchorId(null)
+
+    loadResearchTabs(newProj?.researchTabs ?? [])
+  }
+
+  function newWorkspace() {
+    const curId   = activeId
+    const curSel1 = selectedId
+    const curSel2 = selectedId2
+    const researchTabs = readResearchTabs()
+
+    if (curId) {
+      setProjects(ps => ps.map(p => p.id === curId ? { ...p, sel1: curSel1, sel2: curSel2, researchTabs } : p))
+    }
+
+    const p = newProject(namedProjectCount + 1)
+    p.name = ''
+    setProjects(ps => [...ps, p])
+    setActiveId(p.id)
+    setSelectedId(null)
+    setSelectedId2(null)
+    setSelectedIds(new Set())
+    setAnchorId(null)
+
+    loadResearchTabs([])
+  }
+
+  function removeWorkspace(targetId?: string) {
+    const id = targetId ?? activeId
+    if (!id) return
+    const proj = projects.find(p => p.id === id)
+    if (!proj) return
+
+    const sourceIds = proj.sources.map(s => s.id)
+    function reapSources() {
+      if (sourceIds.length) {
+        Promise.allSettled(sourceIds.flatMap(sid => [deleteFile(sid), deleteContent(sid)]))
+          .then(notifyStorageChanged)
+      }
+    }
+
+    // Non-active workspace — just remove it.
+    if (id !== activeId) {
+      setProjects(ps => ps.filter(p => p.id !== id))
+      reapSources()
+      return
+    }
+
+    // Active workspace — delete it and switch to adjacent if one exists.
+    const remaining = projects.filter(p => p.id !== id)
+    const idx       = projects.findIndex(p => p.id === id)
+
+    setProjects(remaining)
+    setSelectedIds(new Set())
+    setAnchorId(null)
+
+    if (remaining.length === 0) {
+      setActiveId(null)
+      setSelectedId(null)
+      setSelectedId2(null)
+      loadResearchTabs([])
+    } else {
+      const nextProj = remaining[Math.max(0, idx - 1)]
+      setActiveId(nextProj.id)
+      setSelectedId(nextProj.sel1 ?? null)
+      setSelectedId2(nextProj.sel2 ?? null)
+      loadResearchTabs(nextProj.researchTabs ?? [])
+    }
+
+    reapSources()
+  }
+
   function openInPane(id: string) {
     const src = allSources.find(s => s.id === id)
     if (!src) return
@@ -801,6 +944,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     removeSource, removeSelected,
     createNote, addUrl, createProject, switchProject, deleteProject, resumeSession, lastActiveId,
     addToStack, removeFromStack, clearStack, reorderStack, openInPane,
+    switchWorkspace, newWorkspace, saveWorkspace, removeWorkspace,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

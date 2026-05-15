@@ -19,25 +19,58 @@ export default function ReaderPanel() {
     uploadFiles, patchSource,
   } = useApp()
 
+  const [focusedPane, setFocusedPane] = useState<null | 1 | 2>(null)
+
+  function toggleFocus(pane: 1 | 2) {
+    setFocusedPane(prev => prev === pane ? null : pane)
+  }
+
+  function handleClose1() {
+    setSelectedId(null)
+    if (focusedPane === 1) setFocusedPane(null)
+  }
+
+  function handleClose2() {
+    setSelectedId2(null)
+    if (focusedPane === 2) setFocusedPane(null)
+  }
+
+  // When a pane is focused, the other collapses to flex:0.
+  // The wrapper div stays mounted so scroll/page state is preserved.
+  const hide1 = focusedPane === 2
+  const hide2 = focusedPane === 1
+
   return (
     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={{ flex: 1, minHeight: 0, padding: '5px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <SourcePane
-          label={selectedSource ? truncate(selectedSource.label ?? selectedSource.raw) : 'Source 1'}
-          source={selectedSource}
-          onClose={() => setSelectedId(null)}
-          onSelectId={setSelectedId}
-          uploadFiles={uploadFiles}
-          patchSource={patchSource}
-        />
-        <SourcePane
-          label={selectedSource2 ? truncate(selectedSource2.label ?? selectedSource2.raw) : 'Source 2'}
-          source={selectedSource2}
-          onClose={() => setSelectedId2(null)}
-          onSelectId={setSelectedId2}
-          uploadFiles={uploadFiles}
-          patchSource={patchSource}
-        />
+      <div style={{
+        flex: 1, minHeight: 0, padding: '5px',
+        display: 'flex', flexDirection: 'column',
+        gap: focusedPane ? 0 : '4px',
+      }}>
+        <div style={{ flex: hide1 ? 0 : 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <SourcePane
+            label={selectedSource ? truncate(selectedSource.label ?? selectedSource.raw) : 'Source 1'}
+            source={selectedSource}
+            onClose={handleClose1}
+            onSelectId={setSelectedId}
+            uploadFiles={uploadFiles}
+            patchSource={patchSource}
+            isFocused={focusedPane === 1}
+            onToggleFocus={() => toggleFocus(1)}
+          />
+        </div>
+        <div style={{ flex: hide2 ? 0 : 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <SourcePane
+            label={selectedSource2 ? truncate(selectedSource2.label ?? selectedSource2.raw) : 'Source 2'}
+            source={selectedSource2}
+            onClose={handleClose2}
+            onSelectId={setSelectedId2}
+            uploadFiles={uploadFiles}
+            patchSource={patchSource}
+            isFocused={focusedPane === 2}
+            onToggleFocus={() => toggleFocus(2)}
+          />
+        </div>
       </div>
     </div>
   )
@@ -51,6 +84,7 @@ function truncate(name: string): string {
 
 function SourcePane({
   label, source, onClose, onSelectId, uploadFiles, patchSource,
+  isFocused, onToggleFocus,
 }: {
   label: string
   source: QueuedSource | null
@@ -58,6 +92,8 @@ function SourcePane({
   onSelectId: (id: string) => void
   uploadFiles: (files: FileList | File[]) => Promise<void>
   patchSource: (projId: string, srcId: string, patch: Partial<QueuedSource>) => void
+  isFocused: boolean
+  onToggleFocus: () => void
 }) {
   const [dragOver, setDragOver] = useState(false)
 
@@ -90,7 +126,12 @@ function SourcePane({
         if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files)
       }}
     >
-      <PaneHeader label={label} onClose={source ? onClose : undefined} />
+      <PaneHeader
+        label={label}
+        onClose={source ? onClose : undefined}
+        isFocused={isFocused}
+        onToggleFocus={onToggleFocus}
+      />
       {source
         ? <SourceContent source={source} patchSource={patchSource} />
         : <EmptySource uploadFiles={uploadFiles} />
@@ -190,7 +231,12 @@ function EmptySource({ uploadFiles }: { uploadFiles: (files: FileList | File[]) 
 
 // ─── Pane header ─────────────────────────────────────────────────────────────
 
-function PaneHeader({ label, onClose }: { label: string; onClose?: () => void }) {
+function PaneHeader({ label, onClose, isFocused, onToggleFocus }: {
+  label: string
+  onClose?: () => void
+  isFocused?: boolean
+  onToggleFocus: () => void
+}) {
   return (
     <div style={{
       height: '32px', flexShrink: 0,
@@ -202,6 +248,9 @@ function PaneHeader({ label, onClose }: { label: string; onClose?: () => void })
       <span style={{ flex: 1, fontSize: '11px', color: '#555', letterSpacing: '0.04em', userSelect: 'none' }}>
         {label}
       </span>
+      <IconBtn onClick={onToggleFocus} title={isFocused ? 'Restore split' : 'Expand'}>
+        {isFocused ? <CollapseIcon /> : <ExpandIcon />}
+      </IconBtn>
       {onClose && <IconBtn onClick={onClose} title="Close"><CloseIcon /></IconBtn>}
     </div>
   )
@@ -238,7 +287,7 @@ function UrlOpenCard({ source }: { source: QueuedSource }) {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
         {isElectron && (
           <button
-            onClick={() => window.electronAPI?.research?.navigate(url)}
+            onClick={() => window.electronAPI?.research?.navigate('A', url)}
             style={{
               background: 'none', border: '1px solid #252525', borderRadius: '3px',
               color: '#666', fontSize: '11px', padding: '6px 14px',
@@ -440,6 +489,24 @@ function CloseIcon() {
     <svg width="9" height="9" viewBox="0 0 9 9" fill="none"
       stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
       <path d="M1 1L8 8M8 1L1 8" />
+    </svg>
+  )
+}
+
+function ExpandIcon() {
+  return (
+    <svg width="9" height="9" viewBox="0 0 9 9" fill="none"
+      stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 3.5V1H3.5M5.5 1H8V3.5M8 5.5V8H5.5M3.5 8H1V5.5" />
+    </svg>
+  )
+}
+
+function CollapseIcon() {
+  return (
+    <svg width="9" height="9" viewBox="0 0 9 9" fill="none"
+      stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3.5 1V3.5H1M8 3.5H5.5V1M1 5.5H3.5V8M5.5 8V5.5H8" />
     </svg>
   )
 }

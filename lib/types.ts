@@ -50,6 +50,11 @@ export interface QueuedSource {
   draft?: string
 }
 
+export interface SavedResearchTab {
+  url: string
+  title: string
+}
+
 export interface Project {
   id: string
   name: string
@@ -59,4 +64,8 @@ export interface Project {
   fragments: Fragment[]
   scratchpad?: string
   projectDraft?: string
+  // Per-workspace state — saved on switch/explicit save
+  sel1?: string | null
+  sel2?: string | null
+  researchTabs?: SavedResearchTab[]
 }
