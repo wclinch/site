@@ -53,7 +53,10 @@ function makePlaceholderTab(): TabState {
   return { id: 'tab-init', url: '', title: '', loading: false, canGoBack: false, canGoForward: false }
 }
 
-export default function ResearchBrowser() {
+export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
+  isFocused?: boolean
+  onFocusToggle?: () => void
+}) {
   const panelId = 'A'
   const { addUrl, sources } = useApp()
 
@@ -267,6 +270,11 @@ export default function ResearchBrowser() {
 
   useEffect(() => () => { if (savedTimerRef.current) clearTimeout(savedTimerRef.current) }, [])
 
+  // Recalculate WebContentsView bounds when focus mode changes
+  useEffect(() => {
+    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')))
+  }, [isFocused])
+
   function navigateUrl(url: string) {
     if (!url) return
     setUrlInput(url)
@@ -346,15 +354,26 @@ export default function ResearchBrowser() {
                 onClose={() => window.electronAPI?.research?.closeTab(panelId, tab.id)}
               />
             ))}
+            {/* New tab — sits right after the last tab */}
+            <TabBarBtn
+              onClick={() => window.electronAPI?.research?.newTab(panelId)}
+              title="New tab"
+              borderLeft={false}
+            >
+              <span style={{ fontSize: '14px', lineHeight: 1 }}>+</span>
+            </TabBarBtn>
           </div>
 
-          {/* New tab */}
-          <TabBarBtn
-            onClick={() => window.electronAPI?.research?.newTab(panelId)}
-            title="New tab"
-          >
-            <span style={{ fontSize: '14px', lineHeight: 1 }}>+</span>
-          </TabBarBtn>
+          {/* Focus toggle — far right of tab bar */}
+          {onFocusToggle && (
+            <TabBarBtn
+              key={String(isFocused)}
+              onClick={onFocusToggle}
+              title={isFocused ? 'Exit focus' : 'Focus Research'}
+            >
+              {isFocused ? <FocusCollapseIcon /> : <FocusExpandIcon />}
+            </TabBarBtn>
+          )}
         </div>
 
         {/* URL / nav toolbar */}
@@ -423,11 +442,12 @@ export default function ResearchBrowser() {
 
 // ─── Tab bar button ───────────────────────────────────────────────────────────
 
-function TabBarBtn({ children, onClick, title, active }: {
+function TabBarBtn({ children, onClick, title, active, borderLeft = true }: {
   children: React.ReactNode
   onClick?: () => void
   title: string
   active?: boolean
+  borderLeft?: boolean
 }) {
   const baseColor = active ? '#666' : '#3a3a3a'
   return (
@@ -438,7 +458,7 @@ function TabBarBtn({ children, onClick, title, active }: {
         width: '28px', height: '28px', flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: active ? '#141414' : 'none', border: 'none',
-        borderLeft: '1px solid #111',
+        borderLeft: borderLeft ? '1px solid #111' : 'none',
         color: baseColor,
         cursor: 'pointer',
         fontFamily: 'inherit', padding: 0, outline: 'none',
@@ -520,6 +540,26 @@ function NavBtn({ children, onClick, disabled, title }: {
       onMouseEnter={e => { if (!disabled) e.currentTarget.style.color = '#999' }}
       onMouseLeave={e => { if (!disabled) e.currentTarget.style.color = '#555' }}
     >{children}</button>
+  )
+}
+
+// ─── Focus icons ─────────────────────────────────────────────────────────────
+
+function FocusExpandIcon() {
+  return (
+    <svg width="9" height="9" viewBox="0 0 9 9" fill="none"
+      stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 3.5V1H3.5M5.5 1H8V3.5M8 5.5V8H5.5M3.5 8H1V5.5" />
+    </svg>
+  )
+}
+
+function FocusCollapseIcon() {
+  return (
+    <svg width="9" height="9" viewBox="0 0 9 9" fill="none"
+      stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3.5 1V3.5H1M8 3.5H5.5V1M5.5 8V5.5H8M1 5.5H3.5V8" />
+    </svg>
   )
 }
 

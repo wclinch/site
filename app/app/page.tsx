@@ -50,6 +50,7 @@ function StorageWarning() {
 
 function Layout() {
   const { mounted } = useApp()
+  const [researchFocused, setResearchFocused] = useState(false)
 
   if (!mounted) {
     return (
@@ -64,9 +65,12 @@ function Layout() {
       <ProjectBar />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', paddingRight: '5px' }}>
         <SourcePanel width={DEF_SOURCE} />
-        <ReaderPanel />
-        <div style={{ width: DEF_BROWSER, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <RightPanel />
+        {!researchFocused && <ReaderPanel />}
+        <div style={researchFocused
+          ? { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
+          : { width: DEF_BROWSER, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
+        }>
+          <RightPanel isFocused={researchFocused} onFocusToggle={() => setResearchFocused(f => !f)} />
         </div>
       </div>
       <SourceContextMenu />
