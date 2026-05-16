@@ -33,7 +33,7 @@ declare global {
         onTabUpdated:     (pid: string, cb: (id: string, state: Partial<TabState>) => void) => () => void
         onTabsChanged:    (pid: string, cb: (tabs: TabState[], activeTabId: string) => void) => () => void
         onBoundsRecalc:   (cb: () => void) => () => void
-        loadWorkspace:    (tabs: Array<{ url: string; title: string }>) => void
+        loadWorkspace:    (tabs: Array<{ url: string; title: string; active?: boolean }>) => void
       }
     }
   }
@@ -163,9 +163,21 @@ export default function ResearchBrowser() {
       if (newTabs.length === 0) {
         setUrlInput('')
         setHomeMode(true)
+        try { localStorage.removeItem(tabsKey) } catch {}
       } else {
         const active = newTabs.find(t => t.id === newActiveId)
         if (active?.url) setUrlInput(active.url)
+        // If no tab has a URL yet (fresh workspace), show home screen.
+        if (newTabs.every(t => !t.url)) setHomeMode(true)
+        // Sync localStorage from authoritative main-process state — includes
+        // title and active flag so workspace restore knows which tab to activate.
+        try {
+          const toSave = newTabs.filter(t => t.url).map(t => ({
+            id: t.id, url: t.url, title: t.title || '', active: t.id === newActiveId,
+          }))
+          if (toSave.length > 0) localStorage.setItem(tabsKey, JSON.stringify(toSave))
+          else localStorage.removeItem(tabsKey)
+        } catch {}
       }
     })
 
@@ -376,13 +388,13 @@ export default function ResearchBrowser() {
               style={{
                 height: '22px', flexShrink: 0, display: 'flex', alignItems: 'center',
                 background: 'none', border: '1px solid #252525', borderRadius: '3px',
-                color: '#444', fontSize: '10px', padding: '0 7px', cursor: 'pointer',
+                color: '#555', fontSize: '11px', padding: '0 7px', cursor: 'pointer',
                 fontFamily: 'inherit', letterSpacing: '0.04em', outline: 'none',
                 minWidth: '78px', justifyContent: 'center',
                 transition: 'color 0.15s, border-color 0.15s',
               }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.color = '#888' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#252525'; e.currentTarget.style.color = '#444' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.color = '#999' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = '#252525'; e.currentTarget.style.color = '#555' }}
             >
               {saveStatus === 'saved' ? 'Saved' : saveStatus === 'duplicate' ? 'Already saved' : 'Save'}
             </button>
@@ -416,7 +428,7 @@ function TabBarBtn({ children, onClick, title, active }: {
   title: string
   active?: boolean
 }) {
-  const baseColor = active ? '#555' : '#2a2a2a'
+  const baseColor = active ? '#666' : '#3a3a3a'
   return (
     <button
       onClick={onClick}
@@ -466,7 +478,7 @@ function TabChip({ tab, active, onSelect, onClose }: {
         <span style={{ fontSize: '8px', color: '#444', flexShrink: 0, animation: 'pulse-dot 1.2s ease-in-out infinite' }}>●</span>
       )}
       <span style={{
-        fontSize: '10px', color: active ? '#888' : '#3a3a3a',
+        fontSize: '10px', color: active ? '#aaa' : '#555',
         overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
         flex: 1, letterSpacing: '0.02em', transition: 'color 0.1s',
       }}>
@@ -478,11 +490,11 @@ function TabChip({ tab, active, onSelect, onClose }: {
           width: '16px', height: '16px', flexShrink: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'none', border: 'none', borderRadius: '2px',
-          color: '#2e2e2e', fontSize: '13px', cursor: 'pointer',
+          color: '#3a3a3a', fontSize: '13px', cursor: 'pointer',
           padding: 0, outline: 'none', fontFamily: 'inherit', lineHeight: 1,
         }}
         onMouseEnter={e => { e.currentTarget.style.color = '#777' }}
-        onMouseLeave={e => { e.currentTarget.style.color = '#2e2e2e' }}
+        onMouseLeave={e => { e.currentTarget.style.color = '#3a3a3a' }}
       >×</button>
     </div>
   )
@@ -504,7 +516,7 @@ function NavBtn({ children, onClick, disabled, title }: {
         color: disabled ? '#2a2a2a' : '#555',
         fontSize: '16px', fontFamily: 'inherit', padding: 0, outline: 'none',
       }}
-      onMouseEnter={e => { if (!disabled) e.currentTarget.style.color = '#aaa' }}
+      onMouseEnter={e => { if (!disabled) e.currentTarget.style.color = '#999' }}
       onMouseLeave={e => { if (!disabled) e.currentTarget.style.color = '#555' }}
     >{children}</button>
   )
@@ -521,7 +533,7 @@ function HomeScreen() {
     }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '7px' }}>
         <span style={{ fontSize: '12px', color: '#555', fontWeight: 500, letterSpacing: '0.03em' }}>Start researching</span>
-        <span style={{ fontSize: '11px', color: '#333', letterSpacing: '0.02em' }}>Search the web or enter a URL above.</span>
+        <span style={{ fontSize: '11px', color: '#333', letterSpacing: '0.02em' }}>Search the web or enter a URL.</span>
       </div>
     </div>
   )

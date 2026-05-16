@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useApp } from '@/context/AppContext'
-import type { RenameSourceDetail } from './SourceItem'
+interface RenameSourceDetail { srcId: string; currentLabel: string }
 
 export default function SourceContextMenu() {
   const {

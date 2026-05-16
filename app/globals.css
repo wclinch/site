@@ -1,7 +1,5 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html, body { overflow: hidden; }
-
 html { color-scheme: dark; }
 
 body {
@@ -20,11 +18,6 @@ input, button, textarea, select { font-family: inherit; }
 .draft-title::placeholder { color: #555; opacity: 1; }
 .draft-body::placeholder  { color: #555; opacity: 1; }
 .prose-area::placeholder  { color: #555; opacity: 1; }
-
-@keyframes fragmentIn {
-  from { opacity: 0; transform: translateY(-6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
 
 button, nav, label { user-select: none; }
 
@@ -48,7 +41,7 @@ button, nav, label { user-select: none; }
   color: #666;
   transition: color 0.15s;
 }
-.nav-logo:hover { color: #bbb; }
+.nav-logo:hover { color: #999; }
 
 .nav-link {
   font-size: 11px;
@@ -58,14 +51,14 @@ button, nav, label { user-select: none; }
   text-transform: uppercase;
   transition: color 0.15s;
 }
-.nav-link:hover { color: #bbb; }
+.nav-link:hover { color: #999; }
 
 .cta-link {
   display: inline-block;
   background: #0f0f0f;
   border: 1px solid #333;
   border-radius: 4px;
-  padding: 10px 24px;
+  padding: 8px 14px;
   font-size: 12px;
   color: #bbb;
   text-decoration: none;
@@ -73,7 +66,7 @@ button, nav, label { user-select: none; }
   text-transform: uppercase;
   transition: border-color 0.15s, color 0.15s;
 }
-.cta-link:hover { border-color: #555; color: #eee; }
+.cta-link:hover { border-color: #555; color: #ddd; }
 
 .footer-link {
   font-size: 11px;
@@ -83,7 +76,7 @@ button, nav, label { user-select: none; }
   text-transform: uppercase;
   transition: color 0.15s;
 }
-.footer-link:hover { color: #aaa; }
+.footer-link:hover { color: #999; }
 
 .text-cta {
   font-size: 12px;
@@ -93,14 +86,14 @@ button, nav, label { user-select: none; }
   text-transform: uppercase;
   transition: color 0.15s;
 }
-.text-cta:hover { color: #bbb; }
+.text-cta:hover { color: #999; }
 
 .inline-link {
   color: #777;
   text-decoration: none;
   transition: color 0.15s;
 }
-.inline-link:hover { color: #ccc; }
+.inline-link:hover { color: #999; }
 
 /* react-pdf-viewer dark theme overrides */
 .rpv-core__viewer { background: #080808 !important; }

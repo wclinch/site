@@ -4,7 +4,6 @@ const STORAGE_KEY  = 'proof-v3-projects'
 export const ACTIVE_KEY          = 'proof-v3-active'
 export const SELECTED_KEY        = 'proof-v3-selected'
 export const SELECTED_KEY_2      = 'proof-v3-selected-2'
-export const SELECTED_IMAGE_KEY  = 'proof-v3-selected-image'
 // Legacy localStorage key from the pre-refactor model where the stack
 // was a separately-stored pinned-ID list. The new project-scoped model
 // derives the stack from the active project's sources directly, so this
@@ -22,22 +21,17 @@ export function uid(): string {
 export function newProject(n: number): Project {
   return {
     id: uid(),
-    name: `Session ${n}`,
+    name: `Workspace ${n}`,
     sources: [],
-    draft: '',
-    draftTitle: '',
-    fragments: [],
-    scratchpad: '',
-    projectDraft: '',
   }
 }
 
 export function newSource(raw: string, label?: string): import('./types').QueuedSource {
-  return { id: uid(), raw, status: 'queued', error: null, label, clips: [] }
+  return { id: uid(), raw, status: 'queued', error: null, label }
 }
 
 export function newNote(): import('./types').QueuedSource {
-  return { id: uid(), raw: 'page', label: 'Page', status: 'done', error: null, fileType: 'note', noteContent: '', clips: [] }
+  return { id: uid(), raw: 'page', label: 'Page', status: 'done', error: null, fileType: 'note', noteContent: '' }
 }
 
 export function newUrlSource(url: string, title?: string): import('./types').QueuedSource {
@@ -45,7 +39,7 @@ export function newUrlSource(url: string, title?: string): import('./types').Que
   if (!label) {
     try { label = new URL(url).hostname.replace(/^www\./, '') } catch { label = url }
   }
-  return { id: uid(), raw: url, url, label, status: 'done', error: null, fileType: 'url', clips: [] }
+  return { id: uid(), raw: url, url, label, status: 'done', error: null, fileType: 'url' }
 }
 
 export function loadProjects(): Project[] {

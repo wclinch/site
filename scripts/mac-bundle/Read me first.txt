@@ -31,7 +31,10 @@ First launch
 
 Activation
   A license key was issued at purchase. Paste it into the gate on
-  first launch of the workspace.
+  first launch. One-time beta access. No subscription.
+
+Storage
+  250 MB for uploaded Sources. Saved Sites do not count toward storage.
 
 Support
   Official_Site_Support@protonmail.com

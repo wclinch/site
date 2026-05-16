@@ -1,6 +1,6 @@
 'use client'
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
-import type { Project, QueuedSource, Clip, Fragment, SavedResearchTab } from '@/lib/types'
+import type { Project, QueuedSource, SavedResearchTab } from '@/lib/types'
 import {
   ACTIVE_KEY, SELECTED_KEY, SELECTED_KEY_2, STACK_KEY, STACK_LIMIT,
   newProject, newSource, newNote, newUrlSource,
@@ -11,18 +11,11 @@ import { extractContent } from '@/lib/extract'
 import { wouldExceedLimit, STORAGE_LIMIT_BYTES } from '@/lib/storage-limit'
 
 
-// Legacy id from the pre-refactor "floating sources" model. Kept exported
-// only so old persisted state can be migrated on load — no new code
-// should reference it. New model: every source lives in exactly one
-// project, and there's no inbox.
-export const INBOX_ID      = '__inbox__'
-// No project ceiling — users can create as many projects as the 250 MB
-// storage cap allows. PROJECT_LIMIT and `atProjectLimit` remain in the
-// surface for API stability but always read as "no limit reached".
-export const PROJECT_LIMIT = Number.POSITIVE_INFINITY
+// Legacy id from the pre-refactor "floating sources" model. Kept only so
+// old persisted state can be migrated on load — no new code writes it.
+const INBOX_ID = '__inbox__'
 
-interface ContextMenu     { srcId: string; x: number; y: number }
-interface ProjContextMenu { projId: string; x: number; y: number }
+interface ContextMenu { srcId: string; x: number; y: number }
 
 interface AppState {
   mounted: boolean
@@ -32,50 +25,28 @@ interface AppState {
   selectedId2: string | null
   selectedIds: Set<string>
   anchorId: string | null
-  showProjects: boolean
   contextMenu: ContextMenu | null
-  projContextMenu: ProjContextMenu | null
   // derived
   activeProject: Project | null
   sources: QueuedSource[]
   allSources: QueuedSource[]
   selectedSource: QueuedSource | null
   selectedSource2: QueuedSource | null
-  // Stack is now project-scoped: it IS the active project's source list.
-  // `stackSources` = active project's sources (in order). `stackIds` is
-  // derived from that. `addToStack` / `removeFromStack` / `clearStack` are
-  // semantic aliases for source operations against the active project —
-  // sources can't exist without a project anymore, so "pinning" is just
-  // "adding to the active project."
   stackIds: string[]
   stackSources: QueuedSource[]
-  stackLimit: number          // max sources per project
-  atStackLimit: boolean       // active project at the cap
+  stackLimit: number
+  atStackLimit: boolean
   inStack: (id: string) => boolean
-  namedProjectCount: number
-  atProjectLimit: boolean
   // setters
-  setShowProjects: (v: boolean | ((prev: boolean) => boolean)) => void
   setSelectedId: (id: string | null) => void
   setSelectedId2: (id: string | null) => void
   setSelectedIds: (ids: Set<string>) => void
   setAnchorId: (id: string | null) => void
   setContextMenu: (m: ContextMenu | null) => void
-  setProjContextMenu: (m: ProjContextMenu | null) => void
   // actions
   setProjects: React.Dispatch<React.SetStateAction<Project[]>>
   updateProject: (id: string, patch: Partial<Project>) => void
   patchSource: (projId: string, srcId: string, patch: Partial<QueuedSource>) => void
-  addClip: (srcId: string, clip: Clip) => void
-  removeClip: (srcId: string, clipId: string) => void
-  updateClip: (srcId: string, clipId: string, patch: Partial<Clip>) => void
-  reorderClips: (srcId: string, fromId: string, afterId: string | null) => void
-  addFragment: (fragment: Fragment) => void
-  insertFragment: (fragment: Fragment, afterId: string | null) => void
-  removeFragment: (fragmentId: string) => void
-  updateFragment: (fragmentId: string, patch: Partial<Fragment>) => void
-  moveFragment: (id: string, afterId: string | null) => void
-  clearFragments: () => void
   moveSource: (srcId: string, toIndex: number) => void
   moveSourceToProject: (srcId: string, targetProjId: string) => void
   moveProject: (projId: string, toIndex: number) => void
@@ -85,23 +56,15 @@ interface AppState {
   removeSelected: () => void
   createNote: (targetProjId?: string) => void
   addUrl: (url: string, targetProjId?: string, label?: string) => Promise<void>
-  createProject: (name?: string) => boolean
-  switchProject: (id: string) => void
-  deleteProject: (id: string) => void
-  resumeSession: (id: string) => void
-  lastActiveId: string | null
   // Workspace actions
   switchWorkspace: (id: string) => void
   newWorkspace: () => void
   saveWorkspace: (name?: string) => void
   removeWorkspace: (targetId?: string) => void
-  // Stack actions — aliases over the project-scoped source ops.
-  // `addToStack` is the entry point for drag-source-into-stack: if the
-  // source is already in the active project, no-op; otherwise it's
-  // moved from its current project into the active one.
+  // Stack actions
   addToStack: (id: string) => void
-  removeFromStack: (id: string) => void   // alias for removeSource
-  clearStack: () => void                   // clears the active project
+  removeFromStack: (id: string) => void
+  clearStack: () => void
   reorderStack: (fromIndex: number, toIndex: number) => void
   openInPane: (id: string) => void
 }
@@ -128,11 +91,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [selectedId2, setSelectedId2]         = useState<string | null>(null)
   const [selectedIds, setSelectedIds]         = useState<Set<string>>(new Set())
   const [anchorId, setAnchorId]               = useState<string | null>(null)
-  const [showProjects, setShowProjects]       = useState(false)
   const [contextMenu, setContextMenu]         = useState<ContextMenu | null>(null)
-  const [projContextMenu, setProjContextMenu] = useState<ProjContextMenu | null>(null)
-  // Read last active session ID at mount time (before we clear it). Used by
-  // SessionOverlay to pre-select the "Resume last session" target.
+  // Snapshot the last active workspace ID before effects can update it,
+  // so the mount effect can restore the correct workspace on reload.
   const [lastActiveId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null
     try { return localStorage.getItem(ACTIVE_KEY) } catch { return null }
@@ -148,9 +109,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setShowProjects(false); setProjContextMenu(null); setContextMenu(null)
-      }
+      if (e.key === 'Escape') setContextMenu(null)
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -162,15 +121,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.addEventListener('click', handler)
     return () => window.removeEventListener('click', handler)
   }, [contextMenu])
-
-  useEffect(() => {
-    if (!projContextMenu) return
-    const handler = () => setProjContextMenu(null)
-    window.addEventListener('click', handler)
-    return () => window.removeEventListener('click', handler)
-  }, [projContextMenu])
-
-  useEffect(() => { setProjContextMenu(null) }, [showProjects])
 
   useEffect(() => {
     const saved = loadProjects()
@@ -229,6 +179,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (savedSel2 && restoredSources.find(s => s.id === savedSel2)) setSelectedId2(savedSel2)
       } catch {}
 
+      // Restore research tabs for the active workspace on startup.
+      loadResearchTabs(restoredProj?.researchTabs ?? [])
+
       // Re-extract PDF content for any source that's `done` but missing
       // its parsed body in IDB (e.g. interrupted extraction in a prior
       // session). Notes / images / URLs are skipped.
@@ -279,7 +232,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const raw = JSON.parse(localStorage.getItem('proof-v3-research-tabs') || '[]')
         researchTabs = Array.isArray(raw)
-          ? raw.filter((t: { url?: string }) => t.url).map((t: { url: string; title?: string }) => ({ url: t.url, title: t.title || '' }))
+          ? raw.filter((t: { url?: string }) => t.url)
+               .map((t: { url: string; title?: string; active?: boolean }) => ({ url: t.url, title: t.title || '', active: t.active ?? false }))
           : []
       } catch {}
       const curId = activeIdRef.current
@@ -313,7 +267,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const selectedSource      = allSources.find(s => s.id === selectedId)  ?? null
   const selectedSource2     = allSources.find(s => s.id === selectedId2) ?? null
   const namedProjectCount   = projects.length
-  const atProjectLimit      = namedProjectCount >= PROJECT_LIMIT
 
   // Stack = active project's sources. No separate storage, no separate
   // ordering — switching projects swaps the stack instantly because it's
@@ -335,120 +288,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...p,
       sources: p.sources.map(s => s.id === srcId ? { ...s, ...patch } : s),
     })))
-  }
-
-  function addClip(srcId: string, clip: Clip) {
-    setProjects(ps => ps.map(p => ({
-      ...p,
-      sources: p.sources.map(s =>
-        s.id !== srcId ? s : { ...s, clips: [...s.clips, clip] }
-      ),
-    })))
-  }
-
-  function updateClip(srcId: string, clipId: string, patch: Partial<Clip>) {
-    setProjects(ps => ps.map(p => ({
-      ...p,
-      sources: p.sources.map(s =>
-        s.id !== srcId ? s : { ...s, clips: s.clips.map(c => c.id !== clipId ? c : { ...c, ...patch }) }
-      ),
-    })))
-  }
-
-  function reorderClips(srcId: string, fromId: string, afterId: string | null) {
-    setProjects(ps => ps.map(p => ({
-      ...p,
-      sources: p.sources.map(s => {
-        if (s.id !== srcId) return s
-        const clips  = s.clips
-        const idx    = clips.findIndex(c => c.id === fromId)
-        if (idx === -1) return s
-        const moved  = clips[idx]
-        const rest   = clips.filter(c => c.id !== fromId)
-        if (afterId === null) return { ...s, clips: [moved, ...rest] }
-        const afterIdx = rest.findIndex(c => c.id === afterId)
-        if (afterIdx === -1) return { ...s, clips: [...rest, moved] }
-        const result = [...rest]
-        result.splice(afterIdx + 1, 0, moved)
-        return { ...s, clips: result }
-      }),
-    })))
-  }
-
-  function removeClip(srcId: string, clipId: string) {
-    setProjects(ps => ps.map(p => ({
-      ...p,
-      sources: p.sources.map(s =>
-        s.id !== srcId ? s : { ...s, clips: s.clips.filter(c => c.id !== clipId) }
-      ),
-    })))
-  }
-
-  function addFragment(fragment: Fragment) {
-    const projId = activeIdRef.current
-    if (!projId) return
-    setProjects(ps => ps.map(p =>
-      p.id !== projId ? p : { ...p, fragments: [...(p.fragments ?? []), fragment] }
-    ))
-  }
-
-  function insertFragment(fragment: Fragment, afterId: string | null) {
-    const projId = activeIdRef.current
-    if (!projId) return
-    setProjects(ps => ps.map(p => {
-      if (p.id !== projId) return p
-      const frags = p.fragments ?? []
-      if (afterId === null) return { ...p, fragments: [fragment, ...frags] }
-      const idx = frags.findIndex(f => f.id === afterId)
-      if (idx === -1) return { ...p, fragments: [...frags, fragment] }
-      const result = [...frags]
-      result.splice(idx + 1, 0, fragment)
-      return { ...p, fragments: result }
-    }))
-  }
-
-  function removeFragment(fragmentId: string) {
-    const projId = activeIdRef.current
-    if (!projId) return
-    setProjects(ps => ps.map(p =>
-      p.id !== projId ? p : { ...p, fragments: (p.fragments ?? []).filter(f => f.id !== fragmentId) }
-    ))
-  }
-
-  function updateFragment(fragmentId: string, patch: Partial<Fragment>) {
-    const projId = activeIdRef.current
-    if (!projId) return
-    setProjects(ps => ps.map(p =>
-      p.id !== projId ? p : {
-        ...p,
-        fragments: (p.fragments ?? []).map(f => f.id !== fragmentId ? f : { ...f, ...patch }),
-      }
-    ))
-  }
-
-  function moveFragment(id: string, afterId: string | null) {
-    const projId = activeIdRef.current
-    if (!projId) return
-    setProjects(ps => ps.map(p => {
-      if (p.id !== projId) return p
-      const frags = p.fragments ?? []
-      const idx = frags.findIndex(f => f.id === id)
-      if (idx === -1) return p
-      const moved = frags[idx]
-      const rest  = frags.filter(f => f.id !== id)
-      if (afterId === null) return { ...p, fragments: [moved, ...rest] }
-      const afterIdx = rest.findIndex(f => f.id === afterId)
-      if (afterIdx === -1) return { ...p, fragments: [...rest, moved] }
-      const result = [...rest]
-      result.splice(afterIdx + 1, 0, moved)
-      return { ...p, fragments: result }
-    }))
-  }
-
-  function clearFragments() {
-    const projId = activeIdRef.current
-    if (!projId) return
-    setProjects(ps => ps.map(p => p.id !== projId ? p : { ...p, fragments: [] }))
   }
 
   function moveSource(srcId: string, toIndex: number) {
@@ -654,74 +493,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // the Stack, the right Browser keeps showing whatever it had.
   }
 
-  function createProject(name?: string): boolean {
-    // No project-count ceiling — only the 250 MB storage cap and the
-    // 12-source per-project cap bound the workspace.
-    const trimmed = name?.trim() ?? ''
-    if (trimmed) {
-      const dup = projects.some(p =>
-        p.name.trim().toLowerCase() === trimmed.toLowerCase()
-      )
-      if (dup) return false
-    }
-    const p = newProject(namedProjectCount + 1)
-    if (trimmed) p.name = trimmed
-    setProjects(ps => [...ps, p])
-    setActiveId(p.id)
-    setSelectedId(null)
-    return true
-  }
-
-  function switchProject(id: string) {
-    if (id === activeId) return
-    setActiveId(id)
-    setSelectedId(null)
-    setSelectedIds(new Set())
-    setAnchorId(null)
-  }
-
-  // Restores a session and its saved Source selection. Used by
-  // SessionOverlay's "Resume last session" and saved-session list.
-  function resumeSession(id: string) {
-    setActiveId(id)
-    const sessionSources = projectsRef.current.find(p => p.id === id)?.sources ?? []
-    try {
-      const savedSel = localStorage.getItem(SELECTED_KEY)
-      if (savedSel && sessionSources.find(s => s.id === savedSel)) setSelectedId(savedSel)
-      else setSelectedId(null)
-    } catch {
-      setSelectedId(null)
-    }
-    setSelectedIds(new Set())
-    setAnchorId(null)
-  }
-
-  function deleteProject(id: string) {
-    // Reap the project's source files from IDB so storage isn't leaked.
-    const doomed    = projects.find(p => p.id === id)
-    if (!doomed) return
-    const sourceIds = doomed.sources.map(s => s.id)
-
-    const remaining = projects.filter(p => p.id !== id)
-    setProjects(remaining)
-    setSelectedId(null)
-    setSelectedId2(null)
-    setSelectedIds(new Set())
-    setAnchorId(null)
-
-    if (activeId === id) {
-      // Move to first remaining project if any, else clear active state.
-      setActiveId(remaining[0]?.id ?? null)
-      setShowProjects(false)
-    }
-
-    if (sourceIds.length) {
-      Promise.allSettled(
-        sourceIds.flatMap(sid => [deleteFile(sid), deleteContent(sid)])
-      ).then(notifyStorageChanged)
-    }
-  }
-
   // ─── Stack actions (aliases over project-scoped source ops) ───────────────
 
   // Drag-source-into-stack semantics: if the source already lives in the
@@ -774,7 +545,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const raw = JSON.parse(localStorage.getItem('proof-v3-research-tabs') || '[]')
       return Array.isArray(raw)
-        ? raw.filter((t: { url?: string }) => t.url).map((t: { url: string; title?: string }) => ({ url: t.url, title: t.title || '' }))
+        ? raw.filter((t: { url?: string }) => t.url)
+             .map((t: { url: string; title?: string; active?: boolean }) => ({ url: t.url, title: t.title || '', active: t.active ?? false }))
         : []
     } catch { return [] }
   }
@@ -931,18 +703,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppState = {
     mounted, projects, activeId, selectedId, selectedId2, selectedIds, anchorId,
-    showProjects, contextMenu, projContextMenu,
+    contextMenu,
     activeProject, sources, allSources, selectedSource, selectedSource2,
     stackIds, stackSources, stackLimit: STACK_LIMIT, atStackLimit, inStack,
-    namedProjectCount, atProjectLimit,
-    setShowProjects, setSelectedId, setSelectedId2, setSelectedIds, setAnchorId,
-    setContextMenu, setProjContextMenu,
+    setSelectedId, setSelectedId2, setSelectedIds, setAnchorId,
+    setContextMenu,
     setProjects, updateProject, patchSource, moveSource, moveSourceToProject, moveProject,
-    addClip, removeClip, updateClip, reorderClips,
-    addFragment, insertFragment, removeFragment, updateFragment, moveFragment, clearFragments,
     uploadFiles, retrySource,
     removeSource, removeSelected,
-    createNote, addUrl, createProject, switchProject, deleteProject, resumeSession, lastActiveId,
+    createNote, addUrl,
     addToStack, removeFromStack, clearStack, reorderStack, openInPane,
     switchWorkspace, newWorkspace, saveWorkspace, removeWorkspace,
   }

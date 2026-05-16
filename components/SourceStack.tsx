@@ -77,7 +77,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
         <SectionHeader title="Sources" />
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 0 8px', display: 'flex', flexDirection: 'column' }}>
           {fileSources.length === 0 ? (
-            <EmptyRow text="Files you add appear here." />
+            <EmptyRow text="Files you add stay with this workspace." />
           ) : (
             fileSources.map(src => (
               <StackRow
@@ -107,7 +107,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
         <SectionHeader title="Sites" />
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 0 8px', display: 'flex', flexDirection: 'column' }}>
           {siteSources.length === 0 ? (
-            <EmptyRow text="Pages you save appear here." />
+            <EmptyRow text="Pages you save stay with this workspace." />
           ) : (
             siteSources.map(src => (
               <StackRow
@@ -141,7 +141,7 @@ function SectionHeader({ title, action }: { title: string; action?: React.ReactN
       borderBottom: '1px solid #1a1a1a',
       userSelect: 'none',
     }}>
-      <span style={{ fontSize: '10px', color: '#888', letterSpacing: '0.04em' }}>
+      <span style={{ fontSize: '10px', color: '#666', letterSpacing: '0.05em' }}>
         {title}
       </span>
       {action}
@@ -154,7 +154,7 @@ function EmptyRow({ text }: { text: string }) {
   return (
     <div style={{
       padding: '10px 14px',
-      fontSize: '11px', color: '#333',
+      fontSize: '11px', color: '#444',
       letterSpacing: '0.02em', lineHeight: 1.5,
       userSelect: 'none',
     }}>

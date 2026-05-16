@@ -95,22 +95,15 @@ export default function StorageBadge() {
     }
     setBusy(true)
     try {
-      // Preserve draft text per project — if the click was accidental the
-      // user shouldn't lose their writing. We snapshot projects first,
-      // strip their `sources` + legacy `fragments`, then restore. Project
-      // shells (id, name, draft, projectDraft, scratchpad) stay, so the
-      // active project still has a home for the recovered text.
+      // Preserve workspace shells (id, name) so the user doesn't lose their
+      // workspace names on an accidental reset — only sources are wiped.
       let preservedProjects: Project[] = []
       try {
         const raw = localStorage.getItem(PROJECTS_KEY)
         if (raw) {
           const ps = JSON.parse(raw) as Project[]
           if (Array.isArray(ps)) {
-            preservedProjects = ps.map(p => ({
-              ...p,
-              sources: [],
-              fragments: [],
-            }))
+            preservedProjects = ps.map(p => ({ ...p, sources: [] }))
           }
         }
       } catch {}
@@ -190,8 +183,8 @@ export default function StorageBadge() {
               </div>
               <div style={{ fontSize: '12px', color: armed ? '#aaa' : '#888', lineHeight: 1.7 }}>
                 {armed
-                  ? 'Confirm to remove all sources and files on the device. Drafts are preserved. Cannot be reversed.'
-                  : <>Removes all sources and files on the device. <span style={{ color: '#999' }}>Drafts are preserved.</span> Cannot be reversed.</>}
+                  ? 'Confirm to remove all sources and files on the device. Cannot be reversed.'
+                  : <>Removes all sources and files on the device. Cannot be reversed.</>}
               </div>
             </div>
 
@@ -248,10 +241,10 @@ function ModalButton({
 }) {
   const [hover, setHover] = useState(false)
 
-  const idleBorder = destructive ? '#3a1f1f' : '#222'
-  const hoverBorder = destructive ? '#5a2c2c' : '#444'
-  const idleColor  = destructive ? '#a55' : '#777'
-  const hoverColor = destructive ? '#d77' : '#bbb'
+  const idleBorder = destructive ? '#2a1515' : '#222'
+  const hoverBorder = destructive ? '#3a1515' : '#333'
+  const idleColor  = destructive ? '#c44' : '#555'
+  const hoverColor = destructive ? '#e55' : '#999'
 
   return (
     <button

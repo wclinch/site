@@ -198,9 +198,9 @@ function EmptySource({ uploadFiles }: { uploadFiles: (files: FileList | File[]) 
           fontSize: '12px', color: fileDragOver ? '#888' : '#555',
           letterSpacing: '0.04em', textAlign: 'center', transition: 'color 0.15s',
         }}>
-          {fileDragOver ? 'Release to add' : 'Open a source from Stack.'}
+          {fileDragOver ? 'Release to add' : 'Open a source from this workspace.'}
         </span>
-        <span style={{ fontSize: '11px', color: '#333', letterSpacing: '0.03em', textAlign: 'center' }}>
+        <span style={{ fontSize: '11px', color: '#444', letterSpacing: '0.03em', textAlign: 'center' }}>
           Drop a PDF or document here.
         </span>
       </div>
@@ -208,13 +208,13 @@ function EmptySource({ uploadFiles }: { uploadFiles: (files: FileList | File[]) 
       <button
         onClick={() => fileRef.current?.click()}
         style={{
-          background: 'none', border: '1px solid #1e1e1e', borderRadius: '3px',
-          color: '#666', fontSize: '11px', padding: '6px 14px',
+          background: 'none', border: '1px solid #222', borderRadius: '3px',
+          color: '#555', fontSize: '11px', padding: '6px 14px',
           cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.04em', outline: 'none',
           transition: 'border-color 0.12s, color 0.12s',
         }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.color = '#aaa' }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = '#1e1e1e'; e.currentTarget.style.color = '#666' }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.color = '#999' }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = '#222'; e.currentTarget.style.color = '#555' }}
       >
         Add file
       </button>
@@ -239,13 +239,13 @@ function PaneHeader({ label, onClose, isFocused, onToggleFocus }: {
 }) {
   return (
     <div style={{
-      height: '32px', flexShrink: 0,
+      height: '28px', flexShrink: 0,
       display: 'flex', alignItems: 'center',
       padding: '0 8px 0 14px',
       borderBottom: '1px solid #1a1a1a',
       gap: '4px',
     }}>
-      <span style={{ flex: 1, fontSize: '11px', color: '#555', letterSpacing: '0.04em', userSelect: 'none' }}>
+      <span style={{ flex: 1, fontSize: '10px', color: '#666', letterSpacing: '0.05em', userSelect: 'none' }}>
         {label}
       </span>
       <IconBtn onClick={onToggleFocus} title={isFocused ? 'Restore split' : 'Expand'}>
@@ -289,22 +289,22 @@ function UrlOpenCard({ source }: { source: QueuedSource }) {
           <button
             onClick={() => window.electronAPI?.research?.navigate('A', url)}
             style={{
-              background: 'none', border: '1px solid #252525', borderRadius: '3px',
-              color: '#666', fontSize: '11px', padding: '6px 14px',
+              background: 'none', border: '1px solid #222', borderRadius: '3px',
+              color: '#555', fontSize: '11px', padding: '6px 14px',
               cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.04em', outline: 'none',
               transition: 'border-color 0.12s, color 0.12s',
             }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#3a3a3a'; e.currentTarget.style.color = '#aaa' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = '#252525'; e.currentTarget.style.color = '#666' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.color = '#999' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#222'; e.currentTarget.style.color = '#555' }}
           >
             Open in Research
           </button>
         )}
         <a
           href={url} target="_blank" rel="noopener noreferrer"
-          style={{ fontSize: '11px', color: '#3a3a3a', letterSpacing: '0.04em', textDecoration: 'none' }}
-          onMouseEnter={e => (e.currentTarget.style.color = '#666')}
-          onMouseLeave={e => (e.currentTarget.style.color = '#3a3a3a')}
+          style={{ fontSize: '11px', color: '#444', letterSpacing: '0.04em', textDecoration: 'none' }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#777')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#444')}
         >
           Open externally ↗
         </a>
@@ -474,7 +474,7 @@ function IconBtn({ onClick, title, children }: {
       style={{
         background: 'none', border: 'none', cursor: 'pointer',
         padding: '4px', lineHeight: 0,
-        color: hov ? '#bbb' : '#777',
+        color: hov ? '#999' : '#555',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         borderRadius: '2px', flexShrink: 0,
       }}

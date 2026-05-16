@@ -19,18 +19,33 @@ import { dirname, join } from 'node:path'
 const __dirname    = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT    = join(__dirname, '..')
 const ELECTRON_PKG = join(REPO_ROOT, 'node_modules', 'electron')
-const APP_ROOT     = join(ELECTRON_PKG, 'dist', 'Electron.app')
-const PLIST        = join(APP_ROOT, 'Contents', 'Info.plist')
-const MACOS        = join(APP_ROOT, 'Contents', 'MacOS')
-const RESOURCES    = join(APP_ROOT, 'Contents', 'Resources')
+const DIST         = join(ELECTRON_PKG, 'dist')
 const PATH_FILE    = join(ELECTRON_PKG, 'path.txt')
 const SITE_ICON    = join(REPO_ROOT, 'build', 'icon.icns')
 const DESIRED      = 'Site'
 const BUNDLE_ID    = 'com.site.app.dev'
 
+// The bundle may already be renamed Site.app from a previous run.
+const APP_ROOT  = existsSync(join(DIST, 'Site.app'))
+  ? join(DIST, 'Site.app')
+  : join(DIST, 'Electron.app')
+const PLIST     = join(APP_ROOT, 'Contents', 'Info.plist')
+const MACOS     = join(APP_ROOT, 'Contents', 'MacOS')
+const RESOURCES = join(APP_ROOT, 'Contents', 'Resources')
+
 if (!existsSync(PLIST)) {
   // Not on macOS or electron isn't installed yet — skip silently.
   process.exit(0)
+}
+
+// Rename the .app bundle itself if it's still called Electron.app.
+// macOS uses the bundle folder name for the Dock label regardless of
+// what the plist says, so this is the most reliable fix.
+const electronBundle = join(DIST, 'Electron.app')
+const siteBundle     = join(DIST, 'Site.app')
+if (existsSync(electronBundle) && !existsSync(siteBundle)) {
+  const { renameSync: rn } = await import('node:fs')
+  rn(electronBundle, siteBundle)
 }
 
 function read(key) {
@@ -82,18 +97,20 @@ if (existsSync(oldBin) && !existsSync(newBin)) {
 
 // 4) `node_modules/electron/path.txt` is what the `electron` npm CLI
 //    reads to locate the binary. Rewrite so `electron .` resolves.
-writeFileSync(PATH_FILE, `Electron.app/Contents/MacOS/${DESIRED}`)
+writeFileSync(PATH_FILE, `Site.app/Contents/MacOS/${DESIRED}`)
 
 // Touch the .app so Launch Services notices the change.
 execSync(`touch "${APP_ROOT}"`)
 
-// Force-refresh the Launch Services database. Without this macOS keeps
-// showing the cached "Electron" label even after the plist is correct.
+// Force-refresh the Launch Services database, then restart the Dock so
+// macOS picks up the new name immediately. Without killall Dock, the
+// cached "Electron" label persists even after a correct plist + lsregister.
 try {
   execSync(
     `/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister -f "${APP_ROOT}"`,
     { stdio: 'ignore' }
   )
 } catch {}
+try { execSync('killall Dock', { stdio: 'ignore' }) } catch {}
 
 console.log(`[rename-electron-dev] Patched dev Electron bundle → ${DESIRED} (plist + binary)`)

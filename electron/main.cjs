@@ -208,6 +208,16 @@ function switchToTab(win, pid, id) {
   panel.activeTabId = id
   if (!(inFullscreenTransition || isMinimized)) showActiveView(win, pid)
   const state = panel.tabStates.get(id) || { url: '', title: '', loading: false, canGoBack: false, canGoForward: false }
+
+  // If this view was restored from a saved workspace but never loaded, load it now.
+  const switchView = panel.tabViews.get(id)
+  if (switchView && !switchView.webContents.isDestroyed() && state.url) {
+    const loaded = switchView.webContents.getURL()
+    if (!loaded || loaded === 'about:blank') {
+      switchView.webContents.loadURL(state.url).catch(() => {})
+    }
+  }
+
   win.webContents.send('research:url-changed',     pid, state.url, state.canGoBack, state.canGoForward)
   win.webContents.send('research:title-changed',   pid, state.title)
   win.webContents.send('research:loading-changed', pid, state.loading)
@@ -433,16 +443,18 @@ function setupResearchBrowser(win) {
       const state = panel.tabStates.get(ids[i])
       if (state) { state.url = workspaceTabs[i].url || ''; state.title = workspaceTabs[i].title || '' }
     }
-    panel.activeTabId = ids[0]
+    const activeIdx = workspaceTabs.findIndex(t => t.active)
+    panel.activeTabId = ids[activeIdx >= 0 ? activeIdx : 0]
     emitTabsChanged(win, 'A')
 
-    const firstUrl = workspaceTabs[0].url
-    if (firstUrl) {
+    const activeTabIdx = activeIdx >= 0 ? activeIdx : 0
+    const activeUrl = workspaceTabs[activeTabIdx].url
+    if (activeUrl) {
       if (savedBounds && windowReady) {
         showActiveView(win, 'A')
-        panel.tabViews.get(ids[0])?.webContents.loadURL(firstUrl).catch(() => {})
+        panel.tabViews.get(ids[activeTabIdx])?.webContents.loadURL(activeUrl).catch(() => {})
       } else {
-        panel.pendingUrl = firstUrl
+        panel.pendingUrl = activeUrl
         if (windowReady) win.webContents.send('research:recalc-bounds')
       }
     } else if (savedBounds && windowReady) {
@@ -507,6 +519,12 @@ function createWindow() {
   mainWindow.webContents.on('will-navigate', (event, url) => {
     const ok = isDev ? url.startsWith('http://localhost:3000') : url.startsWith('site://')
     if (!ok) { event.preventDefault(); shell.openExternal(url) }
+    if (ok && !url.includes('/app')) {
+      const panel = panels['A']
+      for (const [, view] of panel.tabViews) {
+        try { view.setBounds({ x: 0, y: 0, width: 0, height: 0 }) } catch {}
+      }
+    }
   })
 
   if (isDev) {

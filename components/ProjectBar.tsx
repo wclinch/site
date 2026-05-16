@@ -5,7 +5,7 @@ import StorageBadge from './StorageBadge'
 
 export default function ProjectBar() {
   const {
-    projects, activeId, sources,
+    projects, activeId,
     switchWorkspace, newWorkspace, saveWorkspace, removeWorkspace,
     updateProject,
   } = useApp()
@@ -13,11 +13,9 @@ export default function ProjectBar() {
   const [editingProjId,  setEditingProjId]  = useState<string | null>(null)
   const [fromSaveBtn,    setFromSaveBtn]     = useState(false)
   const [nameInput,      setNameInput]       = useState('')
-  const [confirmNew,     setConfirmNew]      = useState(false)
   const [flashSaved,     setFlashSaved]      = useState(false)
   const [pendingRmId,    setPendingRmId]     = useState<string | null>(null)
 
-  const newTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
   const savedTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
   const rmTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null)
   const tabStripRef    = useRef<HTMLDivElement>(null)
@@ -88,15 +86,7 @@ export default function ProjectBar() {
   }
 
   function handleNew() {
-    if (!confirmNew && sources.length > 0) {
-      setConfirmNew(true)
-      if (newTimerRef.current) clearTimeout(newTimerRef.current)
-      newTimerRef.current = setTimeout(() => setConfirmNew(false), 2500)
-    } else {
-      setConfirmNew(false)
-      if (newTimerRef.current) clearTimeout(newTimerRef.current)
-      newWorkspace()
-    }
+    newWorkspace()
   }
 
   function handleRemoveClick(e: React.MouseEvent, projId: string) {
@@ -128,7 +118,7 @@ export default function ProjectBar() {
         display: 'flex', alignItems: 'center', flexShrink: 0,
         textDecoration: 'none', lineHeight: 1,
         opacity: 0.85, transition: 'opacity 0.15s',
-        padding: '0 0 0 16px', marginRight: '10px',
+        padding: '0 0 0 20px', marginRight: '10px',
         WebkitAppRegion: 'no-drag',
       } as React.CSSProperties}
         onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
@@ -144,8 +134,8 @@ export default function ProjectBar() {
         display: 'flex', alignItems: 'center', gap: '1px', flexShrink: 0,
         WebkitAppRegion: 'no-drag',
       } as React.CSSProperties}>
-        <NavBtn onClick={handleNew} danger={confirmNew}>
-          {confirmNew ? 'Confirm?' : 'New'}
+        <NavBtn onClick={handleNew}>
+          New
         </NavBtn>
         <NavBtn onClick={handleSave} disabled={!activeId}>
           {flashSaved ? 'Saved' : isUntitled ? 'Save As' : 'Save'}
@@ -221,7 +211,7 @@ export default function ProjectBar() {
             fontSize: '11px', color: '#555', letterSpacing: '0.04em',
             textDecoration: 'none', transition: 'color 0.15s',
           }}
-          onMouseEnter={e => (e.currentTarget.style.color = '#aaa')}
+          onMouseEnter={e => (e.currentTarget.style.color = '#888')}
           onMouseLeave={e => (e.currentTarget.style.color = '#555')}
         >
           Support
@@ -249,8 +239,8 @@ function WorkspaceTab({ name, active, rmArmed, onClick, onDoubleClick, onRemoveC
       style={{
         display: 'flex', alignItems: 'center', gap: '3px',
         height: '24px', padding: '0 5px 0 10px', flexShrink: 0,
-        background: active ? '#151515' : 'none',
-        border: `1px solid ${active ? '#2a2a2a' : 'transparent'}`,
+        background: active ? '#111' : 'none',
+        border: `1px solid ${active ? '#222' : 'transparent'}`,
         borderRadius: '3px',
         cursor: active ? 'default' : 'pointer',
         userSelect: 'none',
@@ -259,7 +249,7 @@ function WorkspaceTab({ name, active, rmArmed, onClick, onDoubleClick, onRemoveC
     >
       <span style={{
         fontSize: '11px', letterSpacing: '0.03em', whiteSpace: 'nowrap',
-        color: active ? '#999' : '#3a3a3a',
+        color: active ? '#aaa' : '#555',
       }}>
         {name}
       </span>
@@ -271,13 +261,13 @@ function WorkspaceTab({ name, active, rmArmed, onClick, onDoubleClick, onRemoveC
           width: '14px', height: '14px', flexShrink: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'none', border: 'none', borderRadius: '2px',
-          color: rmArmed ? '#d44' : '#282828',
+          color: rmArmed ? '#c44' : '#333',
           fontSize: '13px', lineHeight: 1,
           cursor: 'pointer', padding: 0, outline: 'none',
           fontFamily: 'inherit', transition: 'color 0.1s',
         }}
-        onMouseEnter={e => { if (!rmArmed) e.currentTarget.style.color = '#555' }}
-        onMouseLeave={e => { if (!rmArmed) e.currentTarget.style.color = '#282828' }}
+        onMouseEnter={e => { if (!rmArmed) e.currentTarget.style.color = '#777' }}
+        onMouseLeave={e => { if (!rmArmed) e.currentTarget.style.color = '#333' }}
       >×</button>
     </div>
   )
@@ -288,8 +278,8 @@ function WorkspaceTab({ name, active, rmArmed, onClick, onDoubleClick, onRemoveC
 function NavBtn({ children, onClick, danger, disabled }: {
   children: React.ReactNode; onClick: () => void; danger?: boolean; disabled?: boolean
 }) {
-  const base  = disabled ? '#2a2a2a' : danger ? '#c44' : '#444'
-  const hover = disabled ? '#2a2a2a' : danger ? '#e55' : '#aaa'
+  const base  = disabled ? '#333' : danger ? '#c44' : '#555'
+  const hover = disabled ? '#333' : danger ? '#e55' : '#999'
   return (
     <button
       onClick={onClick}

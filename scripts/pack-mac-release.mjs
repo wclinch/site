@@ -6,13 +6,13 @@
 //   release/Site-0.1.0-arm64-mac.zip   (just Site.app inside)
 //   release/Site-0.1.0-mac.zip         (just Site.app inside)
 //
-// We unzip each, drop our installer files alongside the .app, re-zip
+// We unzip each, drop our bundle files alongside the .app, re-zip
 // to a versioned filename, and write SHA256 checksums for both.
 //
 // Intentionally minimal: no DMG, no nested folders, no Installers/
 // subdirectory. When the buyer double-clicks the zip macOS expands it
-// in place and they see exactly three things: Site.app, Install
-// Site.command, Read me first.txt.
+// in place and they see exactly two things: Site.app,
+// Read me first.txt.
 
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
