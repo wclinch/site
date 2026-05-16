@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useApp } from '@/context/AppContext'
 import type { QueuedSource } from '@/lib/types'
 
@@ -8,8 +8,9 @@ import type { QueuedSource } from '@/lib/types'
 export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
   const {
     stackSources, setContextMenu,
-    selectedId, setSelectedId, setSelectedId2, patchSource, openInPane,
+    selectedId, setSelectedId, setSelectedId2, patchSource, openInPane, uploadFiles,
   } = useApp()
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [renameId,    setRenameId]    = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
@@ -74,7 +75,31 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
         flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden',
         border: '1px solid #1e1e1e', borderRadius: '4px',
       }}>
-        <SectionHeader title="Sources" />
+        <SectionHeader title="Sources" action={
+          <>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              title="Add file"
+              style={{
+                background: 'none', border: 'none', padding: '4px 2px',
+                cursor: 'pointer', color: '#444', lineHeight: 0,
+                display: 'flex', alignItems: 'center',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#999' }}
+              onMouseLeave={e => { e.currentTarget.style.color = '#444' }}
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" />
+              </svg>
+            </button>
+            <input
+              ref={fileInputRef} type="file"
+              accept=".pdf,.png,.jpg,.jpeg,.webp,.gif" multiple
+              style={{ display: 'none' }}
+              onChange={e => { if (e.target.files?.length) { uploadFiles(e.target.files); e.target.value = '' } }}
+            />
+          </>
+        } />
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 0 8px', display: 'flex', flexDirection: 'column' }}>
           {fileSources.length === 0 ? (
             <EmptyRow text="Files you add stay with this workspace." />
