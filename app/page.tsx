@@ -45,38 +45,38 @@ export default function Home() {
             Welcome to Site
           </h1>
           <p style={{ ...BODY, color: '#666', marginBottom: '24px' }}>
-            Site keeps your research workspace together. Come back where you left off.
+            A persistent research workspace. Add sources, browse, and save pages — everything stays with your workspace when you come back.
           </p>
           <a href="/app" className="cta-link" style={{ alignSelf: 'flex-start' }}>Open Site</a>
         </div>
 
-        {/* Open */}
+        {/* Install */}
         <div style={SECTION}>
-          <span style={LABEL}>Open</span>
+          <span style={LABEL}>Install</span>
           <p style={BODY}>
-            Drag <span style={{ color: '#888' }}>Site.app</span> into your Applications folder. Then double-click to open.
+            Drag <span style={{ color: '#888' }}>Site.app</span> to your Applications folder, then double-click to open.
           </p>
           <p style={BODY}>
-            macOS will block the app once because Site is not notarized. See <span style={{ color: '#777' }}>Read me first.txt</span> in the download for instructions to get past the prompt.
+            macOS will block Site on first launch because it is not notarized. The included <span style={{ color: '#777' }}>Read me first.txt</span> has two ways to clear it — takes under a minute.
           </p>
-          <p style={NOTE}>After first launch macOS remembers Site. You will not see the prompt again.</p>
+          <p style={NOTE}>After the first launch, macOS remembers Site and will not prompt again.</p>
         </div>
 
-        {/* Unlock */}
+        {/* License */}
         <div style={SECTION}>
-          <span style={LABEL}>Unlock</span>
-          <p style={BODY}>Enter the license key from your purchase when Site asks for it.</p>
-          <p style={NOTE}>One-time beta access. No subscription.</p>
+          <span style={LABEL}>License</span>
+          <p style={BODY}>Paste your license key when Site prompts you on first open.</p>
+          <p style={NOTE}>One-time purchase. No subscription.</p>
         </div>
 
-        {/* How Site works */}
+        {/* How it works */}
         <div style={SECTION}>
-          <span style={LABEL}>How Site works</span>
+          <span style={LABEL}>How it works</span>
           {([
-            ['Research',  'Search the web and open tools in Research tabs on the right. Save any page to Sites.'],
-            ['Sources',   'Add PDFs and files to Sources. Open them in Source 1 and Source 2 in the center.'],
-            ['Workspace', 'Sources, Sites, and Research tabs restore with each workspace. Come back later and everything is still there.'],
-            ['Save As',   'Name a workspace to save it. Switch between workspaces at the top.'],
+            ['Research',  'Browser tabs on the right. Search the web, navigate URLs, and save any page to Sites.'],
+            ['Sources',   'Add PDFs and images to Sources. Open them side by side in Source 1 and Source 2.'],
+            ['Workspace', 'Everything in a workspace — sources, saved pages, open tabs — is restored when you return.'],
+            ['Save As',   'Name and save the current workspace. Switch between workspaces from the top bar.'],
           ] as const).map(([label, body]) => (
             <p key={label} style={BODY}>
               <span style={{ color: '#888' }}>{label}</span> — {body}
@@ -87,14 +87,8 @@ export default function Home() {
         {/* Storage */}
         <div style={SECTION}>
           <span style={LABEL}>Storage</span>
-          <p style={BODY}>250 MB for uploaded Sources. Saved Sites do not count toward storage.</p>
-          <p style={BODY}><span style={{ color: '#888' }}>Site → Reset Site Data…</span> clears all local data. Cannot be reversed.</p>
-        </div>
-
-        {/* Beta */}
-        <div style={SECTION}>
-          <span style={LABEL}>Beta</span>
-          <p style={BODY}>Site is in beta. Expect rough edges. Your feedback helps shape the product.</p>
+          <p style={BODY}>250 MB for uploaded Sources. Saved Sites store metadata only and do not count toward storage.</p>
+          <p style={NOTE}><span style={{ color: '#555' }}>Site → Reset Site Data…</span> clears all local data. This cannot be undone.</p>
         </div>
 
         {/* Support */}
@@ -105,6 +99,7 @@ export default function Home() {
               Official_Site_Support@protonmail.com
             </a>
           </p>
+          <p style={NOTE}>Site is in beta. Rough edges are expected — your feedback helps.</p>
         </div>
 
       </main>
