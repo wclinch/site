@@ -47,7 +47,7 @@ export default function Home() {
           <p style={{ ...BODY, color: '#666', marginBottom: '24px' }}>
             A persistent research workspace. Add sources, browse, and save pages — everything stays with your workspace when you come back.
           </p>
-          <a href="/app" style={{ alignSelf: 'flex-start', fontSize: '13px', color: '#777', textDecoration: 'underline', textDecorationColor: '#333', textUnderlineOffset: '3px', letterSpacing: '0.04em' }}>Open Site →</a>
+          <a href="/app" style={{ alignSelf: 'flex-start', fontSize: '13px', color: '#777', textDecoration: 'none', letterSpacing: '0.04em' }}>Open Site →</a>
         </div>
 
         {/* Install */}
