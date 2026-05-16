@@ -95,7 +95,7 @@ export default function Home() {
         <div style={SECTION}>
           <span style={LABEL}>Support</span>
           <p style={BODY}>
-            <a href="mailto:Official_Site_Support@protonmail.com?subject=Site%20support" style={{ color: '#777', textDecoration: 'underline', textDecorationColor: '#2a2a2a', textUnderlineOffset: '3px' }}>
+            <a href="mailto:Official_Site_Support@protonmail.com?subject=Site%20support" style={{ color: '#777', textDecoration: 'none' }}>
               Official_Site_Support@protonmail.com
             </a>
           </p>
@@ -104,9 +104,6 @@ export default function Home() {
 
       </main>
 
-      <footer style={{ padding: '20px', maxWidth: '580px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
-        <span style={{ fontSize: '11px', color: '#333', letterSpacing: '0.08em' }}>Site Beta</span>
-      </footer>
     </div>
   )
 }
