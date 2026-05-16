@@ -248,7 +248,7 @@ function PaneHeader({ label, onClose, isFocused, onToggleFocus }: {
       <span style={{ flex: 1, fontSize: '10px', color: '#666', letterSpacing: '0.05em', userSelect: 'none' }}>
         {label}
       </span>
-      <IconBtn onClick={onToggleFocus} title={isFocused ? 'Restore split' : 'Expand'}>
+      <IconBtn key={String(isFocused)} onClick={onToggleFocus} title={isFocused ? 'Restore split' : 'Expand'}>
         {isFocused ? <CollapseIcon /> : <ExpandIcon />}
       </IconBtn>
       {onClose && <IconBtn onClick={onClose} title="Close"><CloseIcon /></IconBtn>}
