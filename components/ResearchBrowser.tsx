@@ -167,8 +167,9 @@ export default function ResearchBrowser() {
       } else {
         const active = newTabs.find(t => t.id === newActiveId)
         if (active?.url) setUrlInput(active.url)
-        // If no tab has a URL yet (fresh workspace), show home screen.
-        if (newTabs.every(t => !t.url)) setHomeMode(true)
+        else setUrlInput('')
+        // Show home screen whenever the active tab has no URL (new tab, blank workspace, etc).
+        setHomeMode(!active?.url)
         // Sync localStorage from authoritative main-process state — includes
         // title and active flag so workspace restore knows which tab to activate.
         try {
