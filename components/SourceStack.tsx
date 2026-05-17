@@ -8,27 +8,32 @@ import type { QueuedSource } from '@/lib/types'
 export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
   const {
     stackSources, setContextMenu,
-    selectedId, setSelectedId, setSelectedId2, patchSource, openInPane, uploadFiles,
+    selectedId, selectedId2, patchSource, openInPane, uploadFiles,
+    pinPageToView, view1Page, view2Page, openDocInPane,
   } = useApp()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [renameId,    setRenameId]    = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
-  // Pane preferences: absence = Source 1 (default), present = Source 2
+  // Pane preferences: absence = View 1 (default), present = View 2
   const [panePrefs, setPanePrefs] = useState<Record<string, 2>>({})
 
-  function getPref(srcId: string): 1 | 2 { return panePrefs[srcId] ?? 1 }
+  // Effective pref: actual open-in-view-2 state takes precedence over stored preference.
+  function getEffectivePref(srcId: string): 1 | 2 {
+    if (selectedId2 === srcId) return 2
+    return panePrefs[srcId] ?? 1
+  }
   function togglePref(srcId: string, e: React.MouseEvent) {
     e.stopPropagation()
+    const current = getEffectivePref(srcId)
     setPanePrefs(prev => {
       const next = { ...prev }
-      if (next[srcId] === 2) delete next[srcId]; else next[srcId] = 2
+      if (current === 2) delete next[srcId]; else next[srcId] = 2
       return next
     })
   }
   function openWithPref(srcId: string) {
-    if (getPref(srcId) === 2) setSelectedId2(srcId)
-    else                       setSelectedId(srcId)
+    openDocInPane(getEffectivePref(srcId), srcId)
   }
 
   useEffect(() => {
@@ -75,11 +80,11 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
         flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden',
         border: '1px solid #1e1e1e', borderRadius: '4px',
       }}>
-        <SectionHeader title="Sources" action={
+        <SectionHeader title="Documents" action={
           <>
             <button
               onClick={() => fileInputRef.current?.click()}
-              title="Add file"
+              title="Add document"
               style={{
                 background: 'none', border: 'none', padding: '4px 2px',
                 cursor: 'pointer', color: '#444', lineHeight: 0,
@@ -102,7 +107,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
         } />
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 0 8px', display: 'flex', flexDirection: 'column' }}>
           {fileSources.length === 0 ? (
-            <EmptyRow text="Files you add stay with this workspace." />
+            <EmptyRow text="Documents you add stay with this workspace." />
           ) : (
             fileSources.map(src => (
               <StackRow
@@ -116,7 +121,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
                 onRenameCancel={rowProps.onRenameCancel}
                 onClick={() => openWithPref(src.id)}
                 onContextMenu={e => rowProps.onContextMenu(src.id, e)}
-                pref={getPref(src.id)}
+                pref={getEffectivePref(src.id)}
                 onTogglePref={e => togglePref(src.id, e)}
               />
             ))
@@ -129,7 +134,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
         flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden',
         border: '1px solid #1e1e1e', borderRadius: '4px',
       }}>
-        <SectionHeader title="Sites" />
+        <SectionHeader title="Pages" />
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 0 8px', display: 'flex', flexDirection: 'column' }}>
           {siteSources.length === 0 ? (
             <EmptyRow text="Pages you save stay with this workspace." />
@@ -144,8 +149,14 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
                 onRenameChange={rowProps.onRenameChange}
                 onRenameCommit={rowProps.onRenameCommit}
                 onRenameCancel={rowProps.onRenameCancel}
-                onClick={() => rowProps.onClick(src.id)}
+                onClick={() => pinPageToView(getEffectivePref(src.id) === 2 ? 2 : 1, src)}
                 onContextMenu={e => rowProps.onContextMenu(src.id, e)}
+                pinButtons={{
+                  onPin1: () => pinPageToView(1, src),
+                  onPin2: () => pinPageToView(2, src),
+                  active1: view1Page?.srcId === src.id,
+                  active2: view2Page?.srcId === src.id,
+                }}
               />
             ))
           )}
@@ -193,7 +204,7 @@ function EmptyRow({ text }: { text: string }) {
 function StackRow({
   src, isActive,
   renaming, renameValue, onRenameChange, onRenameCommit, onRenameCancel,
-  onClick, onContextMenu, pref, onTogglePref,
+  onClick, onContextMenu, pref, onTogglePref, pinButtons,
 }: {
   src: QueuedSource
   isActive: boolean
@@ -206,8 +217,10 @@ function StackRow({
   onContextMenu: (e: React.MouseEvent) => void
   pref?: 1 | 2
   onTogglePref?: (e: React.MouseEvent) => void
+  pinButtons?: { onPin1: () => void; onPin2: () => void; active1?: boolean; active2?: boolean }
 }) {
   const [hov, setHov] = useState(false)
+  const label = src.label || src.raw
 
   return (
     <div
@@ -220,13 +233,12 @@ function StackRow({
         e.dataTransfer.setData('application/x-proof-source-id', src.id)
         e.dataTransfer.effectAllowed = 'move'
       }}
-      title={renaming ? undefined : (src.label || src.raw)}
       style={{
-        display: 'flex', alignItems: 'center', gap: '8px',
-        padding: '7px 10px 7px 14px',
+        display: 'flex', alignItems: 'center', gap: '6px',
+        padding: '8px 10px 8px 14px',
         cursor: renaming ? 'text' : 'pointer', userSelect: 'none',
-        background: isActive ? '#111' : hov ? '#0d0d0d' : 'transparent',
-        borderLeft: isActive ? '2px solid #444' : '2px solid transparent',
+        background: isActive ? '#131313' : hov ? '#0d0d0d' : 'transparent',
+        borderLeft: isActive ? '2px solid #383838' : '2px solid transparent',
         transition: 'background 0.1s, border-color 0.1s',
       }}
     >
@@ -246,37 +258,42 @@ function StackRow({
           style={{
             flex: 1, minWidth: 0,
             background: 'transparent', border: 'none', outline: 'none',
-            fontSize: '11px', color: '#ccc', fontFamily: 'inherit',
-            padding: 0, letterSpacing: '0.02em',
+            fontSize: '12px', color: '#bbb', fontFamily: 'inherit',
+            padding: 0, letterSpacing: '0.01em',
           }}
         />
       ) : (
-        <span style={{
-          flex: 1, minWidth: 0,
-          fontSize: '11px', letterSpacing: '0.02em',
-          color: '#ccc',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-          {src.label || src.raw}
+        <span
+          title={label}
+          style={{
+            flex: 1, minWidth: 0,
+            fontSize: '12px', letterSpacing: '0.01em',
+            color: '#bbb',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}
+        >
+          {label}
         </span>
       )}
+
+      {/* View pref toggle — Documents only */}
       {pref !== undefined && onTogglePref && (
         <button
           onClick={renaming ? undefined : onTogglePref}
-          title={renaming ? undefined : (pref === 1 ? 'Opens in Source 1 — click for Source 2' : 'Opens in Source 2 — click for Source 1')}
+          title={renaming ? undefined : (pref === 1 ? 'Opens in View 1 — click for View 2' : 'Opens in View 2 — click for View 1')}
           style={{
             flexShrink: 0,
             width: '20px', height: '20px',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             background: 'none', border: 'none', padding: 0, outline: 'none',
-            color: '#444',
+            color: pref === 2 ? '#666' : '#333',
             cursor: renaming ? 'default' : 'pointer',
             transition: 'color 0.12s',
             visibility: renaming ? 'hidden' : 'visible',
             pointerEvents: renaming ? 'none' : 'auto',
           }}
-          onMouseEnter={e => { if (!renaming) { e.stopPropagation(); e.currentTarget.style.color = '#999' } }}
-          onMouseLeave={e => { e.currentTarget.style.color = '#444' }}
+          onMouseEnter={e => { if (!renaming) { e.stopPropagation(); e.currentTarget.style.color = '#888' } }}
+          onMouseLeave={e => { e.currentTarget.style.color = pref === 2 ? '#666' : '#333' }}
         >
           <svg width="8" height="5" viewBox="0 0 8 5" fill="none" style={{ display: 'block' }}>
             <path
@@ -286,35 +303,52 @@ function StackRow({
           </svg>
         </button>
       )}
-      <TypeBadge kind={badgeKind(src)} />
+
+      {/* View pin buttons — Pages only */}
+      {pinButtons && !renaming && (
+        <>
+          <PinBtn label="1" title="Open in View 1" active={!!pinButtons.active1} onClick={e => { e.stopPropagation(); pinButtons.onPin1() }} />
+          <PinBtn label="2" title="Open in View 2" active={!!pinButtons.active2} onClick={e => { e.stopPropagation(); pinButtons.onPin2() }} />
+        </>
+      )}
+
+      {/* File type badge — Documents only, neutral */}
+      {src.fileType !== 'url' && <TypeBadge kind={src.fileType === 'image' ? 'IMG' : 'PDF'} />}
     </div>
   )
 }
 
-function badgeKind(src: QueuedSource): 'IMG' | 'PDF' | 'URL' | 'NOTE' {
-  if (src.fileType === 'image') return 'IMG'
-  if (src.fileType === 'url')   return 'URL'
-  if (src.fileType === 'note')  return 'NOTE'
-  return 'PDF'
+function PinBtn({ label, title, active, onClick }: {
+  label: string; title: string; active: boolean; onClick: (e: React.MouseEvent) => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{
+        flexShrink: 0, width: '16px', height: '16px',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'none', border: 'none', padding: 0, outline: 'none',
+        color: active ? '#aaa' : '#333',
+        fontSize: '9px', letterSpacing: '0.02em',
+        cursor: 'pointer', transition: 'color 0.12s', fontFamily: 'inherit',
+      }}
+      onMouseEnter={e => { e.stopPropagation(); e.currentTarget.style.color = '#bbb' }}
+      onMouseLeave={e => { e.currentTarget.style.color = active ? '#aaa' : '#333' }}
+    >
+      {label}
+    </button>
+  )
 }
 
-const KIND_COLOR: Record<'IMG' | 'PDF' | 'URL' | 'NOTE', string> = {
-  IMG:  '#5c9e6e',
-  PDF:  '#5c7eb8',
-  URL:  '#5ca8a0',
-  NOTE: '#b8935c',
-}
-
-function TypeBadge({ kind }: { kind: 'IMG' | 'PDF' | 'URL' | 'NOTE' }) {
-  const color = KIND_COLOR[kind]
+function TypeBadge({ kind }: { kind: 'IMG' | 'PDF' }) {
   return (
     <span style={{
       flexShrink: 0,
-      width: '36px', textAlign: 'center',
-      fontSize: '8px', letterSpacing: '0.1em',
-      color, background: '#141414',
+      fontSize: '8px', letterSpacing: '0.08em',
+      color: '#3a3a3a',
       border: '1px solid #1e1e1e', borderRadius: '2px',
-      padding: '1px 0',
+      padding: '1px 4px',
       fontVariantNumeric: 'tabular-nums',
     }}>
       {kind}

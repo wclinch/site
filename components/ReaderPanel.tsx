@@ -4,71 +4,94 @@ import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/Page/TextLayer.css'
 import { useApp } from '@/context/AppContext'
 import { getFile } from '@/lib/idb'
-import type { QueuedSource } from '@/lib/types'
+import type { QueuedSource, ViewPage } from '@/lib/types'
 
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 
-// Center column — Source 1 and Source 2, stacked vertically.
-// Both panels open PDFs, docs, and images from the Stack.
-// Clicking a Stack source smart-routes to the first empty pane.
-// Either pane also accepts drops from Stack rows or direct file drops.
+// Center column — single View by default, Split View optional.
 export default function ReaderPanel() {
   const {
     selectedSource, setSelectedId,
     selectedSource2, setSelectedId2,
     uploadFiles, patchSource,
+    view1Page, view2Page, clearView, pinPageToView,
+    sources,
+    splitView, setSplitView,
   } = useApp()
 
-  const [focusedPane, setFocusedPane] = useState<null | 1 | 2>(null)
-
-  function toggleFocus(pane: 1 | 2) {
-    setFocusedPane(prev => prev === pane ? null : pane)
+  function handleToggleSplit() {
+    setSplitView(!splitView)
   }
 
   function handleClose1() {
-    setSelectedId(null)
-    if (focusedPane === 1) setFocusedPane(null)
+    if (view1Page) clearView(1)
+    else setSelectedId(null)
   }
 
   function handleClose2() {
-    setSelectedId2(null)
-    if (focusedPane === 2) setFocusedPane(null)
+    if (view2Page) clearView(2)
+    else setSelectedId2(null)
+    setSplitView(false)
   }
 
-  // When a pane is focused, the other collapses to flex:0.
-  // The wrapper div stays mounted so scroll/page state is preserved.
-  const hide1 = focusedPane === 2
-  const hide2 = focusedPane === 1
+  // URL sources dragged onto a View pane get pinned as a live page.
+  function handleDrop1(srcId: string) {
+    const src = sources.find(s => s.id === srcId)
+    if (!src) return
+    if (src.fileType === 'url') { pinPageToView(1, src) }
+    else { clearView(1); setSelectedId(srcId) }
+  }
+  function handleDrop2(srcId: string) {
+    const src = sources.find(s => s.id === srcId)
+    if (!src) return
+    if (src.fileType === 'url') { pinPageToView(2, src) }
+    else { clearView(2); setSelectedId2(srcId) }
+  }
+
+  const hide1 = false
+  const hide2 = !splitView
+
+  const label1 = view1Page
+    ? truncate(view1Page.title)
+    : selectedSource ? truncate(selectedSource.label ?? selectedSource.raw) : (splitView ? 'View 1' : 'View')
+  const label2 = view2Page
+    ? truncate(view2Page.title)
+    : selectedSource2 ? truncate(selectedSource2.label ?? selectedSource2.raw) : 'View 2'
 
   return (
     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{
         flex: 1, minHeight: 0, padding: '5px',
         display: 'flex', flexDirection: 'column',
-        gap: focusedPane ? 0 : '4px',
+        gap: splitView ? '4px' : 0,
       }}>
         <div style={{ flex: hide1 ? 0 : 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <SourcePane
-            label={selectedSource ? truncate(selectedSource.label ?? selectedSource.raw) : 'Source 1'}
-            source={selectedSource}
-            onClose={handleClose1}
-            onSelectId={setSelectedId}
+          <ViewPane
+            viewId={1}
+            label={label1}
+            source={view1Page ? null : selectedSource}
+            viewPage={view1Page}
+            isHidden={hide1}
+            onClose={(view1Page || selectedSource) ? handleClose1 : undefined}
+            onSelectId={handleDrop1}
             uploadFiles={uploadFiles}
             patchSource={patchSource}
-            isFocused={focusedPane === 1}
-            onToggleFocus={() => toggleFocus(1)}
+            onToggleSplit={handleToggleSplit}
+            splitActive={splitView}
           />
         </div>
         <div style={{ flex: hide2 ? 0 : 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <SourcePane
-            label={selectedSource2 ? truncate(selectedSource2.label ?? selectedSource2.raw) : 'Source 2'}
-            source={selectedSource2}
+          <ViewPane
+            viewId={2}
+            label={label2}
+            source={view2Page ? null : selectedSource2}
+            viewPage={view2Page}
+            isHidden={hide2}
             onClose={handleClose2}
-            onSelectId={setSelectedId2}
+            alwaysShowClose
+            onSelectId={handleDrop2}
             uploadFiles={uploadFiles}
             patchSource={patchSource}
-            isFocused={focusedPane === 2}
-            onToggleFocus={() => toggleFocus(2)}
           />
         </div>
       </div>
@@ -80,38 +103,86 @@ function truncate(name: string): string {
   return name.length > 64 ? name.slice(0, 62) + '…' : name
 }
 
-// ─── Source pane ─────────────────────────────────────────────────────────────
+// ─── View pane ───────────────────────────────────────────────────────────────
 
-function SourcePane({
-  label, source, onClose, onSelectId, uploadFiles, patchSource,
-  isFocused, onToggleFocus,
+function ViewPane({
+  viewId, label, source, viewPage, isHidden, alwaysShowClose,
+  onClose, onSelectId, uploadFiles, patchSource,
+  onToggleSplit, splitActive,
 }: {
+  viewId: 1 | 2
   label: string
   source: QueuedSource | null
-  onClose: () => void
+  viewPage: ViewPage | null
+  isHidden: boolean
+  alwaysShowClose?: boolean
+  onClose?: () => void
   onSelectId: (id: string) => void
   uploadFiles: (files: FileList | File[]) => Promise<void>
   patchSource: (projId: string, srcId: string, patch: Partial<QueuedSource>) => void
-  isFocused: boolean
-  onToggleFocus: () => void
+  onToggleSplit?: () => void
+  splitActive?: boolean
 }) {
   const [dragOver, setDragOver] = useState(false)
+  const viewportRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const api = (window as any).electronAPI?.view
+    if (!api) return
+
+    if (!viewPage || isHidden) {
+      api.setBounds?.(String(viewId), { x: 0, y: 0, width: 0, height: 0, innerWidth: window.innerWidth, innerHeight: window.innerHeight })
+      return
+    }
+
+    function sendBounds() {
+      const el = viewportRef.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      api.setBounds?.(String(viewId), {
+        x: r.left, y: r.top,
+        width: Math.round(r.width), height: Math.round(r.height),
+        innerWidth: window.innerWidth, innerHeight: window.innerHeight,
+      })
+    }
+
+    // Send bounds before navigate so the native view has a valid rect when loadURL fires.
+    sendBounds()
+    api.navigate?.(String(viewId), viewPage.url)
+
+    const ro = new ResizeObserver(sendBounds)
+    if (viewportRef.current) ro.observe(viewportRef.current)
+    const unsub = (window as any).electronAPI?.research?.onBoundsRecalc?.(() => {
+      requestAnimationFrame(() => requestAnimationFrame(() => sendBounds()))
+    })
+
+    return () => {
+      ro.disconnect()
+      unsub?.()
+      api.setBounds?.(String(viewId), { x: 0, y: 0, width: 0, height: 0, innerWidth: window.innerWidth, innerHeight: window.innerHeight })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewPage?.url, isHidden, viewId])
+
+  const showClose = alwaysShowClose || !!(viewPage || source)
 
   return (
     <div
       style={{
         flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
-        border: `1px solid ${dragOver ? '#2a2a2a' : '#1e1e1e'}`, borderRadius: '4px',
+        border: `1px solid ${dragOver ? '#333' : '#222'}`, borderRadius: '4px',
         overflow: 'hidden',
         background: dragOver ? 'rgba(255,255,255,0.01)' : 'transparent',
         transition: 'border-color 0.15s, background 0.15s',
       }}
       onDragOver={e => {
+        if (viewPage) return
         const hasStackSrc = e.dataTransfer.types.includes('application/x-proof-source-id')
         const hasFile     = e.dataTransfer.types.includes('Files')
         if (hasStackSrc || hasFile) { e.preventDefault(); setDragOver(true) }
       }}
       onDragEnter={e => {
+        if (viewPage) return
         const hasStackSrc = e.dataTransfer.types.includes('application/x-proof-source-id')
         const hasFile     = e.dataTransfer.types.includes('Files')
         if (hasStackSrc || hasFile) setDragOver(true)
@@ -120,6 +191,7 @@ function SourcePane({
         if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDragOver(false)
       }}
       onDrop={e => {
+        if (viewPage) return
         e.preventDefault(); setDragOver(false)
         const srcId = e.dataTransfer.getData('application/x-proof-source-id')
         if (srcId) { onSelectId(srcId); return }
@@ -128,13 +200,15 @@ function SourcePane({
     >
       <PaneHeader
         label={label}
-        onClose={source ? onClose : undefined}
-        isFocused={isFocused}
-        onToggleFocus={onToggleFocus}
+        onClose={showClose ? onClose : undefined}
+        onToggleSplit={onToggleSplit}
+        splitActive={splitActive}
       />
-      {source
-        ? <SourceContent source={source} patchSource={patchSource} />
-        : <EmptySource uploadFiles={uploadFiles} />
+      {viewPage
+        ? <div ref={viewportRef} style={{ flex: 1, minHeight: 0, background: '#060606' }} />
+        : source
+          ? <SourceContent source={source} patchSource={patchSource} />
+          : <EmptySource uploadFiles={uploadFiles} />
       }
     </div>
   )
@@ -151,7 +225,6 @@ function SourceContent({
   if (source.fileType === 'note')  return <NoteEditor  source={source} patchSource={patchSource} />
   if (source.fileType === 'pdf')   return <PdfViewer   source={source} />
   if (source.fileType === 'image') return <ImageViewer source={source} />
-  if (source.fileType === 'url')   return <UrlOpenCard source={source} />
   return (
     <div style={{ flex: 1, background: '#080808', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <Empty label="Unsupported source type" />
@@ -198,26 +271,9 @@ function EmptySource({ uploadFiles }: { uploadFiles: (files: FileList | File[]) 
           fontSize: '12px', color: fileDragOver ? '#888' : '#555',
           letterSpacing: '0.04em', textAlign: 'center', transition: 'color 0.15s',
         }}>
-          {fileDragOver ? 'Release to add' : 'Open a source from this workspace.'}
-        </span>
-        <span style={{ fontSize: '11px', color: '#444', letterSpacing: '0.03em', textAlign: 'center' }}>
-          Drop a PDF or document here.
+          {fileDragOver ? 'Release to add' : 'Open a Document or Page from the left.'}
         </span>
       </div>
-
-      <button
-        onClick={() => fileRef.current?.click()}
-        style={{
-          background: 'none', border: '1px solid #222', borderRadius: '3px',
-          color: '#555', fontSize: '11px', padding: '6px 14px',
-          cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.04em', outline: 'none',
-          transition: 'border-color 0.12s, color 0.12s',
-        }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.color = '#999' }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = '#222'; e.currentTarget.style.color = '#555' }}
-      >
-        Add file
-      </button>
 
       <input
         ref={fileRef} type="file"
@@ -231,11 +287,11 @@ function EmptySource({ uploadFiles }: { uploadFiles: (files: FileList | File[]) 
 
 // ─── Pane header ─────────────────────────────────────────────────────────────
 
-function PaneHeader({ label, onClose, isFocused, onToggleFocus }: {
+function PaneHeader({ label, onClose, onToggleSplit, splitActive }: {
   label: string
   onClose?: () => void
-  isFocused?: boolean
-  onToggleFocus: () => void
+  onToggleSplit?: () => void
+  splitActive?: boolean
 }) {
   return (
     <div style={{
@@ -244,71 +300,13 @@ function PaneHeader({ label, onClose, isFocused, onToggleFocus }: {
       padding: '0 8px 0 14px',
       borderBottom: '1px solid #1a1a1a',
       gap: '4px',
-    }}>
-      <span style={{ flex: 1, fontSize: '10px', color: '#666', letterSpacing: '0.05em', userSelect: 'none' }}>
+      WebkitAppRegion: 'no-drag',
+    } as React.CSSProperties}>
+      <span style={{ flex: 1, fontSize: '10px', color: '#777', letterSpacing: '0.05em', userSelect: 'none' }}>
         {label}
       </span>
-      <IconBtn key={String(isFocused)} onClick={onToggleFocus} title={isFocused ? 'Restore split' : 'Expand'}>
-        {isFocused ? <CollapseIcon /> : <ExpandIcon />}
-      </IconBtn>
+      {onToggleSplit && <SplitBtn active={!!splitActive} onClick={onToggleSplit} />}
       {onClose && <IconBtn onClick={onClose} title="Close"><CloseIcon /></IconBtn>}
-    </div>
-  )
-}
-
-// ─── URL fallback card ───────────────────────────────────────────────────────
-
-function UrlOpenCard({ source }: { source: QueuedSource }) {
-  const url = source.url ?? source.raw
-  const hostname = (() => {
-    try { return new URL(url).hostname.replace(/^www\./, '') }
-    catch { return url }
-  })()
-  const isElectron = typeof window !== 'undefined' && !!window.electronAPI
-  const title = source.label && source.label !== url && source.label !== hostname
-    ? source.label : null
-
-  return (
-    <div style={{
-      flex: 1, display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      gap: '22px', padding: '40px 32px', background: '#080808',
-    }}>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', maxWidth: '340px', textAlign: 'center' }}>
-        {title && (
-          <span style={{ fontSize: '13px', color: '#999', letterSpacing: '0.02em', lineHeight: 1.45 }}>
-            {title}
-          </span>
-        )}
-        <span style={{ fontSize: '11px', color: '#444', letterSpacing: '0.04em' }}>
-          {hostname}
-        </span>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-        {isElectron && (
-          <button
-            onClick={() => window.electronAPI?.research?.navigate('A', url)}
-            style={{
-              background: 'none', border: '1px solid #222', borderRadius: '3px',
-              color: '#555', fontSize: '11px', padding: '6px 14px',
-              cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.04em', outline: 'none',
-              transition: 'border-color 0.12s, color 0.12s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.color = '#999' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = '#222'; e.currentTarget.style.color = '#555' }}
-          >
-            Open in Research
-          </button>
-        )}
-        <a
-          href={url} target="_blank" rel="noopener noreferrer"
-          style={{ fontSize: '11px', color: '#444', letterSpacing: '0.04em', textDecoration: 'none' }}
-          onMouseEnter={e => (e.currentTarget.style.color = '#777')}
-          onMouseLeave={e => (e.currentTarget.style.color = '#444')}
-        >
-          Open externally ↗
-        </a>
-      </div>
     </div>
   )
 }
@@ -336,7 +334,7 @@ function NoteEditor({
   }
 
   return (
-    <div style={{ flex: 1, overflow: 'auto', background: '#080808', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ flex: 1, overflow: 'auto', background: '#080808', display: 'flex', flexDirection: 'column', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
       <textarea
         value={text}
         onChange={e => handleChange(e.target.value)}
@@ -379,7 +377,7 @@ function ImageViewer({ source }: { source: QueuedSource }) {
   }, [])
 
   return (
-    <div style={{ flex: 1, background: '#080808', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ flex: 1, background: '#080808', display: 'flex', flexDirection: 'column', overflow: 'hidden', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
       {source.status !== 'done' && <Msg>Loading...</Msg>}
       {source.status === 'done' && !imgUrl && <Msg>Image failed to load.</Msg>}
       {source.status === 'done' && imgUrl && (
@@ -435,7 +433,7 @@ function PdfViewer({ source }: { source: QueuedSource }) {
   }, [])
 
   return (
-    <div ref={containerRef} style={{ flex: 1, overflow: 'auto', background: '#080808', display: 'flex', flexDirection: 'column' }}>
+    <div ref={containerRef} style={{ flex: 1, overflow: 'auto', background: '#080808', display: 'flex', flexDirection: 'column', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
       {source.status === 'queued'           && <Msg>Waiting...</Msg>}
       {source.status === 'extracting'       && <Msg>Reading document...</Msg>}
       {source.status === 'done' && !fileUrl && <Msg>Loading...</Msg>}
@@ -459,6 +457,32 @@ function PdfViewer({ source }: { source: QueuedSource }) {
         </div>
       )}
     </div>
+  )
+}
+
+// ─── Split button ─────────────────────────────────────────────────────────────
+
+function SplitBtn({ active, onClick }: { active: boolean; onClick: () => void }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      title={active ? 'Exit Split' : 'Split'}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        background: 'none', border: 'none', cursor: 'pointer',
+        padding: '4px', lineHeight: 0, flexShrink: 0,
+        color: active ? '#555' : hov ? '#555' : '#2e2e2e',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        borderRadius: '2px', transition: 'color 0.12s',
+      }}
+    >
+      <svg width="11" height="9" viewBox="0 0 11 9" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="0.65" y="0.65" width="4.1" height="7.7" rx="0.7" />
+        <rect x="6.25" y="0.65" width="4.1" height="7.7" rx="0.7" />
+      </svg>
+    </button>
   )
 }
 
@@ -493,23 +517,6 @@ function CloseIcon() {
   )
 }
 
-function ExpandIcon() {
-  return (
-    <svg width="9" height="9" viewBox="0 0 9 9" fill="none"
-      stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M1 3.5V1H3.5M5.5 1H8V3.5M8 5.5V8H5.5M3.5 8H1V5.5" />
-    </svg>
-  )
-}
-
-function CollapseIcon() {
-  return (
-    <svg width="9" height="9" viewBox="0 0 9 9" fill="none"
-      stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3.5 1V3.5H1M8 3.5H5.5V1M1 5.5H3.5V8M5.5 8V5.5H8" />
-    </svg>
-  )
-}
 
 // ─── Shared primitives ───────────────────────────────────────────────────────
 

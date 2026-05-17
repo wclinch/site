@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from '@/context/AppContext'
-import { resolveCommandToUrl } from '@/lib/url'
+import { resolveCommandToUrl, getShortcutHint, SHORTCUTS, SHORTCUT_LABELS } from '@/lib/url'
 
 type TabState = {
   id: string
@@ -58,7 +58,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
   onFocusToggle?: () => void
 }) {
   const panelId = 'A'
-  const { addUrl, sources } = useApp()
+  const { addUrl, sources, pinUrlToView } = useApp()
 
   const homeKey = 'proof-v3-browser-home'
   const tabsKey = 'proof-v3-research-tabs'
@@ -67,10 +67,12 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
   const [tabs, setTabs]               = useState<TabState[]>([makePlaceholderTab()])
   const [activeTabId, setActiveTabId] = useState<string>('tab-init')
   const [urlInput, setUrlInput]       = useState('')
+  const [urlFocused, setUrlFocused]   = useState(false)
   const [saveStatus, setSaveStatus]   = useState<null | 'saved' | 'duplicate'>(null)
   const [homeMode, setHomeMode]       = useState(() => readSavedHome(homeKey))
 
   const viewportRef    = useRef<HTMLDivElement>(null)
+  const urlInputRef    = useRef<HTMLInputElement>(null)
   const savedTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
   const homeModeRef    = useRef(readSavedHome(homeKey))
   const activeTabIdRef = useRef<string>('tab-init')
@@ -80,7 +82,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
   useEffect(() => { tabsRef.current = tabs }, [tabs])
   useEffect(() => { setIsElectron(!!window.electronAPI) }, [])
 
-  // Persist homeMode
+  // Persist homeMode + focus URL bar on new/blank tab
   useEffect(() => {
     homeModeRef.current = homeMode
     try { localStorage.setItem(homeKey, String(homeMode)) } catch {}
@@ -89,6 +91,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
         x: 0, y: 0, width: 0, height: 0,
         innerWidth: window.innerWidth, innerHeight: window.innerHeight,
       })
+      requestAnimationFrame(() => urlInputRef.current?.focus())
     } else {
       window.dispatchEvent(new Event('resize'))
     }
@@ -124,15 +127,16 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
     const unUrl = api.onUrlChanged(panelId, (url, back, fwd) => {
       setTabs(ts => ts.map(t => t.id === activeTabIdRef.current
         ? { ...t, url, canGoBack: back, canGoForward: fwd } : t))
+      // Never treat about:blank or empty as real navigation — doing so would
+      // set homeMode=false and cause a white flash for blank/clearing tabs.
+      if (!url || url === 'about:blank') return
       setUrlInput(url)
       setHomeMode(false)
       try {
-        if (url) {
-          const saved = JSON.parse(localStorage.getItem(tabsKey) || '[]') as Array<{ id: string; url: string }>
-          const idx = saved.findIndex(t => t.id === activeTabIdRef.current)
-          if (idx >= 0) saved[idx].url = url; else saved.push({ id: activeTabIdRef.current, url })
-          localStorage.setItem(tabsKey, JSON.stringify(saved))
-        }
+        const saved = JSON.parse(localStorage.getItem(tabsKey) || '[]') as Array<{ id: string; url: string }>
+        const idx = saved.findIndex(t => t.id === activeTabIdRef.current)
+        if (idx >= 0) saved[idx].url = url; else saved.push({ id: activeTabIdRef.current, url })
+        localStorage.setItem(tabsKey, JSON.stringify(saved))
       } catch {}
     })
 
@@ -333,7 +337,8 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
         <div style={{
           height: '28px', flexShrink: 0, display: 'flex', alignItems: 'center',
           background: '#050505', borderBottom: '1px solid #1a1a1a',
-        }}>
+          WebkitAppRegion: 'no-drag',
+        } as React.CSSProperties}>
           <div
             className="tab-strip"
             style={{
@@ -342,9 +347,6 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
               scrollbarWidth: 'none',
             }}
           >
-            {tabs.length === 0 && (
-              <span style={{ fontSize: '10px', color: '#2a2a2a', letterSpacing: '0.04em', padding: '0 4px', flexShrink: 0 }}>No tabs</span>
-            )}
             {tabs.map(tab => (
               <TabChip
                 key={tab.id}
@@ -360,7 +362,9 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
               title="New tab"
               borderLeft={false}
             >
-              <span style={{ fontSize: '14px', lineHeight: 1 }}>+</span>
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" />
+              </svg>
             </TabBarBtn>
           </div>
 
@@ -369,7 +373,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
             <TabBarBtn
               key={String(isFocused)}
               onClick={onFocusToggle}
-              title={isFocused ? 'Exit focus' : 'Focus Research'}
+              title={isFocused ? 'Exit focus' : 'Focus Web'}
             >
               {isFocused ? <FocusCollapseIcon /> : <FocusExpandIcon />}
             </TabBarBtn>
@@ -380,7 +384,8 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
         <div style={{
           height: '36px', flexShrink: 0, display: 'flex', alignItems: 'center',
           gap: '3px', padding: '0 8px', borderBottom: '1px solid #1a1a1a', background: '#060606',
-        }}>
+          WebkitAppRegion: 'no-drag',
+        } as React.CSSProperties}>
           <NavBtn disabled={!active?.canGoBack}    onClick={() => window.electronAPI?.research?.goBack(panelId)}    title="Back">‹</NavBtn>
           <NavBtn disabled={!active?.canGoForward} onClick={() => window.electronAPI?.research?.goForward(panelId)} title="Forward">›</NavBtn>
           <NavBtn onClick={() => window.electronAPI?.research?.reload(panelId)} title={active?.loading ? 'Stop' : 'Reload'}>
@@ -388,9 +393,11 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
           </NavBtn>
           <NavBtn onClick={() => setHomeMode(true)} title="Home">⌂</NavBtn>
           <input
+            ref={urlInputRef}
             value={urlInput}
             onChange={e => setUrlInput(e.target.value)}
-            onFocus={e => e.currentTarget.select()}
+            onFocus={e => { e.currentTarget.select(); setUrlFocused(true) }}
+            onBlur={() => setUrlFocused(false)}
             onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); navigate(urlInput) } }}
             placeholder="Search or enter URL"
             style={{
@@ -402,31 +409,49 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
             onBlurCapture={e  => { e.currentTarget.style.borderColor = '#222' }}
           />
           {active?.url && (
-            <button
-              onClick={savePage}
-              title="Save page to Sites"
-              style={{
-                height: '22px', flexShrink: 0, display: 'flex', alignItems: 'center',
-                background: 'none', border: '1px solid #252525', borderRadius: '3px',
-                color: '#555', fontSize: '11px', padding: '0 7px', cursor: 'pointer',
-                fontFamily: 'inherit', letterSpacing: '0.04em', outline: 'none',
-                minWidth: '78px', justifyContent: 'center',
-                transition: 'color 0.15s, border-color 0.15s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.color = '#999' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#252525'; e.currentTarget.style.color = '#555' }}
-            >
-              {saveStatus === 'saved' ? 'Saved' : saveStatus === 'duplicate' ? 'Already saved' : 'Save'}
-            </button>
+            <>
+              <ViewPinBtn label="1" title="Open in View 1" onClick={() => pinUrlToView(1, active.url, active.title || active.url)} />
+              <ViewPinBtn label="2" title="Open in View 2" onClick={() => pinUrlToView(2, active.url, active.title || active.url)} />
+              <button
+                onClick={savePage}
+                title="Save to Pages"
+                style={{
+                  height: '22px', flexShrink: 0, display: 'flex', alignItems: 'center',
+                  background: 'none', border: '1px solid #252525', borderRadius: '3px',
+                  color: '#555', fontSize: '11px', padding: '0 7px', cursor: 'pointer',
+                  fontFamily: 'inherit', letterSpacing: '0.04em', outline: 'none',
+                  minWidth: '78px', justifyContent: 'center',
+                  transition: 'color 0.15s, border-color 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.color = '#999' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#252525'; e.currentTarget.style.color = '#555' }}
+              >
+                {saveStatus === 'saved' ? 'Saved' : saveStatus === 'duplicate' ? 'Already saved' : 'Save'}
+              </button>
+            </>
           )}
         </div>
+
+        {/* Shortcut hint — only in homeMode to avoid shifting the native view */}
+        {homeMode && urlFocused && getShortcutHint(urlInput) && (
+          <div style={{
+            height: '22px', flexShrink: 0,
+            display: 'flex', alignItems: 'center',
+            padding: '0 12px',
+            background: '#060606', borderBottom: '1px solid #0f0f0f',
+            fontSize: '10px', color: '#2e2e2e', letterSpacing: '0.03em',
+            userSelect: 'none',
+          }}>
+            {getShortcutHint(urlInput)}
+          </div>
+        )}
 
         {/* Native browser viewport */}
         <div
           ref={viewportRef}
-          style={{ flex: 1, minHeight: 0, background: '#060606', position: 'relative', overflow: 'hidden' }}
+          style={{ flex: 1, minHeight: 0, background: '#060606', position: 'relative', overflow: 'hidden', WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
-          {homeMode && <HomeScreen />}
+          {homeMode && <HomeScreen onNavigate={navigate} />}
           {!isElectron && !homeMode && (
             <div style={{
               position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
@@ -563,19 +588,92 @@ function FocusCollapseIcon() {
   )
 }
 
+// ─── View pin button ─────────────────────────────────────────────────────────
+
+function ViewPinBtn({ label, title, onClick }: { label: string; title: string; onClick: () => void }) {
+  const [hover, setHover] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        height: '22px', flexShrink: 0, display: 'flex', alignItems: 'center',
+        background: 'none',
+        border: `1px solid ${hover ? '#333' : '#252525'}`,
+        borderRadius: '3px',
+        color: hover ? '#999' : '#555',
+        fontSize: '11px', padding: '0 7px', cursor: 'pointer',
+        fontFamily: 'inherit', letterSpacing: '0.04em', outline: 'none',
+        transition: 'color 0.15s, border-color 0.15s',
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
 // ─── Home screen ──────────────────────────────────────────────────────────────
 
-function HomeScreen() {
+const HOME_SHORTCUTS = Object.entries(SHORTCUT_LABELS).filter(([key]) => key !== 'google docs')
+
+function HomeScreen({ onNavigate }: { onNavigate: (input: string) => void }) {
   return (
     <div style={{
-      position: 'absolute', inset: 0,
+      position: 'absolute', inset: 0, overflowY: 'auto',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: '#060606',
     }}>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '7px' }}>
-        <span style={{ fontSize: '12px', color: '#555', fontWeight: 500, letterSpacing: '0.03em' }}>Start researching</span>
-        <span style={{ fontSize: '11px', color: '#333', letterSpacing: '0.02em' }}>Search the web or enter a URL.</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', width: '200px' }}>
+
+        <div style={{ paddingBottom: '10px', borderBottom: '1px solid #111' }}>
+          <span style={{ fontSize: '10px', color: '#333', letterSpacing: '0.08em', textTransform: 'uppercase', userSelect: 'none' }}>
+            Quick open
+          </span>
+        </div>
+
+        {HOME_SHORTCUTS.map(([key, label]) => (
+          <ShortcutRow key={key} keyword={key} label={label} onClick={() => onNavigate(key)} />
+        ))}
+
+        <div style={{ marginTop: '8px', paddingTop: '10px', borderTop: '1px solid #111', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
+            <span style={{ fontSize: '10px', color: '#2e2e2e', fontFamily: 'monospace', letterSpacing: '0.02em', flexShrink: 0 }}>domain.com</span>
+            <span style={{ fontSize: '10px', color: '#222', letterSpacing: '0.02em' }}>opens directly</span>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
+            <span style={{ fontSize: '10px', color: '#2e2e2e', fontFamily: 'monospace', letterSpacing: '0.02em', flexShrink: 0 }}>? query</span>
+            <span style={{ fontSize: '10px', color: '#222', letterSpacing: '0.02em' }}>forces Google search</span>
+          </div>
+        </div>
+
       </div>
     </div>
+  )
+}
+
+function ShortcutRow({ keyword, label, onClick }: { keyword: string; label: string; onClick: () => void }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+        gap: '12px', padding: '5px 0',
+        background: 'none', border: 'none', cursor: 'pointer',
+        fontFamily: 'inherit', outline: 'none', width: '100%',
+        borderRadius: '2px',
+      }}
+    >
+      <span style={{ fontSize: '11px', color: hov ? '#888' : '#555', letterSpacing: '0.02em', transition: 'color 0.1s' }}>
+        {label}
+      </span>
+      <span style={{ fontSize: '10px', color: hov ? '#444' : '#282828', letterSpacing: '0.04em', fontFamily: 'monospace', transition: 'color 0.1s' }}>
+        {keyword}
+      </span>
+    </button>
   )
 }

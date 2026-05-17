@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, shell, protocol, nativeImage, ipcMain, WebContentsView } = require('electron')
+const { app, BrowserWindow, Menu, dialog, shell, protocol, nativeImage, ipcMain, WebContentsView, session } = require('electron')
 const path = require('path')
 const fs   = require('fs')
 
@@ -75,6 +75,140 @@ const panels   = { A: makePanel() }
 let windowReady           = false
 let inFullscreenTransition = false
 let isMinimized            = false
+let isRestoring            = false
+let modalOpen              = false
+let devToolsOpen           = false
+// Cached scale factors — updated only when DevTools is closed and the iW/cw ratio
+// looks healthy (> 0.8). Protects against the transient state where DevTools is
+// opening but devtools-opened hasn't fired yet (iW drops dramatically before the flag).
+let cachedScaleX = 1.0
+let cachedScaleY = 1.0
+
+// ─── Debug logger (remove after scroll-jump is diagnosed) ────────────────────
+function dbg(event, ...rest) {
+  const t = new Date().toISOString().slice(11, 23)
+  console.log(`[DBG ${t}] [${event}]`, ...rest)
+}
+function dbgWinState(win, label) {
+  try {
+    const [cw, ch] = win.getContentSize()
+    const fs = win.isFullScreen()
+    const mn = win.isMinimized()
+    console.log(`[DBG]   win@${label}: contentSize=${cw}x${ch} fullscreen=${fs} minimized=${mn}`)
+    for (const pid of Object.keys(panels)) {
+      const panel = panels[pid]
+      const st = panel.activeTabId && panel.tabStates.get(panel.activeTabId)
+      const lb = panel.lastBounds
+      console.log(`[DBG]   panel-${pid}: tab=${panel.activeTabId?.slice(-8)} url=${st?.url?.slice(0,60)} lastBounds=${lb ? `${lb.x},${lb.y},${lb.width}x${lb.height}` : 'null'}`)
+    }
+    for (const paneId of Object.keys(viewPanes)) {
+      const pane = viewPanes[paneId]
+      const url = pane.view && !pane.view.webContents.isDestroyed() ? pane.view.webContents.getURL() : '—'
+      const lb = pane.lastBounds
+      console.log(`[DBG]   pane-${paneId}: url=${url.slice(0,60)} lastBounds=${lb ? `${lb.x},${lb.y},${lb.width}x${lb.height}` : 'null'}`)
+    }
+  } catch {}
+}
+// Async: capture scrollY from a WebContentsView and log it.
+function dbgScrollAsync(label, view) {
+  if (!view || view.webContents.isDestroyed()) return
+  view.webContents.executeJavaScript(
+    `(function(){try{if(window.scrollY)return window.scrollY;var a=document.querySelectorAll('*');for(var i=0;i<Math.min(a.length,300);i++)if(a[i].scrollTop>0)return a[i].scrollTop;return 0}catch(x){return-1}})()`)
+    .then(y => console.log(`[DBG]   scrollY@${label}:`, y)).catch(() => {})
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─── Scroll save / restore ────────────────────────────────────────────────────
+// Preserves page scroll position across fullscreen transitions and minimize/restore.
+// Saved as a minified JSON string: [windowScrollX, windowScrollY, [[childPath[], top, left], ...]]
+const savedScrolls = new Map() // key → { view, json }
+
+// Injected into each WebContentsView to capture all scrolled elements.
+const CAPTURE_SCROLL_JS = `(function(){try{var r=[],a=document.querySelectorAll('*');for(var i=0,m=Math.min(a.length,600);i<m;i++){var e=a[i];if(e.scrollTop>5||e.scrollLeft>5){var p=[],c=e;for(var d=0;d<15&&c&&c!==document.documentElement;d++){var par=c.parentElement;if(!par)break;var k=0;for(var j=0;j<par.children.length;j++)if(par.children[j]===c){k=j;break}p.unshift(k);c=par}r.push([p,e.scrollTop,e.scrollLeft])}}return JSON.stringify([window.scrollX||0,window.scrollY||0,r])}catch(x){return'[0,0,[]]'}})()
+`
+
+function makeRestoreScrollJs(json) {
+  return `(function(d){try{window.scrollTo(d[0],d[1]);for(var i=0;i<d[2].length;i++){var it=d[2][i],el=document.documentElement;for(var j=0;j<it[0].length;j++){if(!el.children[it[0][j]]){el=null;break}el=el.children[it[0][j]]}if(el&&el!==document.documentElement){el.scrollTop=it[1];el.scrollLeft=it[2]}}}catch(x){}})(${json})`
+}
+
+function saveAllScrolls() {
+  savedScrolls.clear()
+  const tasks = []
+  for (const pid of Object.keys(panels)) {
+    const panel = panels[pid]
+    if (!panel.activeTabId) continue
+    const view = panel.tabViews.get(panel.activeTabId)
+    if (!view || view.webContents.isDestroyed()) continue
+    const key = `panel-${pid}`
+    tasks.push(view.webContents.executeJavaScript(CAPTURE_SCROLL_JS)
+      .then(json => { if (json) savedScrolls.set(key, { view, json }) }).catch(() => {}))
+  }
+  for (const paneId of Object.keys(viewPanes)) {
+    const pane = viewPanes[paneId]
+    if (!pane.view || pane.view.webContents.isDestroyed()) continue
+    const url = pane.view.webContents.getURL()
+    if (!url || url === 'about:blank') continue
+    const key = `pane-${paneId}`
+    tasks.push(pane.view.webContents.executeJavaScript(CAPTURE_SCROLL_JS)
+      .then(json => { if (json) savedScrolls.set(key, { view: pane.view, json }) }).catch(() => {}))
+  }
+  return Promise.all(tasks)
+}
+
+function restoreAllScrolls() {
+  const tasks = []
+  console.log(`[DBG-restore] savedScrolls.size=${savedScrolls.size}`)
+  for (const [key, { view, json }] of savedScrolls.entries()) {
+    try {
+      const parsed = JSON.parse(json)
+      console.log(`[DBG-restore] ${key}: windowScroll=[${parsed[0]},${parsed[1]}] elements=${parsed[2].length}`)
+      if (parsed[2].length > 0) {
+        console.log(`[DBG-restore] ${key}: first element scrollTop=${parsed[2][0][1]} path=[${parsed[2][0][0]}]`)
+      }
+    } catch {}
+    if (!view || view.webContents.isDestroyed()) continue
+    tasks.push(view.webContents.executeJavaScript(makeRestoreScrollJs(json)).catch(() => {}))
+  }
+  savedScrolls.clear()
+  return Promise.all(tasks)
+}
+
+// ─── Center view panes ────────────────────────────────────────────────────────
+// View 1 and View 2 — one WebContentsView each for center pane live pages.
+const viewPanes = {
+  '1': { view: null, lastBounds: null, pendingUrl: null },
+  '2': { view: null, lastBounds: null, pendingUrl: null },
+}
+
+function getOrCreateViewPane(win, paneId) {
+  const pane = viewPanes[paneId]
+  if (pane.view && !pane.view.webContents.isDestroyed()) return pane.view
+  const view = new WebContentsView({
+    webPreferences: {
+      contextIsolation: true, nodeIntegration: false,
+      sandbox: true, webSecurity: true,
+      partition: 'persist:site-research-A', // shared session — shared logins with Web tabs
+    },
+  })
+  win.contentView.addChildView(view)
+  view.setBounds({ x: 0, y: 0, width: 0, height: 0 })
+  const wc = view.webContents
+  wc.on('will-navigate', (event, url) => {
+    try {
+      const { protocol: p } = new URL(url)
+      if (p !== 'https:' && p !== 'http:') event.preventDefault()
+    } catch { event.preventDefault() }
+  })
+
+  // Intercept popups from pinned Pages — route to a new Site Web tab.
+  wc.setWindowOpenHandler(({ url }) => {
+    openUrlInNewTab(win, url)
+    return { action: 'deny' }
+  })
+
+  pane.view = view
+  return view
+}
 
 // ─── Panel helpers ────────────────────────────────────────────────────────────
 
@@ -102,10 +236,70 @@ function showActiveView(win, pid) {
   if (!panel.activeTabId) return
   const view = panel.tabViews.get(panel.activeTabId)
   if (!view || view.webContents.isDestroyed()) return
+  const st = panel.tabStates.get(panel.activeTabId)
+  dbg(`showActiveView[${pid}]: removeChildView+addChildView url=${st?.url?.slice(0,60)} lastBounds=${JSON.stringify(panel.lastBounds)}`)
   try { win.contentView.removeChildView(view) } catch {}
   win.contentView.addChildView(view)
-  if (panel.lastBounds) view.setBounds(panel.lastBounds)
+  if (panel.lastBounds && !modalOpen) view.setBounds(panel.lastBounds)
   try { view.webContents.focus() } catch {}
+}
+
+function hideAllViews() {
+  for (const pid of Object.keys(panels)) {
+    const panel = panels[pid]
+    if (!panel.activeTabId) continue
+    const view = panel.tabViews.get(panel.activeTabId)
+    if (view && !view.webContents.isDestroyed()) {
+      try { view.setBounds({ x: 0, y: 0, width: 0, height: 0 }) } catch {}
+    }
+  }
+  for (const pid of Object.keys(viewPanes)) {
+    const pane = viewPanes[pid]
+    if (pane.view && !pane.view.webContents.isDestroyed()) {
+      try { pane.view.setBounds({ x: 0, y: 0, width: 0, height: 0 }) } catch {}
+    }
+  }
+}
+
+function restoreAllViews() {
+  for (const pid of Object.keys(panels)) {
+    const panel = panels[pid]
+    if (!panel.activeTabId || !panel.lastBounds) continue
+    const view = panel.tabViews.get(panel.activeTabId)
+    if (view && !view.webContents.isDestroyed()) {
+      try { view.setBounds(panel.lastBounds) } catch {}
+    }
+  }
+  for (const pid of Object.keys(viewPanes)) {
+    const pane = viewPanes[pid]
+    if (pane.lastBounds && pane.view && !pane.view.webContents.isDestroyed()) {
+      try { pane.view.setBounds(pane.lastBounds) } catch {}
+    }
+  }
+}
+
+// Route any new-window request (window.open / target=_blank / popup / OAuth)
+// to a new Site Web tab instead of an independent OS window.
+function openUrlInNewTab(win, url) {
+  try {
+    const { protocol: p } = new URL(url)
+    if (p !== 'https:' && p !== 'http:') return
+  } catch { return }
+  const panel = panels['A']
+  if (!panel || panel.tabViews.size >= MAX_TABS) return
+  const id = `tab-A-${Date.now()}-popup`
+  createTabView(win, 'A', id)
+  // Seed state before switchToTab so React sees a non-empty URL in
+  // onTabsChanged and keeps homeMode=false instead of showing home screen.
+  const state = panel.tabStates.get(id)
+  if (state) { state.url = url; state.title = labelFromUrl(url); state.loading = true }
+  switchToTab(win, 'A', id)
+  if (panel.lastBounds) {
+    panel.tabViews.get(id)?.webContents.loadURL(url).catch(() => {})
+  } else {
+    panel.pendingUrl = url
+    if (!win.webContents.isDestroyed()) win.webContents.send('research:recalc-bounds')
+  }
 }
 
 function tryFirePending(win, pid) {
@@ -139,17 +333,22 @@ function createTabView(win, pid, id) {
   })
   win.contentView.addChildView(view)
   view.setBounds({ x: 0, y: 0, width: 0, height: 0 })
+  try { view.setBackgroundColor('#060606') } catch {}
 
-  const wc        = view.webContents
-  const defaultUA = wc.getUserAgent()
-  const cleanUA   = defaultUA.replace(/\sElectron\/[^\s]+/i, '')
-  if (cleanUA !== defaultUA) wc.setUserAgent(cleanUA)
+  const wc = view.webContents
 
   wc.on('will-navigate', (event, url) => {
     try {
       const { protocol: p } = new URL(url)
       if (p !== 'https:' && p !== 'http:') event.preventDefault()
     } catch { event.preventDefault() }
+  })
+
+  // Intercept window.open / target=_blank / popup / OAuth redirects —
+  // open as a new Site Web tab instead of an independent OS window.
+  wc.setWindowOpenHandler(({ url }) => {
+    openUrlInNewTab(win, url)
+    return { action: 'deny' }
   })
 
   const state = { url: '', title: '', loading: false, canGoBack: false, canGoForward: false }
@@ -165,12 +364,12 @@ function createTabView(win, pid, id) {
 
   wc.on('did-navigate', (_e, url) => {
     state.url = url; syncNav(); sendTabUpdated()
-    if (id === panel.activeTabId)
+    if (id === panel.activeTabId && url !== 'about:blank')
       win.webContents.send('research:url-changed', pid, url, state.canGoBack, state.canGoForward)
   })
   wc.on('did-navigate-in-page', (_e, url) => {
     state.url = url; syncNav(); sendTabUpdated()
-    if (id === panel.activeTabId)
+    if (id === panel.activeTabId && url !== 'about:blank')
       win.webContents.send('research:url-changed', pid, url, state.canGoBack, state.canGoForward)
   })
   wc.on('page-title-updated', (_e, title) => {
@@ -182,7 +381,7 @@ function createTabView(win, pid, id) {
     state.loading = true; sendTabUpdated()
     if (id === panel.activeTabId) {
       win.webContents.send('research:loading-changed', pid, true)
-      if (!(inFullscreenTransition || isMinimized)) showActiveView(win, pid)
+      if (!(inFullscreenTransition || isMinimized || isRestoring) && state.url && state.url !== 'about:blank') showActiveView(win, pid)
     }
   })
   wc.on('did-stop-loading', () => {
@@ -206,19 +405,25 @@ function switchToTab(win, pid, id) {
     panel.tabViews.get(panel.activeTabId).setBounds({ x: 0, y: 0, width: 0, height: 0 })
   }
   panel.activeTabId = id
-  if (!(inFullscreenTransition || isMinimized)) showActiveView(win, pid)
   const state = panel.tabStates.get(id) || { url: '', title: '', loading: false, canGoBack: false, canGoForward: false }
+  const hasContent = !!(state.url && state.url !== 'about:blank')
+
+  // Only expand the view to real bounds when the tab has content.
+  // Blank/new tabs stay hidden (0,0,0,0) — React home screen shows instead.
+  if (!(inFullscreenTransition || isMinimized || isRestoring) && hasContent) showActiveView(win, pid)
 
   // If this view was restored from a saved workspace but never loaded, load it now.
   const switchView = panel.tabViews.get(id)
-  if (switchView && !switchView.webContents.isDestroyed() && state.url) {
+  if (switchView && !switchView.webContents.isDestroyed() && hasContent) {
     const loaded = switchView.webContents.getURL()
     if (!loaded || loaded === 'about:blank') {
       switchView.webContents.loadURL(state.url).catch(() => {})
     }
   }
 
-  win.webContents.send('research:url-changed',     pid, state.url, state.canGoBack, state.canGoForward)
+  // Only send url-changed for real URLs. Sending '' triggers setHomeMode(false)
+  // in the renderer which would flash white before homeMode corrects itself.
+  if (hasContent) win.webContents.send('research:url-changed', pid, state.url, state.canGoBack, state.canGoForward)
   win.webContents.send('research:title-changed',   pid, state.title)
   win.webContents.send('research:loading-changed', pid, state.loading)
   win.webContents.send('research:can-navigate',    pid, state.canGoBack, state.canGoForward)
@@ -234,20 +439,104 @@ function setupResearchBrowser(win) {
   panels['A'].activeTabId = initId
   emitTabsChanged(win, 'A')
 
-  win.on('will-enter-full-screen', () => { inFullscreenTransition = true })
-  win.on('will-leave-full-screen', () => { inFullscreenTransition = true })
+  // Track whether will-enter-full-screen fired for this transition.
+  // On macOS app-restore, enter-full-screen fires WITHOUT will-enter-full-screen.
+  let willFSFired = false
+
+  win.on('will-enter-full-screen', () => {
+    willFSFired = true
+    inFullscreenTransition = true
+    dbg('will-enter-full-screen'); dbgWinState(win, 'pre')
+    for (const pid of Object.keys(panels)) { const v = panels[pid].activeTabId && panels[pid].tabViews.get(panels[pid].activeTabId); dbgScrollAsync(`panel-${pid}-pre-fs`, v) }
+    for (const paneId of Object.keys(viewPanes)) { dbgScrollAsync(`pane-${paneId}-pre-fs`, viewPanes[paneId].view) }
+    saveAllScrolls()
+  })
+  win.on('will-leave-full-screen', () => {
+    inFullscreenTransition = true
+    dbg('will-leave-full-screen'); dbgWinState(win, 'pre')
+    for (const pid of Object.keys(panels)) { const v = panels[pid].activeTabId && panels[pid].tabViews.get(panels[pid].activeTabId); dbgScrollAsync(`panel-${pid}-pre-leave`, v) }
+    for (const paneId of Object.keys(viewPanes)) { dbgScrollAsync(`pane-${paneId}-pre-leave`, viewPanes[paneId].view) }
+    saveAllScrolls()
+  })
   win.on('enter-full-screen', () => {
+    const wasUserTriggered = willFSFired
+    willFSFired = false
     inFullscreenTransition = false
+    dbg(`enter-full-screen wasUserTriggered=${wasUserTriggered}`); dbgWinState(win, 'post')
     win.webContents.send('research:recalc-bounds')
+    dbg('enter-full-screen: recalc-bounds sent')
+    setTimeout(() => {
+      dbg('enter-full-screen: restoring scrolls (220ms)')
+      for (const pid of Object.keys(panels)) { const v = panels[pid].activeTabId && panels[pid].tabViews.get(panels[pid].activeTabId); dbgScrollAsync(`panel-${pid}-before-restore`, v) }
+      restoreAllScrolls().then(() => {
+        for (const pid of Object.keys(panels)) { const v = panels[pid].activeTabId && panels[pid].tabViews.get(panels[pid].activeTabId); dbgScrollAsync(`panel-${pid}-after-restore`, v) }
+      })
+    }, 220)
   })
   win.on('leave-full-screen', () => {
     inFullscreenTransition = false
+    dbg('leave-full-screen'); dbgWinState(win, 'post')
+    win.webContents.send('research:recalc-bounds')
+    dbg('leave-full-screen: recalc-bounds sent')
+    setTimeout(() => {
+      dbg('leave-full-screen: restoring scrolls (220ms)')
+      restoreAllScrolls()
+    }, 220)
+  })
+  function clearAndZeroAllViews() {
+    for (const pid of Object.keys(panels)) {
+      const panel = panels[pid]
+      panel.lastBounds = null
+      const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
+      if (view && !view.webContents.isDestroyed()) {
+        try { view.setBounds({ x: 0, y: 0, width: 0, height: 0 }) } catch {}
+      }
+    }
+    for (const paneId of Object.keys(viewPanes)) {
+      const pane = viewPanes[paneId]
+      pane.lastBounds = null
+      if (pane.view && !pane.view.webContents.isDestroyed()) {
+        try { pane.view.setBounds({ x: 0, y: 0, width: 0, height: 0 }) } catch {}
+      }
+    }
+  }
+
+  win.webContents.on('devtools-opened', () => {
+    devToolsOpen = true
+    dbg('devtools-opened: zeroing all views')
+    clearAndZeroAllViews()
+  })
+  win.webContents.on('devtools-closed', () => {
+    devToolsOpen = false
+    dbg('devtools-closed: zeroing + recalc in 150ms')
+    clearAndZeroAllViews()
+    setTimeout(() => { if (!win.isDestroyed()) win.webContents.send('research:recalc-bounds') }, 150)
+  })
+  win.on('resize', () => {
+    if (inFullscreenTransition || isMinimized || isRestoring) {
+      dbg('resize: BLOCKED', { inFullscreenTransition, isMinimized, isRestoring })
+      return
+    }
+    dbg('resize: recalc-bounds sent'); dbgWinState(win, 'resize')
     win.webContents.send('research:recalc-bounds')
   })
-  win.on('minimize', () => { isMinimized = true })
+  win.on('minimize', () => {
+    dbg('minimize'); dbgWinState(win, 'minimize')
+    for (const pid of Object.keys(panels)) { const v = panels[pid].activeTabId && panels[pid].tabViews.get(panels[pid].activeTabId); dbgScrollAsync(`panel-${pid}-pre-minimize`, v) }
+    isMinimized = true; isRestoring = false; saveAllScrolls()
+  })
   win.on('restore',  () => {
+    dbg('restore'); dbgWinState(win, 'restore')
     isMinimized = false
-    win.webContents.send('research:recalc-bounds')
+    isRestoring = true
+    setTimeout(() => {
+      isRestoring = false
+      dbg('restore: isRestoring cleared, restoring scrolls')
+      for (const pid of Object.keys(panels)) { const v = panels[pid].activeTabId && panels[pid].tabViews.get(panels[pid].activeTabId); dbgScrollAsync(`panel-${pid}-before-restore`, v) }
+      restoreAllScrolls().then(() => {
+        for (const pid of Object.keys(panels)) { const v = panels[pid].activeTabId && panels[pid].tabViews.get(panels[pid].activeTabId); dbgScrollAsync(`panel-${pid}-after-restore`, v) }
+      })
+    }, 150)
   })
 
   // ── navigate ──────────────────────────────────────────────────────────────
@@ -294,27 +583,69 @@ function setupResearchBrowser(win) {
   ipcMain.on('research:set-bounds', (_e, pid, rect) => {
     const panel = panels[pid]
     if (!panel) return
+    // While DevTools is open the window is wider — keep views zeroed.
+    if (devToolsOpen) {
+      const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
+      if (view) view.setBounds({ x: 0, y: 0, width: 0, height: 0 })
+      return
+    }
     const [cw, ch] = win.getContentSize()
-    const iW = rect.innerWidth  || cw
-    const iH = rect.innerHeight || ch
-    const sx = cw / iW, sy = ch / iH
+    if (!devToolsOpen && rect.innerWidth && rect.innerWidth / cw > 0.8) {
+      cachedScaleX = cw / rect.innerWidth
+      cachedScaleY = ch / (rect.innerHeight || ch)
+    }
+    const sx = cachedScaleX, sy = cachedScaleY
     const x = Math.round(rect.x     * sx)
     const y = Math.round(rect.y     * sy)
     const w = Math.round(rect.width * sx)
     const h = Math.round(rect.height * sy)
-    if ((inFullscreenTransition || isMinimized) && (w === 0 || h === 0)) return
+    if (isMinimized || isRestoring) {
+      dbg(`research:set-bounds[${pid}]: BLOCKED isMinimized=${isMinimized} isRestoring=${isRestoring} rect=${rect.x},${rect.y},${rect.width}x${rect.height}`)
+      return
+    }
+    if (inFullscreenTransition && (w === 0 || h === 0)) {
+      dbg(`research:set-bounds[${pid}]: BLOCKED inFullscreenTransition+zero w=${w} h=${h}`)
+      return
+    }
     if (w > 0 && h > 0) {
-      // Ignore spurious near-zero-x bounds that arrive during layout settling.
-      // Research column can be dragged wide, so only filter clearly invalid
-      // positions (< 10% of content width — less than SourcePanel's ~20%).
-      if (x <= cw / 10) return
+      if (x <= cw / 10) {
+        dbg(`research:set-bounds[${pid}]: BLOCKED near-zero-x x=${x} cw=${cw}`)
+        return
+      }
+      const prevBounds = panel.lastBounds
       panel.lastBounds = { x, y, width: w, height: h }
-      const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
-      if (view) view.setBounds({ x, y, width: w, height: h })
-      tryFirePending(win, pid)
+      if (!modalOpen) {
+        const activeState = panel.activeTabId && panel.tabStates.get(panel.activeTabId)
+        const hasContent  = !!(activeState?.url && activeState.url !== 'about:blank')
+        const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
+        if (view && hasContent) {
+          dbg(`research:set-bounds[${pid}]: setBounds ${x},${y},${w}x${h} url=${activeState?.url?.slice(0,50)}`)
+          const sizeChanged = prevBounds && (prevBounds.width !== w || prevBounds.height !== h)
+          if (sizeChanged && !view.webContents.isDestroyed()) {
+            view.webContents.executeJavaScript(CAPTURE_SCROLL_JS).then(json => {
+              if (view.webContents.isDestroyed()) return
+              view.setBounds({ x, y, width: w, height: h })
+              if (json && json !== '[0,0,[]]') {
+                setTimeout(() => {
+                  if (!view.webContents.isDestroyed())
+                    view.webContents.executeJavaScript(makeRestoreScrollJs(json)).catch(() => {})
+                }, 120)
+              }
+            }).catch(() => {
+              if (!view.webContents.isDestroyed()) view.setBounds({ x, y, width: w, height: h })
+            })
+          } else {
+            view.setBounds({ x, y, width: w, height: h })
+          }
+        }
+        tryFirePending(win, pid)
+      }
     } else {
       const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
-      if (view) view.setBounds({ x: 0, y: 0, width: 0, height: 0 })
+      if (view) {
+        dbg(`research:set-bounds[${pid}]: ZERO-BOUND (w=${w} h=${h}) url=${panel.tabStates.get(panel.activeTabId)?.url?.slice(0,50)}`)
+        view.setBounds({ x: 0, y: 0, width: 0, height: 0 })
+      }
     }
   })
 
@@ -384,8 +715,10 @@ function setupResearchBrowser(win) {
     const view     = panel.tabViews.get(id)
     const wasActive = id === panel.activeTabId
 
+    try { if (!view.webContents.isDestroyed()) view.webContents.setAudioMuted(true) } catch {}
+    try { if (!view.webContents.isDestroyed()) view.webContents.stop() } catch {}
     win.contentView.removeChildView(view)
-    try { if (!view.webContents.isDestroyed()) view.webContents.close?.() } catch {}
+    try { if (!view.webContents.isDestroyed()) view.webContents.loadURL('about:blank').catch(() => {}) } catch {}
     panel.tabViews.delete(id)
     panel.tabStates.delete(id)
 
@@ -417,8 +750,10 @@ function setupResearchBrowser(win) {
     panel.pendingUrl = null
 
     for (const [, view] of panel.tabViews) {
+      try { if (!view.webContents.isDestroyed()) view.webContents.setAudioMuted(true) } catch {}
+      try { if (!view.webContents.isDestroyed()) view.webContents.stop() } catch {}
       try { win.contentView.removeChildView(view) } catch {}
-      try { if (!view.webContents.isDestroyed()) view.webContents.close?.() } catch {}
+      try { if (!view.webContents.isDestroyed()) view.webContents.loadURL('about:blank').catch(() => {}) } catch {}
     }
     panel.tabViews.clear()
     panel.tabStates.clear()
@@ -462,13 +797,120 @@ function setupResearchBrowser(win) {
     }
   })
 
+  // ── view pane IPC ──────────────────────────────────────────────────────────
+  ipcMain.on('view:navigate', (_e, paneId, url) => {
+    const pane = viewPanes[paneId]
+    if (!pane) return
+    // Mute whatever is currently playing before navigating away.
+    if (pane.view && !pane.view.webContents.isDestroyed()) {
+      try { pane.view.webContents.setAudioMuted(true) } catch {}
+      try { pane.view.webContents.stop() } catch {}
+    }
+    pane.pendingUrl = url
+    // Fire immediately only if valid bounds are already known.
+    if (pane.lastBounds && !modalOpen) {
+      const view = getOrCreateViewPane(win, paneId)
+      view.webContents.setAudioMuted(false)
+      view.webContents.loadURL(url).catch(err => console.log(`[view:${paneId}] loadURL error:`, err?.message))
+      pane.pendingUrl = null
+    }
+  })
+
+  ipcMain.on('view:set-bounds', (_e, paneId, rect) => {
+    const pane = viewPanes[paneId]
+    if (!pane) return
+    if (isMinimized || isRestoring) return
+    const sx = cachedScaleX, sy = cachedScaleY
+    const x = Math.round(rect.x     * sx)
+    const y = Math.round(rect.y     * sy)
+    const w = Math.round(rect.width * sx)
+    const h = Math.round(rect.height * sy)
+    if (inFullscreenTransition && (w === 0 || h === 0)) {
+      dbg(`view:set-bounds[${paneId}]: BLOCKED inFullscreenTransition+zero w=${w} h=${h}`)
+      return
+    }
+    if (w > 0 && h > 0) {
+      const prevBounds = pane.lastBounds
+      pane.lastBounds = { x, y, width: w, height: h }
+      if (!modalOpen) {
+        const view = getOrCreateViewPane(win, paneId)
+        const currentUrl = view.webContents.getURL()
+        dbg(`view:set-bounds[${paneId}]: setBounds ${x},${y},${w}x${h} url=${currentUrl.slice(0,50)}`)
+        const sizeChanged = prevBounds && (prevBounds.width !== w || prevBounds.height !== h)
+        const hasPending = !!pane.pendingUrl
+        if (sizeChanged && !hasPending && !view.webContents.isDestroyed()) {
+          view.webContents.executeJavaScript(CAPTURE_SCROLL_JS).then(json => {
+            if (view.webContents.isDestroyed()) return
+            view.setBounds({ x, y, width: w, height: h })
+            if (json && json !== '[0,0,[]]') {
+              setTimeout(() => {
+                if (!view.webContents.isDestroyed())
+                  view.webContents.executeJavaScript(makeRestoreScrollJs(json)).catch(() => {})
+              }, 120)
+            }
+          }).catch(() => {
+            if (!view.webContents.isDestroyed()) view.setBounds({ x, y, width: w, height: h })
+          })
+        } else {
+          view.setBounds({ x, y, width: w, height: h })
+        }
+        if (pane.pendingUrl) {
+          const url = pane.pendingUrl
+          pane.pendingUrl = null
+          dbg(`view:set-bounds[${paneId}]: loadURL (pending) ${url.slice(0,60)}`)
+          view.webContents.setAudioMuted(false)
+          view.webContents.loadURL(url).catch(err => console.log(`[view:${paneId}] loadURL error:`, err?.message))
+        }
+      }
+    } else {
+      pane.lastBounds = null
+      const v = pane.view
+      if (v && !v.webContents.isDestroyed()) {
+        dbg(`view:set-bounds[${paneId}]: ZERO-BOUND url=${v.webContents.getURL().slice(0,50)}`)
+        try { v.setBounds({ x: 0, y: 0, width: 0, height: 0 }) } catch {}
+      }
+    }
+  })
+
+  ipcMain.on('view:clear', (_e, paneId) => {
+    const pane = viewPanes[paneId]
+    if (!pane) return
+    pane.pendingUrl = null
+    pane.lastBounds = null
+    const v = pane.view
+    if (v && !v.webContents.isDestroyed()) {
+      try { v.webContents.setAudioMuted(true) } catch {}
+      try { v.webContents.stop() } catch {}
+      try { v.setBounds({ x: 0, y: 0, width: 0, height: 0 }) } catch {}
+      v.webContents.loadURL('about:blank').catch(() => {})
+    }
+  })
+
+  ipcMain.on('view:reload', (_e, paneId) => {
+    const pane = viewPanes[paneId]
+    if (!pane?.view || pane.view.webContents.isDestroyed()) return
+    pane.view.webContents.reload()
+  })
+
+  // ── modal state ────────────────────────────────────────────────────────────
+  ipcMain.on('app:set-modal', (_e, isOpen) => {
+    modalOpen = !!isOpen
+    if (modalOpen) {
+      hideAllViews()
+    } else {
+      restoreAllViews()
+    }
+  })
+
   // ── cleanup ────────────────────────────────────────────────────────────────
   win.on('closed', () => {
+    modalOpen = false
     const channels = [
       'research:navigate', 'research:set-bounds',
       'research:go-back', 'research:go-forward', 'research:reload',
       'research:new-tab', 'research:close-tab', 'research:switch-tab',
-      'research:load-workspace',
+      'research:load-workspace', 'app:set-modal',
+      'view:navigate', 'view:set-bounds', 'view:clear', 'view:reload',
     ]
     for (const ch of channels) ipcMain.removeAllListeners(ch)
     ipcMain.removeHandler('research:get-state')
@@ -481,6 +923,114 @@ function setupResearchBrowser(win) {
     panel.lastBounds  = null
     panel.pendingUrl  = null
     if (panel.pendingTimer) { clearTimeout(panel.pendingTimer); panel.pendingTimer = null }
+
+    for (const pid of Object.keys(viewPanes)) {
+      const pane = viewPanes[pid]
+      if (pane.view && !pane.view.webContents.isDestroyed()) {
+        try { pane.view.webContents.close?.() } catch {}
+      }
+      viewPanes[pid] = { view: null, lastBounds: null, pendingUrl: null }
+    }
+  })
+}
+
+// ─── Polar auth IPC ───────────────────────────────────────────────────────────
+//
+// The org access token (POLAR_ACCESS_TOKEN) lives here in the main process only —
+// never exposed to the renderer. Set it as an environment variable before launch.
+
+const POLAR_ORG_ID       = 'ef60cd00-9e07-4db8-83e8-bda9a2afa313'
+const POLAR_API          = 'https://api.polar.sh'
+
+function polarHeaders(token) {
+  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+}
+
+function setupAuth() {
+  const ORG_TOKEN = process.env.POLAR_ACCESS_TOKEN ?? ''
+
+  // Sign in: find customer by email → create session → check subscriptions
+  ipcMain.handle('auth:get-session', async (_e, email) => {
+    if (!ORG_TOKEN) return { error: 'not_configured' }
+    try {
+      // 1. Find customer by email in this org
+      const cusRes = await fetch(
+        `${POLAR_API}/v1/customers?email=${encodeURIComponent(email)}&organization_id=${POLAR_ORG_ID}&limit=1`,
+        { headers: polarHeaders(ORG_TOKEN) }
+      )
+      if (!cusRes.ok) return { error: 'polar_error', status: cusRes.status }
+      const cusData = await cusRes.json()
+      const customer = cusData?.items?.[0]
+      if (!customer) return { error: 'no_account' }
+
+      // 2. Create a customer session (short-lived token + portal URL)
+      const sesRes = await fetch(`${POLAR_API}/v1/customer-sessions/`, {
+        method: 'POST',
+        headers: polarHeaders(ORG_TOKEN),
+        body: JSON.stringify({ customer_id: customer.id }),
+      })
+      if (!sesRes.ok) return { error: 'polar_error', status: sesRes.status }
+      const session = await sesRes.json()
+
+      // 3. Check subscription status with the customer session token
+      const subRes = await fetch(
+        `${POLAR_API}/v1/customer-portal/subscriptions?active=true&limit=10`,
+        { headers: polarHeaders(session.token) }
+      )
+      let isPro = false
+      if (subRes.ok) {
+        const subData = await subRes.json()
+        isPro = (subData?.items ?? []).some(s =>
+          s.status === 'active' || s.status === 'trialing'
+        )
+      }
+
+      return {
+        ok: true,
+        token:      session.token,
+        expiresAt:  session.expires_at,
+        customerId: customer.id,
+        email:      customer.email,
+        isPro,
+      }
+    } catch (err) {
+      return { error: 'network_error', message: err?.message }
+    }
+  })
+
+  // Recheck subscription status with an existing customer session token
+  ipcMain.handle('auth:check-subscriptions', async (_e, customerToken) => {
+    try {
+      const res = await fetch(
+        `${POLAR_API}/v1/customer-portal/subscriptions?active=true&limit=10`,
+        { headers: polarHeaders(customerToken) }
+      )
+      if (!res.ok) return { error: 'polar_error', status: res.status }
+      const data = await res.json()
+      const isPro = (data?.items ?? []).some(s =>
+        s.status === 'active' || s.status === 'trialing'
+      )
+      return { ok: true, isPro }
+    } catch {
+      return { error: 'network_error' }
+    }
+  })
+
+  // Get a fresh customer portal URL (do not cache — Polar docs say generate fresh each time)
+  ipcMain.handle('auth:get-portal-url', async (_e, customerId) => {
+    if (!ORG_TOKEN) return { error: 'not_configured' }
+    try {
+      const res = await fetch(`${POLAR_API}/v1/customer-sessions/`, {
+        method: 'POST',
+        headers: polarHeaders(ORG_TOKEN),
+        body: JSON.stringify({ customer_id: customerId }),
+      })
+      if (!res.ok) return { error: 'polar_error', status: res.status }
+      const data = await res.json()
+      return { ok: true, portalUrl: data.customer_portal_url }
+    } catch {
+      return { error: 'network_error' }
+    }
   })
 }
 
@@ -629,7 +1179,13 @@ app.whenReady().then(() => {
     })
   }
 
+  // Override UA on the shared web-tab / View-pane session so sites like Canva
+  // see a plain Chrome UA instead of detecting Electron via navigator.userAgentData.
+  const CHROME_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+  session.fromPartition('persist:site-research-A').setUserAgent(CHROME_UA)
+
   buildMenu()
+  setupAuth()
   createWindow()
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
 })

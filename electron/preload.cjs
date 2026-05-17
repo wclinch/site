@@ -4,6 +4,25 @@ const { contextBridge, ipcRenderer } = require('electron')
 // Event subscriptions also take `panelId` and filter internally so each
 // ResearchBrowser component only receives events for its own panel.
 contextBridge.exposeInMainWorld('electronAPI', {
+  // ── Account / Polar auth ────────────────────────────────────────────────────
+  // POLAR_ACCESS_TOKEN is set in the main process env (never exposed to renderer).
+  // POLAR_CHECKOUT_URL is a static Polar hosted-checkout link — set it as an env var.
+  POLAR_CHECKOUT_URL: process.env.POLAR_CHECKOUT_URL ?? '',
+  auth: {
+    getSession:         (email)      => ipcRenderer.invoke('auth:get-session', email),
+    checkSubscriptions: (token)      => ipcRenderer.invoke('auth:check-subscriptions', token),
+    getPortalUrl:       (customerId) => ipcRenderer.invoke('auth:get-portal-url', customerId),
+  },
+  // ── Modal state ─────────────────────────────────────────────────────────────
+  setModal: (isOpen) => ipcRenderer.send('app:set-modal', isOpen),
+  // ── View panes (center View 1 / View 2 live pages) ───────────────────────────
+  view: {
+    navigate:  (paneId, url)  => ipcRenderer.send('view:navigate',   paneId, url),
+    setBounds: (paneId, rect) => ipcRenderer.send('view:set-bounds', paneId, rect),
+    clear:     (paneId)       => ipcRenderer.send('view:clear',      paneId),
+    reload:    (paneId)       => ipcRenderer.send('view:reload',     paneId),
+  },
+  // ── Research browser ────────────────────────────────────────────────────────
   research: {
     navigate:  (pid, url)  => ipcRenderer.send('research:navigate',   pid, url),
     setBounds: (pid, rect) => ipcRenderer.send('research:set-bounds', pid, rect),

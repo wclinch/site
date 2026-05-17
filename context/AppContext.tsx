@@ -1,14 +1,22 @@
 'use client'
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
-import type { Project, QueuedSource, SavedResearchTab } from '@/lib/types'
+import type { Project, QueuedSource, SavedResearchTab, ViewPage, HistoryEntry } from '@/lib/types'
 import {
   ACTIVE_KEY, SELECTED_KEY, SELECTED_KEY_2, STACK_KEY, STACK_LIMIT,
   newProject, newSource, newNote, newUrlSource,
   loadProjects, saveProjects,
+  uid, addHistoryEntry, deleteHistoryEntry as storageDeleteHistoryEntry,
 } from '@/lib/storage'
 import { storeFile, deleteFile, getFile, storeContent, getContent, deleteContent } from '@/lib/idb'
 import { extractContent } from '@/lib/extract'
 import { wouldExceedLimit, STORAGE_LIMIT_BYTES } from '@/lib/storage-limit'
+import { checkIsPro, FREE_LIMITS, PRO_LIMITS } from '@/lib/entitlement'
+import type { Limits } from '@/lib/entitlement'
+import {
+  getStoredUser, storeEntitlementCache, clearStoredSession,
+  signIn as authSignIn, refreshEntitlement as authRefresh, getPortalUrl,
+} from '@/lib/auth'
+import type { AuthUser, SignInResult } from '@/lib/auth'
 
 
 // Legacy id from the pre-refactor "floating sources" model. Kept only so
@@ -37,6 +45,25 @@ interface AppState {
   stackLimit: number
   atStackLimit: boolean
   inStack: (id: string) => boolean
+  // center view panes
+  view1Page: ViewPage | null
+  view2Page: ViewPage | null
+  splitView: boolean
+  setSplitView: (v: boolean) => void
+  pinPageToView: (pane: 1 | 2, src: QueuedSource) => void
+  pinUrlToView:  (pane: 1 | 2, url: string, title: string) => void
+  clearView: (pane: 1 | 2) => void
+  openDocInPane: (pane: 1 | 2, srcId: string) => void
+  // auth + entitlement
+  user:              AuthUser | null
+  isPro:             boolean
+  limits:            Limits
+  signIn:            (email: string) => Promise<SignInResult>
+  signOut:           () => void
+  refreshEntitlement: () => Promise<void>
+  openBilling:       () => Promise<void>
+  activatePro:       () => void   // legacy license key path
+  deactivatePro:     () => void
   // setters
   setSelectedId: (id: string | null) => void
   setSelectedId2: (id: string | null) => void
@@ -61,6 +88,9 @@ interface AppState {
   newWorkspace: () => void
   saveWorkspace: (name?: string) => void
   removeWorkspace: (targetId?: string) => void
+  // History
+  restoreFromHistory: (entry: HistoryEntry) => void
+  deleteHistoryEntry: (id: string) => void
   // Stack actions
   addToStack: (id: string) => void
   removeFromStack: (id: string) => void
@@ -99,13 +129,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try { return localStorage.getItem(ACTIVE_KEY) } catch { return null }
   })
 
+  const [view1Page, setView1Page] = useState<ViewPage | null>(null)
+  const [view2Page, setView2Page] = useState<ViewPage | null>(null)
+  const [splitView, setSplitView] = useState(false)
+
+  const [isPro, setIsPro] = useState(false)
+  const [user,  setUser]  = useState<AuthUser | null>(null)
+
   const projectsRef    = useRef<Project[]>([])
   const activeIdRef    = useRef(activeId)
   const selectedIdRef  = useRef<string | null>(null)
   const selectedId2Ref = useRef<string | null>(null)
+  const view1PageRef   = useRef<ViewPage | null>(null)
+  const view2PageRef   = useRef<ViewPage | null>(null)
+  const splitViewRef   = useRef(false)
+  const isProRef       = useRef(false)
   useEffect(() => { activeIdRef.current = activeId }, [activeId])
   useEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
   useEffect(() => { selectedId2Ref.current = selectedId2 }, [selectedId2])
+  useEffect(() => { view1PageRef.current = view1Page }, [view1Page])
+  useEffect(() => { view2PageRef.current = view2Page }, [view2Page])
+  useEffect(() => { splitViewRef.current = splitView }, [splitView])
+  useEffect(() => { isProRef.current = isPro }, [isPro])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -155,6 +200,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
       fixed = named
+      if (fixed.length === 0) {
+        const def = newProject(1)
+        def.name = 'Untitled'
+        fixed = [def]
+      }
       setProjects(fixed)
 
       // Drop any orphaned stack-key entry from the previous model — the
@@ -182,6 +232,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Restore research tabs for the active workspace on startup.
       loadResearchTabs(restoredProj?.researchTabs ?? [])
 
+      // Restore view page pins for the active workspace on startup.
+      // Navigation is handled by ViewPane's useEffect after bounds are set.
+      const v1 = restoredProj?.view1Page ?? null
+      const v2 = restoredProj?.view2Page ?? null
+      if (v1) setView1Page(v1)
+      if (v2) setView2Page(v2)
+      if (restoredProj) setSplitView(restoreSplit(restoredProj))
+
       // Re-extract PDF content for any source that's `done` but missing
       // its parsed body in IDB (e.g. interrupted extraction in a prior
       // session). Notes / images / URLs are skipped.
@@ -208,12 +266,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       })()
     } else {
-      // First launch — blank Untitled workspace.
+      // First launch — default Untitled workspace.
       const def = newProject(1)
-      def.name = ''
+      def.name = 'Untitled'
       setProjects([def])
       setActiveId(def.id)
     }
+    setIsPro(checkIsPro())
+
+    // Restore auth session and recheck subscription in background
+    const storedUser = getStoredUser()
+    if (storedUser) {
+      setUser(storedUser)
+      authRefresh(storedUser.token).then(pro => {
+        if (pro !== null) setIsPro(pro)
+      }).catch(() => {})
+    }
+
     setMounted(true)
   }, [])
 
@@ -238,7 +307,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch {}
       const curId = activeIdRef.current
       const snap  = projectsRef.current.map(p => p.id !== curId ? p : {
-        ...p, sel1: selectedIdRef.current, sel2: selectedId2Ref.current, researchTabs,
+        ...p, sel1: selectedIdRef.current, sel2: selectedId2Ref.current,
+        view1Page: view1PageRef.current, view2Page: view2PageRef.current,
+        splitView: splitViewRef.current,
+        researchTabs,
       })
       saveProjects(snap)
     }
@@ -259,6 +331,123 @@ export function AppProvider({ children }: { children: ReactNode }) {
     else             localStorage.removeItem(SELECTED_KEY_2)
   }, [selectedId2])
 
+  // Auto-save workspace state whenever key selection/view state changes.
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!mounted || !activeId) return
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    autoSaveTimer.current = setTimeout(() => { saveWorkspace() }, 400)
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, selectedId2, view1Page, view2Page, splitView, activeId, mounted])
+
+  // ─── Split restore helper ─────────────────────────────────────────────────────
+
+  function restoreSplit(proj: Project): boolean {
+    if (proj.splitView === false) return false
+    if (proj.splitView === true) return true
+    return !!(proj.view2Page || proj.sel2)
+  }
+
+  // ─── History helpers ──────────────────────────────────────────────────────────
+
+  function captureHistory() {
+    const curId = activeIdRef.current
+    if (!curId) return
+    const proj = projectsRef.current.find(p => p.id === curId)
+    if (!proj) return
+    const researchTabs = readResearchTabs()
+    const fileSources = proj.sources.filter(s => s.fileType !== 'url')
+    const pageSources = proj.sources.filter(s => s.fileType === 'url')
+    addHistoryEntry({
+      id: uid(),
+      ts: Date.now(),
+      wsId: curId,
+      wsName: proj.name,
+      docs: fileSources.map(s => ({ id: s.id, label: s.label || s.raw, fileType: s.fileType })),
+      pages: pageSources.map(s => ({ id: s.id, label: s.label || s.raw, url: s.url || s.raw })),
+      sel1: selectedIdRef.current,
+      sel2: selectedId2Ref.current,
+      view1: view1PageRef.current,
+      view2: view2PageRef.current,
+      splitView: splitViewRef.current,
+      webTabs: researchTabs,
+    })
+  }
+
+  function restoreFromHistory(entry: HistoryEntry) {
+    // Source IDs are preserved from history so IDB file lookups still work.
+    // The workspace itself gets a fresh ID to avoid overwriting the current one.
+    const restoredDocs: QueuedSource[] = entry.docs.map(d => ({
+      id: d.id, raw: d.label, label: d.label,
+      status: 'queued' as const, error: null,
+      fileType: (d.fileType ?? 'pdf') as QueuedSource['fileType'],
+    }))
+    const restoredPages: QueuedSource[] = entry.pages.map(p => ({
+      id: p.id, raw: p.url, url: p.url, label: p.label,
+      status: 'done' as const, error: null, fileType: 'url' as const,
+    }))
+
+    // Build a unique restoration name: "Workspace (restored)" or "Workspace (restored 2)"
+    const baseName = `${entry.wsName} (restored)`
+    const usedNames = new Set(projectsRef.current.map(p => p.name))
+    let restoredName = baseName
+    for (let n = 2; usedNames.has(restoredName); n++) restoredName = `${baseName} ${n}`
+
+    const restoredProj: Project = {
+      id: uid(),
+      name: restoredName,
+      sources: [...restoredDocs, ...restoredPages],
+      sel1: entry.sel1,
+      sel2: entry.sel2,
+      view1Page: entry.view1,
+      view2Page: entry.view2,
+      splitView: entry.splitView,
+      researchTabs: entry.webTabs,
+    }
+
+    // Save the current workspace state before switching away
+    captureHistory()
+    setProjects(ps => [...ps, restoredProj])
+    setActiveId(restoredProj.id)
+    setSelectedId(entry.sel1)
+    setSelectedId2(entry.sel2)
+    setView1Page(entry.view1)
+    setView2Page(entry.view2)
+    setSplitView(entry.splitView)
+    loadResearchTabs(entry.webTabs)
+
+    // Re-extract PDF/image content from IDB for restored sources
+    ;(async () => {
+      for (const doc of restoredDocs) {
+        if (doc.fileType === 'note' || doc.fileType === 'url') continue
+        try {
+          if (doc.fileType === 'image') {
+            const file = await getFile(doc.id)
+            patchSource('', doc.id, file ? { status: 'done' } : { status: 'error', error: 'File not found — re-upload to restore.' })
+          } else {
+            let content = await getContent(doc.id) as import('@/lib/types').DocContent | null
+            if (!content) {
+              const file = await getFile(doc.id)
+              if (file) {
+                content = await extractContent(file)
+                storeContent(doc.id, content).catch(() => {})
+              }
+            }
+            if (content) patchSource('', doc.id, { content, status: 'done' })
+            else patchSource('', doc.id, { status: 'error', error: 'File not found — re-upload to restore.' })
+          }
+        } catch {
+          patchSource('', doc.id, { status: 'error', error: 'Failed to restore.' })
+        }
+      }
+    })()
+  }
+
+  function deleteHistoryEntryFn(id: string) {
+    storageDeleteHistoryEntry(id)
+  }
+
   // ─── Derived ────────────────────────────────────────────────────────────────
 
   const activeProject       = projects.find(p => p.id === activeId) ?? null
@@ -275,6 +464,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const stackIds   : string[]        = sources.map(s => s.id)
   const atStackLimit                 = sources.length >= STACK_LIMIT
   const inStack    = (id: string)    => sources.some(s => s.id === id)
+
+  // ─── Auth + entitlement ──────────────────────────────────────────────────────
+
+  async function signInFn(email: string): Promise<SignInResult> {
+    const result = await authSignIn(email)
+    if (result.ok) {
+      setUser(result.user)
+      setIsPro(result.isPro)
+    }
+    return result
+  }
+
+  function signOut() {
+    clearStoredSession()
+    setUser(null)
+    setIsPro(checkIsPro())   // re-read: falls back to legacy license if present
+  }
+
+  async function refreshEntitlementFn() {
+    if (!user) return
+    const pro = await authRefresh(user.token).catch(() => null)
+    if (pro !== null) setIsPro(pro)
+  }
+
+  async function openBilling() {
+    if (!user?.customerId) return
+    const url = await getPortalUrl(user.customerId).catch(() => null)
+    if (url) window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
+  // Legacy license key path (existing beta users)
+  function activatePro() {
+    storeEntitlementCache(true)
+    setIsPro(true)
+  }
+
+  function deactivatePro() {
+    storeEntitlementCache(false)
+    setIsPro(false)
+  }
+
+  function needUpgrade(msg: string) {
+    warn(msg)
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('proof:upgrade-needed'))
+  }
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -324,7 +558,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Target project must have room.
       const target = ps.find(p => p.id === targetProjId)
       if (target && target.sources.length >= STACK_LIMIT) {
-        warn(`Project full. ${STACK_LIMIT} sources maximum.`)
+        warn(`Document limit reached (${STACK_LIMIT}). Remove Documents to add more.`)
         return ps
       }
       return ps.map(p => {
@@ -346,7 +580,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   async function uploadFiles(files: FileList | File[], targetProjId?: string) {
     const projId = targetProjId ?? activeIdRef.current
-    if (!projId) { warn('Create a project first.'); return }
+    if (!projId) { newWorkspace(); return }
 
     const isImage = (f: File) =>
       f.type.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(f.name)
@@ -361,16 +595,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     list = list.filter(f => !currentAllSources.some(s => s.label === f.name))
     if (!list.length) return
 
+    const limits = isProRef.current ? PRO_LIMITS : FREE_LIMITS
+
+    // Global uploaded-document count cap (PDFs and images only; Pages/notes excluded).
+    if (isFinite(limits.docCount)) {
+      const uploadedCount = currentAllSources.filter(
+        s => s.fileType === 'pdf' || s.fileType === 'image'
+      ).length
+      if (uploadedCount >= limits.docCount) {
+        needUpgrade('Free includes 10 Documents. Upgrade to Pro or remove uploaded Documents.')
+        return
+      }
+      const countRoom = limits.docCount - uploadedCount
+      if (list.length > countRoom) list = list.slice(0, countRoom)
+    }
+
     // Per-project source cap.
     const targetProj  = projectsRef.current.find(p => p.id === projId)
     const room        = STACK_LIMIT - (targetProj?.sources.length ?? 0)
-    if (room <= 0) { warn(`Project full. ${STACK_LIMIT} sources maximum.`); return }
+    if (room <= 0) { warn(`Document limit reached (${STACK_LIMIT}). Remove Documents to add more.`); return }
     if (list.length > room) list = list.slice(0, room)
 
-    // 250 MB cap: reject the whole batch if it would push storage over the limit.
+    // Storage cap — tier-specific.
     const batchBytes = list.reduce((sum, f) => sum + f.size, 0)
-    if (await wouldExceedLimit(batchBytes)) {
-      warn('Storage limit reached. Remove uploaded Sources to add more.')
+    if (await wouldExceedLimit(batchBytes, limits.storageBytes)) {
+      needUpgrade('Storage limit reached. Upgrade to Pro or remove uploaded Documents.')
       return
     }
 
@@ -464,10 +713,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   function createNote(targetProjId?: string) {
     const projId = targetProjId ?? activeIdRef.current
-    if (!projId) { warn('Create a project first.'); return }
+    if (!projId) { newWorkspace(); return }
     const projNow = projectsRef.current.find(p => p.id === projId)
     if (projNow && projNow.sources.length >= STACK_LIMIT) {
-      warn(`Project full. ${STACK_LIMIT} sources maximum.`)
+      warn(`Document limit reached (${STACK_LIMIT}). Remove Documents to add more.`)
       return
     }
     const note = newNote()
@@ -478,10 +727,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   async function addUrl(url: string, targetProjId?: string, label?: string) {
     const projId = targetProjId ?? activeIdRef.current
-    if (!projId) { warn('Create a project first.'); return }
+    if (!projId) { newWorkspace(); return }
     const projNow = projectsRef.current.find(p => p.id === projId)
     if (projNow && projNow.sources.length >= STACK_LIMIT) {
-      warn(`Project full. ${STACK_LIMIT} sources maximum.`)
+      warn(`Document limit reached (${STACK_LIMIT}). Remove Documents to add more.`)
       return
     }
     const src = newUrlSource(url, label)
@@ -572,19 +821,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const researchTabs = readResearchTabs()
     setProjects(ps => ps.map(p => {
       if (p.id !== activeId) return p
-      return { ...p, sel1: selectedId, sel2: selectedId2, researchTabs, ...(name !== undefined ? { name } : {}) }
+      return { ...p, sel1: selectedId, sel2: selectedId2, view1Page, view2Page, splitView, researchTabs, ...(name !== undefined ? { name } : {}) }
     }))
   }
 
   function switchWorkspace(id: string) {
     if (id === activeId) return
+    captureHistory()
     const curId   = activeId
     const curSel1 = selectedId
     const curSel2 = selectedId2
     const researchTabs = readResearchTabs()
 
     // Persist state of the workspace we're leaving
-    setProjects(ps => ps.map(p => p.id === curId ? { ...p, sel1: curSel1, sel2: curSel2, researchTabs } : p))
+    setProjects(ps => ps.map(p => p.id === curId
+      ? { ...p, sel1: curSel1, sel2: curSel2, view1Page, view2Page, splitView, researchTabs }
+      : p))
 
     const newProj = projects.find(p => p.id === id)
     setActiveId(id)
@@ -593,27 +845,60 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSelectedIds(new Set())
     setAnchorId(null)
 
+    const nv1 = newProj?.view1Page ?? null
+    const nv2 = newProj?.view2Page ?? null
+    setView1Page(nv1)
+    setView2Page(nv2)
+    setSplitView(newProj ? restoreSplit(newProj) : false)
+    // Clear immediately when no page; navigate handled by ViewPane useEffect when page is set.
+    if (typeof window !== 'undefined') {
+      if (!nv1) (window as any).electronAPI?.view?.clear?.('1')
+      if (!nv2) (window as any).electronAPI?.view?.clear?.('2')
+    }
+
     loadResearchTabs(newProj?.researchTabs ?? [])
   }
 
   function newWorkspace() {
+    captureHistory()
+    const limits = isProRef.current ? PRO_LIMITS : FREE_LIMITS
+    if (!isProRef.current && projectsRef.current.length >= limits.workspaces) {
+      needUpgrade('Free includes 1 workspace. Upgrade to Pro for unlimited workspaces.')
+      return
+    }
+
     const curId   = activeId
     const curSel1 = selectedId
     const curSel2 = selectedId2
     const researchTabs = readResearchTabs()
 
     if (curId) {
-      setProjects(ps => ps.map(p => p.id === curId ? { ...p, sel1: curSel1, sel2: curSel2, researchTabs } : p))
+      setProjects(ps => ps.map(p => p.id === curId
+        ? { ...p, sel1: curSel1, sel2: curSel2, view1Page, view2Page, splitView, researchTabs }
+        : p))
     }
 
     const p = newProject(namedProjectCount + 1)
-    p.name = ''
+    const usedNames = new Set(projectsRef.current.map(w => w.name))
+    let untitledName = 'Untitled'
+    for (let i = 1; i <= projectsRef.current.length + 1; i++) {
+      const candidate = `Untitled-${String(i).padStart(2, '0')}`
+      if (!usedNames.has(candidate)) { untitledName = candidate; break }
+    }
+    p.name = untitledName
     setProjects(ps => [...ps, p])
     setActiveId(p.id)
     setSelectedId(null)
     setSelectedId2(null)
     setSelectedIds(new Set())
     setAnchorId(null)
+    setView1Page(null)
+    setView2Page(null)
+    setSplitView(false)
+    if (typeof window !== 'undefined') {
+      ;(window as any).electronAPI?.view?.clear?.('1')
+      ;(window as any).electronAPI?.view?.clear?.('2')
+    }
 
     loadResearchTabs([])
   }
@@ -621,6 +906,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   function removeWorkspace(targetId?: string) {
     const id = targetId ?? activeId
     if (!id) return
+    captureHistory()
+    if (projects.length <= 1) return
     const proj = projects.find(p => p.id === id)
     if (!proj) return
 
@@ -651,12 +938,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActiveId(null)
       setSelectedId(null)
       setSelectedId2(null)
+      setSplitView(false)
       loadResearchTabs([])
     } else {
       const nextProj = remaining[Math.max(0, idx - 1)]
       setActiveId(nextProj.id)
       setSelectedId(nextProj.sel1 ?? null)
       setSelectedId2(nextProj.sel2 ?? null)
+      const rv1 = nextProj.view1Page ?? null
+      const rv2 = nextProj.view2Page ?? null
+      setView1Page(rv1)
+      setView2Page(rv2)
+      setSplitView(restoreSplit(nextProj))
+      // Clear immediately when no page; navigate handled by ViewPane useEffect when page is set.
+      if (typeof window !== 'undefined') {
+        if (!rv1) (window as any).electronAPI?.view?.clear?.('1')
+        if (!rv2) (window as any).electronAPI?.view?.clear?.('2')
+      }
       loadResearchTabs(nextProj.researchTabs ?? [])
     }
 
@@ -689,23 +987,87 @@ export function AppProvider({ children }: { children: ReactNode }) {
       window.open(url, '_blank', 'noopener,noreferrer')
       return
     }
-    // Smart routing: fill the first empty pane, otherwise replace Source 1.
+    // Single mode: always route to pane 1.
+    if (!splitViewRef.current) {
+      if (view1Page) { setView1Page(null); ;(window as any).electronAPI?.view?.clear?.('1') }
+      setSelectedId(id)
+      return
+    }
+    // Split mode: smart routing — fill first empty pane, otherwise replace View 1.
+    // Clearing view pages ensures doc and live page don't occupy the same pane.
     if (!selectedId || selectedId === id) {
+      if (view1Page) { setView1Page(null); ;(window as any).electronAPI?.view?.clear?.('1') }
       setSelectedId(id)
     } else if (!selectedId2 || selectedId2 === id) {
+      if (view2Page) { setView2Page(null); ;(window as any).electronAPI?.view?.clear?.('2') }
       setSelectedId2(id)
     } else {
+      if (view1Page) { setView1Page(null); ;(window as any).electronAPI?.view?.clear?.('1') }
       setSelectedId(id)
     }
   }
 
+  function openDocInPane(pane: 1 | 2, srcId: string) {
+    if (pane === 2) {
+      setSplitView(true)
+      if (view2PageRef.current) { setView2Page(null); ;(window as any).electronAPI?.view?.clear?.('2') }
+      setSelectedId2(srcId)
+    } else {
+      if (view1PageRef.current) { setView1Page(null); ;(window as any).electronAPI?.view?.clear?.('1') }
+      setSelectedId(srcId)
+    }
+  }
+
+  function pinPageToView(pane: 1 | 2, src: QueuedSource) {
+    const url   = src.url ?? src.raw
+    const title = src.label ?? url
+    const page: ViewPage = { url, title, srcId: src.id }
+    // Navigation is handled by ViewPane's useEffect after bounds are set — not here.
+    if (pane === 1) {
+      setView1Page(page)
+      setSelectedId(null)
+    } else {
+      setSplitView(true)
+      setView2Page(page)
+      setSelectedId2(null)
+    }
+  }
+
+  function pinUrlToView(pane: 1 | 2, url: string, title: string) {
+    const page: ViewPage = { url, title }
+    if (pane === 1) {
+      setView1Page(page)
+      setSelectedId(null)
+    } else {
+      setSplitView(true)
+      setView2Page(page)
+      setSelectedId2(null)
+    }
+  }
+
+  function clearView(pane: 1 | 2) {
+    if (pane === 1) {
+      setView1Page(null)
+      ;(window as any).electronAPI?.view?.clear?.('1')
+    } else {
+      setView2Page(null)
+      ;(window as any).electronAPI?.view?.clear?.('2')
+    }
+  }
+
   // ─── Context value ──────────────────────────────────────────────────────────
+
+  const limits: Limits = isPro ? PRO_LIMITS : FREE_LIMITS
 
   const value: AppState = {
     mounted, projects, activeId, selectedId, selectedId2, selectedIds, anchorId,
     contextMenu,
     activeProject, sources, allSources, selectedSource, selectedSource2,
     stackIds, stackSources, stackLimit: STACK_LIMIT, atStackLimit, inStack,
+    view1Page, view2Page, splitView, setSplitView, pinPageToView, pinUrlToView, clearView, openDocInPane,
+    user, isPro, limits,
+    signIn: signInFn, signOut, refreshEntitlement: refreshEntitlementFn, openBilling,
+    activatePro, deactivatePro,
     setSelectedId, setSelectedId2, setSelectedIds, setAnchorId,
     setContextMenu,
     setProjects, updateProject, patchSource, moveSource, moveSourceToProject, moveProject,
@@ -714,6 +1076,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     createNote, addUrl,
     addToStack, removeFromStack, clearStack, reorderStack, openInPane,
     switchWorkspace, newWorkspace, saveWorkspace, removeWorkspace,
+    restoreFromHistory, deleteHistoryEntry: deleteHistoryEntryFn,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
@@ -726,3 +1089,4 @@ export function useApp(): AppState {
 }
 
 export { STORAGE_LIMIT_BYTES }
+export type { Limits }

@@ -35,6 +35,12 @@ export interface SavedResearchTab {
   active?: boolean
 }
 
+export interface ViewPage {
+  url: string
+  title: string
+  srcId?: string
+}
+
 export interface Project {
   id: string
   name: string
@@ -42,5 +48,23 @@ export interface Project {
   // Per-workspace state — saved on switch/explicit save
   sel1?: string | null
   sel2?: string | null
+  view1Page?: ViewPage | null
+  view2Page?: ViewPage | null
+  splitView?: boolean
   researchTabs?: SavedResearchTab[]
+}
+
+export interface HistoryEntry {
+  id: string
+  ts: number
+  wsId: string
+  wsName: string
+  docs: Array<{ id: string; label: string; fileType?: string }>
+  pages: Array<{ id: string; label: string; url: string }>
+  sel1: string | null
+  sel2: string | null
+  view1: ViewPage | null
+  view2: ViewPage | null
+  splitView: boolean
+  webTabs: SavedResearchTab[]
 }
