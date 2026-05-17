@@ -6,7 +6,6 @@ import SourcePanel       from '@/components/SourcePanel'
 import RightPanel        from '@/components/RightPanel'
 import SourceContextMenu from '@/components/SourceContextMenu'
 import AccountModal      from '@/components/AccountModal'
-import HistoryModal      from '@/components/HistoryModal'
 import { useApp }        from '@/context/AppContext'
 import { getCheckoutUrl } from '@/lib/auth'
 import { useState, useEffect, useRef } from 'react'
@@ -14,8 +13,8 @@ import { useState, useEffect, useRef } from 'react'
 // pdfjs-dist uses DOMMatrix at module init — must not run during SSR
 const ReaderPanel = dynamic(() => import('@/components/ReaderPanel'), { ssr: false })
 
-const DEF_SOURCE  = '20%'
-const DEF_BROWSER = '40%'
+const DEF_SOURCE       = '20%'
+const DEF_BROWSER_PX   = 560   // default browser panel width in pixels
 
 function StorageWarning() {
   const [msg, setMsg] = useState<string | null>(null)
@@ -226,27 +225,56 @@ function AppShell() {
   const [researchFocused, setResearchFocused] = useState(false)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [showAccount, setShowAccount] = useState(false)
-  const [showHistory, setShowHistory] = useState(false)
+  const [browserWidth, setBrowserWidth] = useState(DEF_BROWSER_PX)
+  // soloPane lifted out of ReaderPanel so it survives the unmount that happens
+  // when researchFocused toggles. Otherwise solo View 2 would snap back to View 1
+  // after exiting research fullscreen.
+  const [soloPane, setSoloPane] = useState<1 | 2>(1)
+  const isDraggingRef = useRef(false)
+
+  function handleDividerMouseDown(e: React.MouseEvent) {
+    e.preventDefault()
+    isDraggingRef.current = true
+
+    function onMove(ev: MouseEvent) {
+      if (!isDraggingRef.current) return
+      const newWidth = Math.max(280, Math.min(window.innerWidth - 320, window.innerWidth - ev.clientX - 5))
+      setBrowserWidth(newWidth)
+    }
+    function onUp() {
+      isDraggingRef.current = false
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      window.dispatchEvent(new Event('resize'))
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
 
   useEffect(() => {
-    function onUpgradeNeeded() { setShowUpgrade(true) }
-    function onShowAccount()   { setShowAccount(true) }
-    function onShowHistory()   { setShowHistory(true) }
+    function onUpgradeNeeded() {
+      // setModal synchronously — useEffect fires after render, too late for native views
+      ;(window as any).electronAPI?.setModal?.(true)
+      setShowUpgrade(true)
+    }
+    function onShowAccount() {
+      ;(window as any).electronAPI?.setModal?.(true)
+      setShowAccount(true)
+    }
     window.addEventListener('proof:upgrade-needed', onUpgradeNeeded as EventListener)
     window.addEventListener('proof:show-account',   onShowAccount   as EventListener)
-    window.addEventListener('proof:show-history',   onShowHistory   as EventListener)
     return () => {
       window.removeEventListener('proof:upgrade-needed', onUpgradeNeeded as EventListener)
       window.removeEventListener('proof:show-account',   onShowAccount   as EventListener)
-      window.removeEventListener('proof:show-history',   onShowHistory   as EventListener)
     }
   }, [])
 
-  // Hide native WebContentsViews behind modal overlays — they sit above DOM z-index.
+  // Hide native WebContentsViews on close — keep in sync when modals dismiss.
   useEffect(() => {
-    const isOpen = showUpgrade || showAccount || showHistory
-    ;(window as any).electronAPI?.setModal?.(isOpen)
-  }, [showUpgrade, showAccount, showHistory])
+    if (!showUpgrade && !showAccount) {
+      ;(window as any).electronAPI?.setModal?.(false)
+    }
+  }, [showUpgrade, showAccount])
 
   if (!mounted) {
     return (
@@ -262,10 +290,20 @@ function AppShell() {
         <ProjectBar />
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden', paddingRight: '5px' }}>
           <SourcePanel width={DEF_SOURCE} />
-          {!researchFocused && <ReaderPanel />}
+          {!researchFocused && <ReaderPanel soloPane={soloPane} setSoloPane={setSoloPane} />}
+          {!researchFocused && (
+            <div
+              onMouseDown={handleDividerMouseDown}
+              style={{
+                width: '5px', flexShrink: 0, cursor: 'col-resize',
+                background: 'transparent',
+                WebkitAppRegion: 'no-drag',
+              } as React.CSSProperties}
+            />
+          )}
           <div style={researchFocused
             ? { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
-            : { width: DEF_BROWSER, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
+            : { width: browserWidth, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
           }>
             <RightPanel isFocused={researchFocused} onFocusToggle={() => setResearchFocused(f => !f)} />
           </div>
@@ -275,7 +313,6 @@ function AppShell() {
       <StorageWarning />
       {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
       {showAccount && <AccountModal onClose={() => setShowAccount(false)} />}
-      <HistoryModal open={showHistory} onClose={() => setShowHistory(false)} />
     </>
   )
 }

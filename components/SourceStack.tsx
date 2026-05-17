@@ -23,12 +23,11 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
     if (selectedId2 === srcId) return 2
     return panePrefs[srcId] ?? 1
   }
-  function togglePref(srcId: string, e: React.MouseEvent) {
+  function setPref(srcId: string, pane: 1 | 2, e: React.MouseEvent) {
     e.stopPropagation()
-    const current = getEffectivePref(srcId)
     setPanePrefs(prev => {
       const next = { ...prev }
-      if (current === 2) delete next[srcId]; else next[srcId] = 2
+      if (pane === 1) delete next[srcId]; else next[srcId] = 2
       return next
     })
   }
@@ -121,8 +120,11 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
                 onRenameCancel={rowProps.onRenameCancel}
                 onClick={() => openWithPref(src.id)}
                 onContextMenu={e => rowProps.onContextMenu(src.id, e)}
-                pref={getEffectivePref(src.id)}
-                onTogglePref={e => togglePref(src.id, e)}
+                paneButtons={{
+                  pref: getEffectivePref(src.id),
+                  onSet1: e => setPref(src.id, 1, e),
+                  onSet2: e => setPref(src.id, 2, e),
+                }}
               />
             ))
           )}
@@ -185,7 +187,6 @@ function SectionHeader({ title, action }: { title: string; action?: React.ReactN
   )
 }
 
-
 function EmptyRow({ text }: { text: string }) {
   return (
     <div style={{
@@ -204,7 +205,7 @@ function EmptyRow({ text }: { text: string }) {
 function StackRow({
   src, isActive,
   renaming, renameValue, onRenameChange, onRenameCommit, onRenameCancel,
-  onClick, onContextMenu, pref, onTogglePref, pinButtons,
+  onClick, onContextMenu, paneButtons, pinButtons,
 }: {
   src: QueuedSource
   isActive: boolean
@@ -215,8 +216,7 @@ function StackRow({
   onRenameCancel: () => void
   onClick: () => void
   onContextMenu: (e: React.MouseEvent) => void
-  pref?: 1 | 2
-  onTogglePref?: (e: React.MouseEvent) => void
+  paneButtons?: { pref: 1 | 2; onSet1: (e: React.MouseEvent) => void; onSet2: (e: React.MouseEvent) => void }
   pinButtons?: { onPin1: () => void; onPin2: () => void; active1?: boolean; active2?: boolean }
 }) {
   const [hov, setHov] = useState(false)
@@ -276,32 +276,22 @@ function StackRow({
         </span>
       )}
 
-      {/* View pref toggle — Documents only */}
-      {pref !== undefined && onTogglePref && (
-        <button
-          onClick={renaming ? undefined : onTogglePref}
-          title={renaming ? undefined : (pref === 1 ? 'Opens in View 1 — click for View 2' : 'Opens in View 2 — click for View 1')}
-          style={{
-            flexShrink: 0,
-            width: '20px', height: '20px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'none', border: 'none', padding: 0, outline: 'none',
-            color: pref === 2 ? '#666' : '#333',
-            cursor: renaming ? 'default' : 'pointer',
-            transition: 'color 0.12s',
-            visibility: renaming ? 'hidden' : 'visible',
-            pointerEvents: renaming ? 'none' : 'auto',
-          }}
-          onMouseEnter={e => { if (!renaming) { e.stopPropagation(); e.currentTarget.style.color = '#888' } }}
-          onMouseLeave={e => { e.currentTarget.style.color = pref === 2 ? '#666' : '#333' }}
-        >
-          <svg width="8" height="5" viewBox="0 0 8 5" fill="none" style={{ display: 'block' }}>
-            <path
-              d={pref === 1 ? 'M1 4L4 1.5L7 4' : 'M1 1.5L4 4L7 1.5'}
-              stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"
-            />
-          </svg>
-        </button>
+      {/* Pane selector — Documents: 1 / 2 buttons */}
+      {paneButtons && !renaming && (
+        <>
+          <PinBtn
+            label="1"
+            title="Open in View 1"
+            active={paneButtons.pref === 1}
+            onClick={paneButtons.onSet1}
+          />
+          <PinBtn
+            label="2"
+            title="Open in View 2"
+            active={paneButtons.pref === 2}
+            onClick={paneButtons.onSet2}
+          />
+        </>
       )}
 
       {/* View pin buttons — Pages only */}
@@ -312,7 +302,7 @@ function StackRow({
         </>
       )}
 
-      {/* File type badge — Documents only, neutral */}
+      {/* File type badge — Documents only */}
       {src.fileType !== 'url' && <TypeBadge kind={src.fileType === 'image' ? 'IMG' : 'PDF'} />}
     </div>
   )
@@ -321,20 +311,21 @@ function StackRow({
 function PinBtn({ label, title, active, onClick }: {
   label: string; title: string; active: boolean; onClick: (e: React.MouseEvent) => void
 }) {
+  const [hov, setHov] = useState(false)
   return (
     <button
       onClick={onClick}
       title={title}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
       style={{
         flexShrink: 0, width: '16px', height: '16px',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'none', border: 'none', padding: 0, outline: 'none',
-        color: active ? '#aaa' : '#333',
+        color: active ? '#aaa' : hov ? '#777' : '#333',
         fontSize: '9px', letterSpacing: '0.02em',
         cursor: 'pointer', transition: 'color 0.12s', fontFamily: 'inherit',
       }}
-      onMouseEnter={e => { e.stopPropagation(); e.currentTarget.style.color = '#bbb' }}
-      onMouseLeave={e => { e.currentTarget.style.color = active ? '#aaa' : '#333' }}
     >
       {label}
     </button>

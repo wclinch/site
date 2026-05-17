@@ -29,26 +29,26 @@ export default function About() {
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Site is a persistent research workspace. Research on the right, save pages and files to the left, open sources in the center. Come back later and everything is still there.
+            Site keeps your documents, saved pages, and web tabs together. Web on the right, save pages and files to the left, open documents in the center. Come back later and everything is still there.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Sources, Sites, open source panes, and Research tabs all restore with each workspace. Switch workspaces and your full setup comes back.
+            Documents, Pages, Views, and Web tabs all restore with each workspace. Switch workspaces and everything comes back.
           </p>
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Layout</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Sources / Sites</span> — The left column. Sources are files you add. Sites are pages you save from Research. Both stay saved with the workspace.
+            <span style={{ color: '#999' }}>Documents / Pages</span> — The left column. Documents are files you add. Pages are web pages you save from Web. Both stay saved with the workspace.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Source 1 / Source 2</span> — The center column. Two panes for opening files from Sources. Each opens independently and restores on return.
+            <span style={{ color: '#999' }}>View 1 / View 2</span> — The center column. Two panes for opening Documents or Pages. Each opens independently and restores on return.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Research</span> — The right column. Browser tabs with a URL bar. Save the current page to Sites.
+            <span style={{ color: '#999' }}>Web</span> — The right column. Browser tabs with a URL bar. Save the current page to Pages.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Workspace</span> — A named restore point. Sources, Sites, Source 1/2, and Research tabs all come back when you return to a workspace.
+            <span style={{ color: '#999' }}>Workspace</span> — A named restore point. Documents, Pages, View 1 and View 2, and Web tabs all come back when you return.
           </p>
         </div>
 
@@ -56,17 +56,17 @@ export default function About() {
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Interactions</span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {[
-              { keys: ['Drop file'],        desc: 'Add a PDF or image to Sources' },
-              { keys: ['Add file'],         desc: 'Add a PDF or image via file picker' },
-              { keys: ['Click source'],     desc: 'Open in Source 1 or Source 2' },
-              { keys: ['Drag source'],      desc: 'Drop onto Source 1 or Source 2 to open in that pane' },
-              { keys: ['× on source row'],  desc: 'Remove from Sources' },
-              { keys: ['Click site'],       desc: 'Open in Research' },
-              { keys: ['× on site row'],    desc: 'Remove from Sites' },
-              { keys: ['URL bar'],          desc: 'Navigate or search in Research' },
-              { keys: ['Save'],             desc: 'Save the current Research page to Sites' },
-              { keys: ['Save As'],          desc: 'Name and save the current workspace' },
-              { keys: ['New'],              desc: 'Start a blank workspace' },
+              { keys: ['Drop file'],           desc: 'Add a PDF or image to Documents' },
+              { keys: ['+'],                 desc: 'Add a PDF or image to Documents via file picker' },
+              { keys: ['Click document'],    desc: 'Open in View 1 or View 2' },
+              { keys: ['Drag document'],     desc: 'Drop onto View 1 or View 2 to open in that view' },
+              { keys: ['× on document row'], desc: 'Remove from Documents' },
+              { keys: ['Click page'],        desc: 'Open in Web' },
+              { keys: ['× on page row'],     desc: 'Remove from Pages' },
+              { keys: ['URL bar'],           desc: 'Navigate or search in Web' },
+              { keys: ['Save'],              desc: 'Save the current Web page to Pages' },
+              { keys: ['Double-click tab'],  desc: 'Rename the workspace' },
+              { keys: ['+'],                desc: 'Start a blank workspace' },
               { keys: ['Esc'],              desc: 'Close menus and overlays' },
             ].map((row, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
@@ -80,7 +80,7 @@ export default function About() {
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Source types</span>
+          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Document types</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
             <span style={{ color: '#999' }}>PDF</span> — Selectable text. Scanned documents render as image-only.
           </p>
@@ -92,7 +92,7 @@ export default function About() {
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Storage</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>250 MB</span> for uploaded Sources. Saved Sites store metadata only and do not count toward storage. Nothing is transmitted.
+            <span style={{ color: '#999' }}>Free: 150 MB</span> for uploaded Documents. <span style={{ color: '#999' }}>Pro: 5 GB.</span> Saved Pages store metadata only and do not count toward storage. Nothing is transmitted.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
             <span style={{ color: '#999' }}>Site → Reset Site Data…</span> (desktop menu) clears all local state. Cannot be reversed.

@@ -53,18 +53,3 @@ export interface Project {
   splitView?: boolean
   researchTabs?: SavedResearchTab[]
 }
-
-export interface HistoryEntry {
-  id: string
-  ts: number
-  wsId: string
-  wsName: string
-  docs: Array<{ id: string; label: string; fileType?: string }>
-  pages: Array<{ id: string; label: string; url: string }>
-  sel1: string | null
-  sel2: string | null
-  view1: ViewPage | null
-  view2: ViewPage | null
-  splitView: boolean
-  webTabs: SavedResearchTab[]
-}

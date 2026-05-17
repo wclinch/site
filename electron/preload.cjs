@@ -14,7 +14,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getPortalUrl:       (customerId) => ipcRenderer.invoke('auth:get-portal-url', customerId),
   },
   // ── Modal state ─────────────────────────────────────────────────────────────
-  setModal: (isOpen) => ipcRenderer.send('app:set-modal', isOpen),
+  // sendSync blocks the renderer until main has actually zeroed native views,
+  // preventing the race where the modal renders before native views are hidden.
+  setModal: (isOpen) => ipcRenderer.sendSync('app:set-modal', isOpen),
+  openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   // ── View panes (center View 1 / View 2 live pages) ───────────────────────────
   view: {
     navigate:  (paneId, url)  => ipcRenderer.send('view:navigate',   paneId, url),
@@ -29,11 +32,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     goBack:    (pid)       => ipcRenderer.send('research:go-back',    pid),
     goForward: (pid)       => ipcRenderer.send('research:go-forward', pid),
     reload:    (pid)       => ipcRenderer.send('research:reload',     pid),
-    newTab:    (pid, url)  => ipcRenderer.send('research:new-tab',    pid, url),
-    closeTab:  (pid, id)   => ipcRenderer.send('research:close-tab',  pid, id),
-    switchTab: (pid, id)   => ipcRenderer.send('research:switch-tab', pid, id),
-    getState:  (pid)       => ipcRenderer.invoke('research:get-state', pid),
-    getTabs:   (pid)       => ipcRenderer.invoke('research:get-tabs',  pid),
+    newTab:    (pid, url)    => ipcRenderer.send('research:new-tab',    pid, url),
+    closeTab:  (pid, id)    => ipcRenderer.send('research:close-tab',  pid, id),
+    switchTab: (pid, id)    => ipcRenderer.send('research:switch-tab', pid, id),
+    getState:  (pid)        => ipcRenderer.invoke('research:get-state', pid),
+    getTabs:   (pid)        => ipcRenderer.invoke('research:get-tabs',  pid),
 
     onUrlChanged: (pid, cb) => {
       const fn = (_e, p, url, back, fwd) => { if (p === pid) cb(url, back, fwd) }
@@ -70,6 +73,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       const fn = () => cb()
       ipcRenderer.on('research:recalc-bounds', fn)
       return () => ipcRenderer.removeListener('research:recalc-bounds', fn)
+    },
+    onFailLoad: (pid, cb) => {
+      const fn = (_e, p, id, code) => { if (p === pid) cb(id, code) }
+      ipcRenderer.on('research:fail-load', fn)
+      return () => ipcRenderer.removeListener('research:fail-load', fn)
     },
     loadWorkspace: (tabs) => ipcRenderer.send('research:load-workspace', tabs),
   },

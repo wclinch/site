@@ -83,6 +83,10 @@ let devToolsOpen           = false
 // opening but devtools-opened hasn't fired yet (iW drops dramatically before the flag).
 let cachedScaleX = 1.0
 let cachedScaleY = 1.0
+// Scroll-restore gate: set to true by fullscreen/restore transitions so
+// scheduleScrollRestore() knows to fire restoreAllScrolls after bounds settle.
+let pendingScrollRestore = false
+let scrollRestoreTimer   = null
 
 // ─── Debug logger (remove after scroll-jump is diagnosed) ────────────────────
 function dbg(event, ...rest) {
@@ -103,7 +107,7 @@ function dbgWinState(win, label) {
     }
     for (const paneId of Object.keys(viewPanes)) {
       const pane = viewPanes[paneId]
-      const url = pane.view && !pane.view.webContents.isDestroyed() ? pane.view.webContents.getURL() : '—'
+      const url = wcAlive(pane.view) ? pane.view.webContents.getURL() : '—'
       const lb = pane.lastBounds
       console.log(`[DBG]   pane-${paneId}: url=${url.slice(0,60)} lastBounds=${lb ? `${lb.x},${lb.y},${lb.width}x${lb.height}` : 'null'}`)
     }
@@ -111,12 +115,31 @@ function dbgWinState(win, label) {
 }
 // Async: capture scrollY from a WebContentsView and log it.
 function dbgScrollAsync(label, view) {
-  if (!view || view.webContents.isDestroyed()) return
+  if (!wcAlive(view)) return
   view.webContents.executeJavaScript(
     `(function(){try{if(window.scrollY)return window.scrollY;var a=document.querySelectorAll('*');for(var i=0;i<Math.min(a.length,300);i++)if(a[i].scrollTop>0)return a[i].scrollTop;return 0}catch(x){return-1}})()`)
     .then(y => console.log(`[DBG]   scrollY@${label}:`, y)).catch(() => {})
 }
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Returns true if view exists and its webContents is alive.
+function wcAlive(view) {
+  return !!(view && view.webContents && !view.webContents.isDestroyed())
+}
+
+// Debounced scroll restore — called from set-bounds after applying new bounds.
+// Resets the 200ms timer on each call so we restore after the LAST bounds
+// update, not the first.  No-ops if no transition is pending.
+function scheduleScrollRestore() {
+  if (!pendingScrollRestore) return
+  if (scrollRestoreTimer) clearTimeout(scrollRestoreTimer)
+  scrollRestoreTimer = setTimeout(() => {
+    scrollRestoreTimer   = null
+    pendingScrollRestore = false
+    dbg('scheduleScrollRestore: firing restoreAllScrolls')
+    restoreAllScrolls()
+  }, 200)
+}
 
 // ─── Scroll save / restore ────────────────────────────────────────────────────
 // Preserves page scroll position across fullscreen transitions and minimize/restore.
@@ -138,14 +161,14 @@ function saveAllScrolls() {
     const panel = panels[pid]
     if (!panel.activeTabId) continue
     const view = panel.tabViews.get(panel.activeTabId)
-    if (!view || view.webContents.isDestroyed()) continue
+    if (!wcAlive(view)) continue
     const key = `panel-${pid}`
     tasks.push(view.webContents.executeJavaScript(CAPTURE_SCROLL_JS)
       .then(json => { if (json) savedScrolls.set(key, { view, json }) }).catch(() => {}))
   }
   for (const paneId of Object.keys(viewPanes)) {
     const pane = viewPanes[paneId]
-    if (!pane.view || pane.view.webContents.isDestroyed()) continue
+    if (!wcAlive(pane.view)) continue
     const url = pane.view.webContents.getURL()
     if (!url || url === 'about:blank') continue
     const key = `pane-${paneId}`
@@ -166,7 +189,7 @@ function restoreAllScrolls() {
         console.log(`[DBG-restore] ${key}: first element scrollTop=${parsed[2][0][1]} path=[${parsed[2][0][0]}]`)
       }
     } catch {}
-    if (!view || view.webContents.isDestroyed()) continue
+    if (!wcAlive(view)) continue
     tasks.push(view.webContents.executeJavaScript(makeRestoreScrollJs(json)).catch(() => {}))
   }
   savedScrolls.clear()
@@ -182,7 +205,7 @@ const viewPanes = {
 
 function getOrCreateViewPane(win, paneId) {
   const pane = viewPanes[paneId]
-  if (pane.view && !pane.view.webContents.isDestroyed()) return pane.view
+  if (wcAlive(pane.view)) return pane.view
   const view = new WebContentsView({
     webPreferences: {
       contextIsolation: true, nodeIntegration: false,
@@ -200,10 +223,15 @@ function getOrCreateViewPane(win, paneId) {
     } catch { event.preventDefault() }
   })
 
-  // Intercept popups from pinned Pages — route to a new Site Web tab.
+  // All window.open / target=_blank / popup requests from View panes → Site Web tab.
   wc.setWindowOpenHandler(({ url }) => {
     openUrlInNewTab(win, url)
     return { action: 'deny' }
+  })
+
+  // Re-apply zoom after every navigation (cross-origin resets Chromium's stored value).
+  wc.on('did-finish-load', () => {
+    if (wcAlive(view)) view.webContents.setZoomFactor(1.0)
   })
 
   pane.view = view
@@ -235,7 +263,7 @@ function showActiveView(win, pid) {
   const panel = panels[pid]
   if (!panel.activeTabId) return
   const view = panel.tabViews.get(panel.activeTabId)
-  if (!view || view.webContents.isDestroyed()) return
+  if (!wcAlive(view)) return
   const st = panel.tabStates.get(panel.activeTabId)
   dbg(`showActiveView[${pid}]: removeChildView+addChildView url=${st?.url?.slice(0,60)} lastBounds=${JSON.stringify(panel.lastBounds)}`)
   try { win.contentView.removeChildView(view) } catch {}
@@ -249,13 +277,13 @@ function hideAllViews() {
     const panel = panels[pid]
     if (!panel.activeTabId) continue
     const view = panel.tabViews.get(panel.activeTabId)
-    if (view && !view.webContents.isDestroyed()) {
+    if (wcAlive(view)) {
       try { view.setBounds({ x: 0, y: 0, width: 0, height: 0 }) } catch {}
     }
   }
   for (const pid of Object.keys(viewPanes)) {
     const pane = viewPanes[pid]
-    if (pane.view && !pane.view.webContents.isDestroyed()) {
+    if (wcAlive(pane.view)) {
       try { pane.view.setBounds({ x: 0, y: 0, width: 0, height: 0 }) } catch {}
     }
   }
@@ -266,13 +294,13 @@ function restoreAllViews() {
     const panel = panels[pid]
     if (!panel.activeTabId || !panel.lastBounds) continue
     const view = panel.tabViews.get(panel.activeTabId)
-    if (view && !view.webContents.isDestroyed()) {
+    if (wcAlive(view)) {
       try { view.setBounds(panel.lastBounds) } catch {}
     }
   }
   for (const pid of Object.keys(viewPanes)) {
     const pane = viewPanes[pid]
-    if (pane.lastBounds && pane.view && !pane.view.webContents.isDestroyed()) {
+    if (pane.lastBounds && wcAlive(pane.view)) {
       try { pane.view.setBounds(pane.lastBounds) } catch {}
     }
   }
@@ -289,24 +317,24 @@ function openUrlInNewTab(win, url) {
   if (!panel || panel.tabViews.size >= MAX_TABS) return
   const id = `tab-A-${Date.now()}-popup`
   createTabView(win, 'A', id)
-  // Seed state before switchToTab so React sees a non-empty URL in
-  // onTabsChanged and keeps homeMode=false instead of showing home screen.
+  // Seed state before switchToTab so React sees a real URL → homeMode=false.
   const state = panel.tabStates.get(id)
   if (state) { state.url = url; state.title = labelFromUrl(url); state.loading = true }
+  // switchToTab handles showActiveView + lazy-load (with bounds guard).
+  // Do NOT call loadURL here — switchToTab already does it via the bounds check,
+  // and a second call would cancel the first in-flight load causing a blank tab.
   switchToTab(win, 'A', id)
-  if (panel.lastBounds) {
-    panel.tabViews.get(id)?.webContents.loadURL(url).catch(() => {})
-  } else {
-    panel.pendingUrl = url
-    if (!win.webContents.isDestroyed()) win.webContents.send('research:recalc-bounds')
-  }
 }
 
 function tryFirePending(win, pid) {
   const panel = panels[pid]
-  if (!panel.pendingUrl || !windowReady || !panel.lastBounds) return
+  if (!panel.pendingUrl) return
+  if (!windowReady || !panel.lastBounds) {
+    console.log(`[${pid}] tryFirePending blocked (windowReady=${windowReady} hasLastBounds=${!!panel.lastBounds}): ${panel.pendingUrl?.slice(0, 60)}`)
+    return
+  }
   const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
-  if (!view || view.webContents.isDestroyed()) return
+  if (!wcAlive(view)) { console.log(`[${pid}] tryFirePending: view not alive`); return }
   if (panel.pendingTimer) clearTimeout(panel.pendingTimer)
   panel.pendingTimer = setTimeout(() => {
     panel.pendingTimer = null
@@ -314,7 +342,8 @@ function tryFirePending(win, pid) {
     if (!u) return
     panel.pendingUrl = null
     const v = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
-    if (!v || v.webContents.isDestroyed()) return
+    if (!wcAlive(v)) return
+    console.log(`[${pid}] pendingUrl fired: ${u.slice(0, 60)}`)
     showActiveView(win, pid)
     v.webContents.loadURL(u).catch(err => console.log(`[${pid}] loadURL error:`, err?.message))
   }, 80)
@@ -344,8 +373,8 @@ function createTabView(win, pid, id) {
     } catch { event.preventDefault() }
   })
 
-  // Intercept window.open / target=_blank / popup / OAuth redirects —
-  // open as a new Site Web tab instead of an independent OS window.
+  // All window.open / target=_blank / popup requests → Site Web tab.
+  // Shared partition so logins carry over; no standalone BrowserWindows.
   wc.setWindowOpenHandler(({ url }) => {
     openUrlInNewTab(win, url)
     return { action: 'deny' }
@@ -379,10 +408,8 @@ function createTabView(win, pid, id) {
   })
   wc.on('did-start-loading', () => {
     state.loading = true; sendTabUpdated()
-    if (id === panel.activeTabId) {
+    if (id === panel.activeTabId)
       win.webContents.send('research:loading-changed', pid, true)
-      if (!(inFullscreenTransition || isMinimized || isRestoring) && state.url && state.url !== 'about:blank') showActiveView(win, pid)
-    }
   })
   wc.on('did-stop-loading', () => {
     state.loading = false; syncNav(); sendTabUpdated()
@@ -391,7 +418,17 @@ function createTabView(win, pid, id) {
       win.webContents.send('research:can-navigate',    pid, state.canGoBack, state.canGoForward)
     }
   })
-  wc.on('did-fail-load', (_e, code) => { if (code === -3) return })
+  wc.on('did-fail-load', (_e, code) => {
+    if (code === -3) return
+    win.webContents.send('research:fail-load', pid, id, code)
+  })
+
+  // Re-apply zoom after every navigation (cross-origin resets zoom to per-origin stored value).
+  wc.on('did-finish-load', () => {
+    if (wcAlive(view) && id === panel.activeTabId) {
+      view.webContents.setZoomFactor(1.0)
+    }
+  })
 
   panel.tabViews.set(id, view)
   return view
@@ -413,13 +450,22 @@ function switchToTab(win, pid, id) {
   if (!(inFullscreenTransition || isMinimized || isRestoring) && hasContent) showActiveView(win, pid)
 
   // If this view was restored from a saved workspace but never loaded, load it now.
+  // Guard on bounds — don't loadURL into a 0×0 view; defer until bounds arrive.
   const switchView = panel.tabViews.get(id)
-  if (switchView && !switchView.webContents.isDestroyed() && hasContent) {
+  if (wcAlive(switchView) && hasContent) {
     const loaded = switchView.webContents.getURL()
     if (!loaded || loaded === 'about:blank') {
-      switchView.webContents.loadURL(state.url).catch(() => {})
+      if (panel.lastBounds && windowReady) {
+        switchView.webContents.loadURL(state.url).catch(() => {})
+      } else {
+        panel.pendingUrl = state.url
+        console.log(`[${pid}] pendingUrl set (switchToTab): ${state.url.slice(0, 60)}`)
+        if (windowReady) win.webContents.send('research:recalc-bounds')
+      }
     }
   }
+
+  if (wcAlive(switchView)) switchView.webContents.setZoomFactor(1.0)
 
   // Only send url-changed for real URLs. Sending '' triggers setHomeMode(false)
   // in the renderer which would flash white before homeMode corrects itself.
@@ -463,39 +509,30 @@ function setupResearchBrowser(win) {
     willFSFired = false
     inFullscreenTransition = false
     dbg(`enter-full-screen wasUserTriggered=${wasUserTriggered}`); dbgWinState(win, 'post')
+    pendingScrollRestore = true
     win.webContents.send('research:recalc-bounds')
-    dbg('enter-full-screen: recalc-bounds sent')
-    setTimeout(() => {
-      dbg('enter-full-screen: restoring scrolls (220ms)')
-      for (const pid of Object.keys(panels)) { const v = panels[pid].activeTabId && panels[pid].tabViews.get(panels[pid].activeTabId); dbgScrollAsync(`panel-${pid}-before-restore`, v) }
-      restoreAllScrolls().then(() => {
-        for (const pid of Object.keys(panels)) { const v = panels[pid].activeTabId && panels[pid].tabViews.get(panels[pid].activeTabId); dbgScrollAsync(`panel-${pid}-after-restore`, v) }
-      })
-    }, 220)
+    dbg('enter-full-screen: recalc-bounds sent, pendingScrollRestore=true')
   })
   win.on('leave-full-screen', () => {
     inFullscreenTransition = false
     dbg('leave-full-screen'); dbgWinState(win, 'post')
+    pendingScrollRestore = true
     win.webContents.send('research:recalc-bounds')
-    dbg('leave-full-screen: recalc-bounds sent')
-    setTimeout(() => {
-      dbg('leave-full-screen: restoring scrolls (220ms)')
-      restoreAllScrolls()
-    }, 220)
+    dbg('leave-full-screen: recalc-bounds sent, pendingScrollRestore=true')
   })
   function clearAndZeroAllViews() {
     for (const pid of Object.keys(panels)) {
       const panel = panels[pid]
       panel.lastBounds = null
       const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
-      if (view && !view.webContents.isDestroyed()) {
+      if (wcAlive(view)) {
         try { view.setBounds({ x: 0, y: 0, width: 0, height: 0 }) } catch {}
       }
     }
     for (const paneId of Object.keys(viewPanes)) {
       const pane = viewPanes[paneId]
       pane.lastBounds = null
-      if (pane.view && !pane.view.webContents.isDestroyed()) {
+      if (wcAlive(pane.view)) {
         try { pane.view.setBounds({ x: 0, y: 0, width: 0, height: 0 }) } catch {}
       }
     }
@@ -531,12 +568,10 @@ function setupResearchBrowser(win) {
     isRestoring = true
     setTimeout(() => {
       isRestoring = false
-      dbg('restore: isRestoring cleared, restoring scrolls')
-      for (const pid of Object.keys(panels)) { const v = panels[pid].activeTabId && panels[pid].tabViews.get(panels[pid].activeTabId); dbgScrollAsync(`panel-${pid}-before-restore`, v) }
-      restoreAllScrolls().then(() => {
-        for (const pid of Object.keys(panels)) { const v = panels[pid].activeTabId && panels[pid].tabViews.get(panels[pid].activeTabId); dbgScrollAsync(`panel-${pid}-after-restore`, v) }
-      })
-    }, 150)
+      pendingScrollRestore = true
+      dbg('restore: isRestoring cleared, sending recalc-bounds for scroll restore')
+      win.webContents.send('research:recalc-bounds')
+    }, 100)
   })
 
   // ── navigate ──────────────────────────────────────────────────────────────
@@ -553,9 +588,10 @@ function setupResearchBrowser(win) {
       emitTabsChanged(win, pid)
       showActiveView(win, pid)
       if (windowReady && panel.lastBounds) {
-        panel.tabViews.get(id).webContents.loadURL(url).catch(err =>
+        panel.tabViews.get(id)?.webContents?.loadURL(url).catch(err =>
           console.log(`[${pid}] loadURL error:`, err?.message))
       } else {
+        console.log(`[${pid}] pendingUrl set (navigate, no-tab): ${url.slice(0, 60)}`)
         panel.pendingUrl = url
         if (windowReady) win.webContents.send('research:recalc-bounds')
       }
@@ -563,19 +599,19 @@ function setupResearchBrowser(win) {
     }
 
     const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
-    if (!view || view.webContents.isDestroyed()) return
+    if (!wcAlive(view)) return
 
     const sN = panel.tabStates.get(panel.activeTabId)
     if (sN) { sN.url = url; sN.title = labelFromUrl(url); sN.loading = true }
     if (panel.activeTabId) win.webContents.send('research:tab-updated', pid, panel.activeTabId, { ...sN })
 
-    showActiveView(win, pid)
-
     if (!windowReady || !panel.lastBounds) {
+      console.log(`[${pid}] pendingUrl set (navigate): ${url.slice(0, 60)}`)
       panel.pendingUrl = url
       if (windowReady) win.webContents.send('research:recalc-bounds')
       return
     }
+    showActiveView(win, pid)
     view.webContents.loadURL(url).catch(err => console.log(`[${pid}] loadURL error:`, err?.message))
   })
 
@@ -612,31 +648,15 @@ function setupResearchBrowser(win) {
         dbg(`research:set-bounds[${pid}]: BLOCKED near-zero-x x=${x} cw=${cw}`)
         return
       }
-      const prevBounds = panel.lastBounds
       panel.lastBounds = { x, y, width: w, height: h }
       if (!modalOpen) {
         const activeState = panel.activeTabId && panel.tabStates.get(panel.activeTabId)
-        const hasContent  = !!(activeState?.url && activeState.url !== 'about:blank')
         const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
-        if (view && hasContent) {
+        if (view) {
           dbg(`research:set-bounds[${pid}]: setBounds ${x},${y},${w}x${h} url=${activeState?.url?.slice(0,50)}`)
-          const sizeChanged = prevBounds && (prevBounds.width !== w || prevBounds.height !== h)
-          if (sizeChanged && !view.webContents.isDestroyed()) {
-            view.webContents.executeJavaScript(CAPTURE_SCROLL_JS).then(json => {
-              if (view.webContents.isDestroyed()) return
-              view.setBounds({ x, y, width: w, height: h })
-              if (json && json !== '[0,0,[]]') {
-                setTimeout(() => {
-                  if (!view.webContents.isDestroyed())
-                    view.webContents.executeJavaScript(makeRestoreScrollJs(json)).catch(() => {})
-                }, 120)
-              }
-            }).catch(() => {
-              if (!view.webContents.isDestroyed()) view.setBounds({ x, y, width: w, height: h })
-            })
-          } else {
-            view.setBounds({ x, y, width: w, height: h })
-          }
+          view.setBounds({ x, y, width: w, height: h })
+          if (wcAlive(view)) view.webContents.setZoomFactor(1.0)
+          if (!panel.pendingUrl) scheduleScrollRestore()
         }
         tryFirePending(win, pid)
       }
@@ -649,6 +669,13 @@ function setupResearchBrowser(win) {
     }
   })
 
+  ipcMain.handle('shell:open-external', (_e, url) => {
+    try {
+      const { protocol: p } = new URL(url)
+      if (p === 'https:' || p === 'http:') shell.openExternal(url)
+    } catch {}
+  })
+
   // ── nav controls ───────────────────────────────────────────────────────────
   ipcMain.on('research:go-back', (_e, pid) => {
     const panel = panels[pid]
@@ -656,7 +683,8 @@ function setupResearchBrowser(win) {
     const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
     if (!view) return
     const wc = view.webContents
-    if (!wc.isDestroyed() && wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack()
+    if (!wc || wc.isDestroyed()) return
+    if (wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack()
   })
   ipcMain.on('research:go-forward', (_e, pid) => {
     const panel = panels[pid]
@@ -664,7 +692,8 @@ function setupResearchBrowser(win) {
     const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
     if (!view) return
     const wc = view.webContents
-    if (!wc.isDestroyed() && wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward()
+    if (!wc || wc.isDestroyed()) return
+    if (wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward()
   })
   ipcMain.on('research:reload', (_e, pid) => {
     const panel = panels[pid]
@@ -672,7 +701,8 @@ function setupResearchBrowser(win) {
     const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
     if (!view) return
     const wc = view.webContents
-    if (!wc.isDestroyed()) wc.reload()
+    if (!wc || wc.isDestroyed()) return
+    wc.reload()
   })
 
   // ── get-state / get-tabs ───────────────────────────────────────────────────
@@ -700,7 +730,7 @@ function setupResearchBrowser(win) {
     switchToTab(win, pid, id)
     if (url) {
       if (panel.lastBounds) {
-        panel.tabViews.get(id).webContents.loadURL(url).catch(() => {})
+        panel.tabViews.get(id)?.webContents?.loadURL(url).catch(() => {})
       } else {
         panel.pendingUrl = url
         win.webContents.send('research:recalc-bounds')
@@ -715,16 +745,17 @@ function setupResearchBrowser(win) {
     const view     = panel.tabViews.get(id)
     const wasActive = id === panel.activeTabId
 
-    try { if (!view.webContents.isDestroyed()) view.webContents.setAudioMuted(true) } catch {}
-    try { if (!view.webContents.isDestroyed()) view.webContents.stop() } catch {}
+    try { if (wcAlive(view)) view.webContents.setAudioMuted(true) } catch {}
+    try { if (wcAlive(view)) view.webContents.stop() } catch {}
     win.contentView.removeChildView(view)
-    try { if (!view.webContents.isDestroyed()) view.webContents.loadURL('about:blank').catch(() => {}) } catch {}
+    try { if (wcAlive(view)) view.webContents.loadURL('about:blank').catch(() => {}) } catch {}
     panel.tabViews.delete(id)
     panel.tabStates.delete(id)
 
     if (panel.tabViews.size === 0) {
-      panel.activeTabId = null
-      emitTabsChanged(win, pid)
+      const newId = `tab-${pid}-${Date.now()}`
+      createTabView(win, pid, newId)
+      switchToTab(win, pid, newId)
       return
     }
     if (wasActive) {
@@ -750,10 +781,10 @@ function setupResearchBrowser(win) {
     panel.pendingUrl = null
 
     for (const [, view] of panel.tabViews) {
-      try { if (!view.webContents.isDestroyed()) view.webContents.setAudioMuted(true) } catch {}
-      try { if (!view.webContents.isDestroyed()) view.webContents.stop() } catch {}
+      try { if (wcAlive(view)) view.webContents.setAudioMuted(true) } catch {}
+      try { if (wcAlive(view)) view.webContents.stop() } catch {}
       try { win.contentView.removeChildView(view) } catch {}
-      try { if (!view.webContents.isDestroyed()) view.webContents.loadURL('about:blank').catch(() => {}) } catch {}
+      try { if (wcAlive(view)) view.webContents.loadURL('about:blank').catch(() => {}) } catch {}
     }
     panel.tabViews.clear()
     panel.tabStates.clear()
@@ -787,7 +818,7 @@ function setupResearchBrowser(win) {
     if (activeUrl) {
       if (savedBounds && windowReady) {
         showActiveView(win, 'A')
-        panel.tabViews.get(ids[activeTabIdx])?.webContents.loadURL(activeUrl).catch(() => {})
+        panel.tabViews.get(ids[activeTabIdx])?.webContents?.loadURL(activeUrl).catch(() => {})
       } else {
         panel.pendingUrl = activeUrl
         if (windowReady) win.webContents.send('research:recalc-bounds')
@@ -802,7 +833,7 @@ function setupResearchBrowser(win) {
     const pane = viewPanes[paneId]
     if (!pane) return
     // Mute whatever is currently playing before navigating away.
-    if (pane.view && !pane.view.webContents.isDestroyed()) {
+    if (wcAlive(pane.view)) {
       try { pane.view.webContents.setAudioMuted(true) } catch {}
       try { pane.view.webContents.stop() } catch {}
     }
@@ -811,8 +842,11 @@ function setupResearchBrowser(win) {
     if (pane.lastBounds && !modalOpen) {
       const view = getOrCreateViewPane(win, paneId)
       view.webContents.setAudioMuted(false)
+      console.log(`[view:${paneId}] loadURL immediate: ${url.slice(0, 60)}`)
       view.webContents.loadURL(url).catch(err => console.log(`[view:${paneId}] loadURL error:`, err?.message))
       pane.pendingUrl = null
+    } else {
+      console.log(`[view:${paneId}] pendingUrl set: ${url.slice(0, 60)} (lastBounds=${!!pane.lastBounds} modalOpen=${modalOpen})`)
     }
   })
 
@@ -830,30 +864,18 @@ function setupResearchBrowser(win) {
       return
     }
     if (w > 0 && h > 0) {
-      const prevBounds = pane.lastBounds
       pane.lastBounds = { x, y, width: w, height: h }
       if (!modalOpen) {
         const view = getOrCreateViewPane(win, paneId)
         const currentUrl = view.webContents.getURL()
         dbg(`view:set-bounds[${paneId}]: setBounds ${x},${y},${w}x${h} url=${currentUrl.slice(0,50)}`)
-        const sizeChanged = prevBounds && (prevBounds.width !== w || prevBounds.height !== h)
-        const hasPending = !!pane.pendingUrl
-        if (sizeChanged && !hasPending && !view.webContents.isDestroyed()) {
-          view.webContents.executeJavaScript(CAPTURE_SCROLL_JS).then(json => {
-            if (view.webContents.isDestroyed()) return
-            view.setBounds({ x, y, width: w, height: h })
-            if (json && json !== '[0,0,[]]') {
-              setTimeout(() => {
-                if (!view.webContents.isDestroyed())
-                  view.webContents.executeJavaScript(makeRestoreScrollJs(json)).catch(() => {})
-              }, 120)
-            }
-          }).catch(() => {
-            if (!view.webContents.isDestroyed()) view.setBounds({ x, y, width: w, height: h })
-          })
-        } else {
-          view.setBounds({ x, y, width: w, height: h })
-        }
+        // Keep view pane on top of z-order so it reliably receives mouse events
+        // (mirroring showActiveView for the research browser panel).
+        try { win.contentView.removeChildView(view) } catch {}
+        win.contentView.addChildView(view)
+        view.setBounds({ x, y, width: w, height: h })
+        if (wcAlive(view)) view.webContents.setZoomFactor(1.0)
+        if (!pane.pendingUrl) scheduleScrollRestore()
         if (pane.pendingUrl) {
           const url = pane.pendingUrl
           pane.pendingUrl = null
@@ -865,7 +887,7 @@ function setupResearchBrowser(win) {
     } else {
       pane.lastBounds = null
       const v = pane.view
-      if (v && !v.webContents.isDestroyed()) {
+      if (wcAlive(v)) {
         dbg(`view:set-bounds[${paneId}]: ZERO-BOUND url=${v.webContents.getURL().slice(0,50)}`)
         try { v.setBounds({ x: 0, y: 0, width: 0, height: 0 }) } catch {}
       }
@@ -878,7 +900,7 @@ function setupResearchBrowser(win) {
     pane.pendingUrl = null
     pane.lastBounds = null
     const v = pane.view
-    if (v && !v.webContents.isDestroyed()) {
+    if (wcAlive(v)) {
       try { v.webContents.setAudioMuted(true) } catch {}
       try { v.webContents.stop() } catch {}
       try { v.setBounds({ x: 0, y: 0, width: 0, height: 0 }) } catch {}
@@ -888,18 +910,36 @@ function setupResearchBrowser(win) {
 
   ipcMain.on('view:reload', (_e, paneId) => {
     const pane = viewPanes[paneId]
-    if (!pane?.view || pane.view.webContents.isDestroyed()) return
+    if (!wcAlive(pane?.view)) return
     pane.view.webContents.reload()
   })
 
   // ── modal state ────────────────────────────────────────────────────────────
-  ipcMain.on('app:set-modal', (_e, isOpen) => {
+  ipcMain.on('app:set-modal', (event, isOpen) => {
     modalOpen = !!isOpen
     if (modalOpen) {
       hideAllViews()
     } else {
       restoreAllViews()
+      // Fire any URLs that were deferred while the modal was blocking bounds updates.
+      for (const pid of Object.keys(panels)) tryFirePending(win, pid)
+      for (const paneId of Object.keys(viewPanes)) {
+        const pane = viewPanes[paneId]
+        if (pane.pendingUrl && pane.lastBounds) {
+          const url = pane.pendingUrl
+          pane.pendingUrl = null
+          const view = getOrCreateViewPane(win, paneId)
+          if (wcAlive(view)) {
+            console.log(`[view:${paneId}] pendingUrl fired (modal close): ${url.slice(0, 60)}`)
+            view.webContents.setAudioMuted(false)
+            view.webContents.loadURL(url).catch(err => console.log(`[view:${paneId}] loadURL error:`, err?.message))
+          }
+        }
+      }
     }
+    // sendSync requires a returnValue to unblock the renderer immediately
+    // after native views are hidden — before React renders the modal.
+    event.returnValue = null
   })
 
   // ── cleanup ────────────────────────────────────────────────────────────────
@@ -926,7 +966,7 @@ function setupResearchBrowser(win) {
 
     for (const pid of Object.keys(viewPanes)) {
       const pane = viewPanes[pid]
-      if (pane.view && !pane.view.webContents.isDestroyed()) {
+      if (wcAlive(pane.view)) {
         try { pane.view.webContents.close?.() } catch {}
       }
       viewPanes[pid] = { view: null, lastBounds: null, pendingUrl: null }

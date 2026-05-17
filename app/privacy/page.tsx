@@ -15,35 +15,35 @@ export default function Privacy() {
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Summary</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Site is a macOS desktop beta. Uploaded Sources are stored locally on your device. Site does not sell user data.
+            Site is a macOS desktop beta. Uploaded documents are stored locally on your device. Site does not sell user data.
           </p>
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Storage</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Uploaded Sources (PDFs and images) are stored in IndexedDB on your device. Saved Sites store metadata only — title, URL, hostname, and timestamp. Saved Sites do not store website passwords.
+            Uploaded Documents (PDFs and images) are stored in IndexedDB on your device and count toward your storage limit. Saved Pages store metadata only — title, URL, hostname, and timestamp — and do not count toward storage. Saved Pages do not store website passwords.
           </p>
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Research</span>
+          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Web</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Research uses browser session and cookie storage so websites can keep you logged in. Site does not manually store usernames or passwords.
+            Web uses browser session and cookie storage so websites can keep you logged in. Site does not manually store usernames or passwords.
           </p>
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>License</span>
+          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Billing</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            License validation may contact Polar to verify your license key. No other data is transmitted.
+            Billing is handled by Polar. License or subscription validation may contact Polar to verify your access. No other data is transmitted.
           </p>
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Deletion</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Sources and Sites can be removed individually from within the app. Site → Reset Site Data… (desktop menu) removes all local files and state. Both operations are local and cannot be reversed.
+            Documents and Pages can be removed individually from within the app. Site → Reset Site Data… (desktop menu) removes all local files and state. Both operations are local and cannot be reversed.
           </p>
         </div>
 

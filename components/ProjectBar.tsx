@@ -11,15 +11,13 @@ export default function ProjectBar() {
     updateProject,
   } = useApp()
 
-  const [editingProjId,  setEditingProjId]  = useState<string | null>(null)
-  const [nameInput,      setNameInput]       = useState('')
-  const [pendingRmId,    setPendingRmId]     = useState<string | null>(null)
+  const [editingProjId, setEditingProjId] = useState<string | null>(null)
+  const [nameInput,     setNameInput]     = useState('')
+  const [pendingRmId,   setPendingRmId]   = useState<string | null>(null)
 
-  const rmTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const tabStripRef    = useRef<HTMLDivElement>(null)
-  const cancelEditRef  = useRef(false)
-
-  const activeProject = projects.find(p => p.id === activeId) ?? null
+  const rmTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const tabStripRef   = useRef<HTMLDivElement>(null)
+  const cancelEditRef = useRef(false)
 
   // Scroll active tab into view on workspace switch
   useEffect(() => {
@@ -29,7 +27,7 @@ export default function ProjectBar() {
     active?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
   }, [activeId])
 
-  // Redirect vertical wheel to horizontal scroll on the strip
+  // Redirect vertical wheel → horizontal scroll
   useEffect(() => {
     const el = tabStripRef.current
     if (!el) return
@@ -49,7 +47,6 @@ export default function ProjectBar() {
     window.addEventListener('click', handler)
     return () => window.removeEventListener('click', handler)
   }, [pendingRmId])
-
 
   function startEditing(projId: string, currentName: string) {
     cancelEditRef.current = false
@@ -77,167 +74,176 @@ export default function ProjectBar() {
   function handleRemoveClick(e: React.MouseEvent, projId: string) {
     e.stopPropagation()
     if (pendingRmId !== projId) {
-      // First click — arm the confirm
       setPendingRmId(projId)
       if (rmTimerRef.current) clearTimeout(rmTimerRef.current)
       rmTimerRef.current = setTimeout(() => setPendingRmId(null), 1800)
     } else {
-      // Second click — execute
       if (rmTimerRef.current) { clearTimeout(rmTimerRef.current); rmTimerRef.current = null }
       setPendingRmId(null)
       removeWorkspace(projId)
     }
   }
 
+  const tierLabel = isPro ? 'Pro' : 'Free'
+
   return (
     <div style={{
       display: 'flex', alignItems: 'center',
-      height: '44px', flexShrink: 0,
-      borderBottom: '1px solid #1a1a1a',
+      height: '40px', flexShrink: 0,
+      borderBottom: '1px solid #161616',
       WebkitAppRegion: 'drag',
       overflow: 'hidden',
     } as React.CSSProperties}>
 
-      {/* Logo */}
-      <a href="/" aria-label="Site" style={{
-        display: 'flex', alignItems: 'center', flexShrink: 0,
-        textDecoration: 'none', lineHeight: 1,
-        opacity: 0.85, transition: 'opacity 0.15s',
-        padding: '0 0 0 20px', marginRight: '6px',
-        WebkitAppRegion: 'no-drag',
-      } as React.CSSProperties}
-        onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-        onMouseLeave={e => (e.currentTarget.style.opacity = '0.85')}
-      >
-        <svg width="22" height="22" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-          <text x="16" y="26" fontFamily="Georgia, serif" fontSize="30" fontWeight="500" fill="#e8e8e8" textAnchor="middle">{'{'}</text>
-        </svg>
-      </a>
-
-      {/* Actions */}
+      {/* ── Left: logo + new workspace + tab strip ── */}
       <div style={{
-        display: 'flex', alignItems: 'center', flexShrink: 0,
-        WebkitAppRegion: 'no-drag',
-      } as React.CSSProperties}>
+        flex: 1, minWidth: 0,
+        display: 'flex', alignItems: 'center',
+        overflow: 'hidden',
+      }}>
+
+        {/* Logo */}
+        <a
+          href="/"
+          aria-label="Site"
+          style={{
+            display: 'flex', alignItems: 'center', flexShrink: 0,
+            textDecoration: 'none', lineHeight: 1,
+            padding: '0 12px 0 18px',
+            opacity: 0.6, transition: 'opacity 0.15s',
+            WebkitAppRegion: 'no-drag',
+          } as React.CSSProperties}
+          onMouseEnter={e => (e.currentTarget.style.opacity = '0.9')}
+          onMouseLeave={e => (e.currentTarget.style.opacity = '0.6')}
+        >
+          <svg width="18" height="18" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+            <text x="16" y="26" fontFamily="Georgia, serif" fontSize="30" fontWeight="500" fill="#e8e8e8" textAnchor="middle">{'{'}</text>
+          </svg>
+        </a>
+
+        {/* New workspace + */}
         <button
           onClick={() => newWorkspace()}
           title="New workspace"
           style={{
-            width: '24px', height: '24px', flexShrink: 0,
+            width: '26px', height: '26px', flexShrink: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'none', border: 'none', color: '#3a3a3a',
-            cursor: 'pointer', padding: 0, outline: 'none',
+            background: 'none', border: 'none',
+            color: '#363636', cursor: 'pointer', padding: 0, outline: 'none',
             transition: 'color 0.15s',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.color = '#888' }}
-          onMouseLeave={e => { e.currentTarget.style.color = '#3a3a3a' }}
+            WebkitAppRegion: 'no-drag',
+          } as React.CSSProperties}
+          onMouseEnter={e => { e.currentTarget.style.color = '#777' }}
+          onMouseLeave={e => { e.currentTarget.style.color = '#363636' }}
         >
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+          <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
             <line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" />
           </svg>
         </button>
-        <div style={{ width: '1px', height: '12px', background: '#1e1e1e', margin: '0 6px' }} />
-      </div>
 
-      {/* Workspace tab strip */}
-      <div
-        ref={tabStripRef}
-        style={{
-          flex: 1, minWidth: 0,
-          display: 'flex', alignItems: 'center',
-          overflowX: 'auto', overflowY: 'hidden', gap: '2px',
-          scrollbarWidth: 'none',
-          WebkitAppRegion: 'no-drag',
-        } as React.CSSProperties}
-      >
-        {projects.map(p => {
-          const isActive  = p.id === activeId
-          const isEditing = p.id === editingProjId
-          const rmArmed   = pendingRmId === p.id
+        {/* Divider */}
+        <div style={{ width: '1px', height: '12px', background: '#1c1c1c', flexShrink: 0, margin: '0 8px 0 6px' }} />
 
-          if (isEditing) {
+        {/* Tab strip */}
+        <div
+          ref={tabStripRef}
+          style={{
+            flex: 1, minWidth: 0,
+            display: 'flex', alignItems: 'center',
+            overflowX: 'auto', overflowY: 'hidden', gap: '1px',
+            scrollbarWidth: 'none',
+            WebkitAppRegion: 'no-drag',
+          } as React.CSSProperties}
+        >
+          {projects.map(p => {
+            const isActive  = p.id === activeId
+            const isEditing = p.id === editingProjId
+            const rmArmed   = pendingRmId === p.id
+
+            if (isEditing) {
+              return (
+                <input
+                  key={p.id}
+                  autoFocus
+                  value={nameInput}
+                  onChange={e => setNameInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter')  { commitRename(p.id) }
+                    if (e.key === 'Escape') { cancelEditRef.current = true; setEditingProjId(null) }
+                  }}
+                  onBlur={() => { if (!cancelEditRef.current) commitRename(p.id) }}
+                  placeholder="Workspace name"
+                  style={{
+                    height: '26px', padding: '0 10px', flexShrink: 0,
+                    background: '#111', border: '1px solid #2a2a2a',
+                    borderRadius: '4px', color: '#ccc',
+                    fontSize: '11px', letterSpacing: '0.03em',
+                    fontFamily: 'inherit', outline: 'none', minWidth: '140px',
+                  }}
+                />
+              )
+            }
+
             return (
-              <input
+              <WorkspaceTab
                 key={p.id}
-                autoFocus
-                value={nameInput}
-                onChange={e => setNameInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter')  { commitRename(p.id) }
-                  if (e.key === 'Escape') { cancelEditRef.current = true; setEditingProjId(null) }
-                }}
-                onBlur={() => { if (!cancelEditRef.current) commitRename(p.id) }}
-                placeholder="Workspace name"
-                style={{
-                  height: '24px', padding: '0 10px', flexShrink: 0,
-                  background: '#151515', border: '1px solid #333',
-                  borderRadius: '3px', color: '#bbb',
-                  fontSize: '11px', letterSpacing: '0.03em',
-                  fontFamily: 'inherit', outline: 'none', minWidth: '150px',
-                }}
+                name={p.name || 'Untitled'}
+                active={isActive}
+                rmArmed={rmArmed}
+                canRemove={projects.length > 1}
+                onClick={() => { if (!isActive) switchWorkspace(p.id) }}
+                onDoubleClick={() => startEditing(p.id, p.name || '')}
+                onRemoveClick={e => handleRemoveClick(e, p.id)}
               />
             )
-          }
-
-          return (
-            <WorkspaceTab
-              key={p.id}
-              name={p.name || 'Untitled'}
-              active={isActive}
-              rmArmed={rmArmed}
-              canRemove={projects.length > 1}
-              onClick={() => { if (!isActive) switchWorkspace(p.id) }}
-              onDoubleClick={() => startEditing(p.id, p.name || '')}
-              onRemoveClick={e => handleRemoveClick(e, p.id)}
-            />
-          )
-        })}
+          })}
+        </div>
       </div>
 
-      {/* Right — storage | tier | auth */}
+      {/* ── Right: tier · storage · actions ── */}
       <div style={{
         display: 'flex', alignItems: 'center',
-        padding: '0 20px 0 0', flexShrink: 0,
+        padding: '0 18px 0 12px', gap: '2px', flexShrink: 0,
         WebkitAppRegion: 'no-drag',
       } as React.CSSProperties}>
 
-        <NavBtn onClick={() => {
-          ;(window as any).electronAPI?.setModal?.(true)
-          window.dispatchEvent(new Event('proof:show-history'))
-        }}>History</NavBtn>
-        <span style={{ width: '1px', height: '12px', background: '#1e1e1e', margin: '0 6px' }} />
-        <span style={{ fontSize: '11px', color: '#444', letterSpacing: '0.06em', userSelect: 'none' }}>
-          {isPro ? 'Pro' : 'Free'}
+        {/* Tier label */}
+        <span style={{
+          fontSize: '11px', color: '#3a3a3a',
+          letterSpacing: '0.05em', userSelect: 'none',
+          padding: '0 6px',
+        }}>
+          {tierLabel}
         </span>
-        <span style={{ fontSize: '11px', color: '#2e2e2e', margin: '0 5px', userSelect: 'none' }}>·</span>
+
+        <Dot />
+
+        {/* Storage */}
         <StorageBadge />
 
-        <span style={{ width: '1px', height: '12px', background: '#1e1e1e', margin: '0 6px' }} />
+        <Separator />
 
-        {/* Signed out: Sign in | Upgrade */}
-        {!user && (
+        {/* Auth cluster — exactly one non-contradictory state */}
+        {!user ? (
+          // Signed out
           <>
-            <NavBtn onClick={() => window.dispatchEvent(new Event('proof:show-account'))}>Sign in</NavBtn>
-            <span style={{ width: '1px', height: '12px', background: '#1e1e1e', margin: '0 6px' }} />
-            <NavBtn onClick={() => window.dispatchEvent(new Event('proof:upgrade-needed'))}>Upgrade</NavBtn>
+            <RightBtn onClick={() => window.dispatchEvent(new Event('proof:show-account'))}>Sign in</RightBtn>
+            <Dot />
+            <RightBtn onClick={() => window.dispatchEvent(new Event('proof:upgrade-needed'))}>Upgrade</RightBtn>
           </>
-        )}
-
-        {/* Signed in, Free: Upgrade | Account */}
-        {user && !isPro && (
+        ) : !isPro ? (
+          // Signed in, Free
           <>
-            <NavBtn onClick={() => window.dispatchEvent(new Event('proof:upgrade-needed'))}>Upgrade</NavBtn>
-            <span style={{ width: '1px', height: '12px', background: '#1e1e1e', margin: '0 6px' }} />
-            <NavBtn onClick={() => window.dispatchEvent(new Event('proof:show-account'))}>Account</NavBtn>
+            <RightBtn onClick={() => window.dispatchEvent(new Event('proof:upgrade-needed'))}>Upgrade</RightBtn>
+            <Dot />
+            <RightBtn onClick={() => window.dispatchEvent(new Event('proof:show-account'))}>Account</RightBtn>
           </>
-        )}
-
-        {/* Signed in, Pro: Manage billing | Account */}
-        {user && isPro && (
+        ) : (
+          // Signed in, Pro
           <>
-            <NavBtn onClick={() => openBilling()}>Manage billing</NavBtn>
-            <span style={{ width: '1px', height: '12px', background: '#1e1e1e', margin: '0 6px' }} />
-            <NavBtn onClick={() => window.dispatchEvent(new Event('proof:show-account'))}>Account</NavBtn>
+            <RightBtn onClick={() => openBilling()}>Manage billing</RightBtn>
+            <Dot />
+            <RightBtn onClick={() => window.dispatchEvent(new Event('proof:show-account'))}>Account</RightBtn>
           </>
         )}
       </div>
@@ -245,7 +251,7 @@ export default function ProjectBar() {
   )
 }
 
-// ─── Workspace tab chip ───────────────────────────────────────────────────────
+// ─── Workspace tab ────────────────────────────────────────────────────────────
 
 function WorkspaceTab({ name, active, rmArmed, canRemove, onClick, onDoubleClick, onRemoveClick }: {
   name: string
@@ -256,73 +262,95 @@ function WorkspaceTab({ name, active, rmArmed, canRemove, onClick, onDoubleClick
   onDoubleClick: () => void
   onRemoveClick: (e: React.MouseEvent) => void
 }) {
+  const [hovered, setHovered]   = useState(false)
+  const [xHovered, setXHovered] = useState(false)
+
+  const xColor = rmArmed ? (xHovered ? '#e55' : '#b44') : xHovered ? '#666' : hovered ? '#3a3a3a' : '#1e1e1e'
+
   return (
     <div
       data-active={active}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
-        display: 'flex', alignItems: 'center', gap: '3px',
-        height: '24px', padding: '0 5px 0 10px', flexShrink: 0,
-        background: active ? '#111' : 'none',
-        border: `1px solid ${active ? '#222' : 'transparent'}`,
-        borderRadius: '3px',
+        display: 'flex', alignItems: 'center',
+        height: '28px',
+        padding: canRemove ? '0 2px 0 10px' : '0 10px',
+        flexShrink: 0, gap: '1px',
+        background: active ? '#111' : hovered ? '#0c0c0c' : 'transparent',
+        border: `1px solid ${active ? '#1e1e1e' : 'transparent'}`,
+        borderRadius: '4px',
         cursor: active ? 'default' : 'pointer',
         userSelect: 'none',
+        transition: 'background 0.1s',
         WebkitAppRegion: 'no-drag',
+        maxWidth: '180px',
       } as React.CSSProperties}
     >
       <span style={{
-        fontSize: '11px', letterSpacing: '0.03em', whiteSpace: 'nowrap',
-        color: active ? '#aaa' : '#555',
+        fontSize: '11px', letterSpacing: '0.03em',
+        color: active ? '#999' : hovered ? '#555' : '#444',
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        flex: 1, minWidth: 0,
+        transition: 'color 0.1s',
       }}>
         {name}
       </span>
+
       {canRemove && (
         <button
           onClick={onRemoveClick}
           onDoubleClick={e => e.stopPropagation()}
-          title={rmArmed ? 'Click again to remove' : 'Remove'}
+          title={rmArmed ? 'Click again to remove' : 'Close'}
+          onMouseEnter={() => setXHovered(true)}
+          onMouseLeave={() => setXHovered(false)}
           style={{
-            width: '14px', height: '14px', flexShrink: 0,
+            width: '18px', height: '18px', flexShrink: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'none', border: 'none', borderRadius: '2px',
-            color: rmArmed ? '#c44' : '#333',
-            fontSize: '13px', lineHeight: 1,
+            background: 'none', border: 'none', borderRadius: '3px',
+            color: xColor,
+            fontSize: '12px', lineHeight: 1,
             cursor: 'pointer', padding: 0, outline: 'none',
             fontFamily: 'inherit', transition: 'color 0.1s',
           }}
-          onMouseEnter={e => { if (!rmArmed) e.currentTarget.style.color = '#777' }}
-          onMouseLeave={e => { if (!rmArmed) e.currentTarget.style.color = '#333' }}
         >×</button>
       )}
     </div>
   )
 }
 
-// ─── Nav button ───────────────────────────────────────────────────────────────
+// ─── Right-cluster button ────────────────────────────────────────────────────
 
-function NavBtn({ children, onClick, danger, disabled }: {
-  children: React.ReactNode; onClick: () => void; danger?: boolean; disabled?: boolean
-}) {
-  const base  = disabled ? '#333' : danger ? '#c44' : '#555'
-  const hover = disabled ? '#333' : danger ? '#e55' : '#999'
+function RightBtn({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  const [hov, setHov] = useState(false)
   return (
     <button
       onClick={onClick}
-      disabled={disabled}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
       style={{
-        height: '22px', padding: '0 7px',
+        height: '28px', padding: '0 7px',
         background: 'none', border: 'none', borderRadius: '3px',
-        color: base, fontSize: '11px', letterSpacing: '0.04em',
-        cursor: disabled ? 'default' : 'pointer', fontFamily: 'inherit', outline: 'none',
+        color: hov ? '#888' : '#3e3e3e',
+        fontSize: '11px', letterSpacing: '0.04em',
+        cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
         transition: 'color 0.12s',
-        WebkitAppRegion: 'no-drag',
-      } as React.CSSProperties}
-      onMouseEnter={e => { e.currentTarget.style.color = hover }}
-      onMouseLeave={e => { e.currentTarget.style.color = base }}
+        whiteSpace: 'nowrap',
+      }}
     >
       {children}
     </button>
   )
+}
+
+// ─── Separator / dot ─────────────────────────────────────────────────────────
+
+function Separator() {
+  return <div style={{ width: '1px', height: '12px', background: '#1c1c1c', margin: '0 4px', flexShrink: 0 }} />
+}
+
+function Dot() {
+  return <span style={{ fontSize: '11px', color: '#252525', userSelect: 'none', padding: '0 1px' }}>·</span>
 }

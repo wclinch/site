@@ -12,9 +12,36 @@ type TabState = {
   canGoForward: boolean
 }
 
+type TabStatus = { failedLoad?: boolean; authBlocked?: boolean }
+
+function isAuthUrl(url: string): boolean {
+  if (!url || url === 'about:blank') return false
+  try {
+    const u = new URL(url)
+    const h = u.hostname.toLowerCase()
+    const p = u.pathname.toLowerCase()
+    return h === 'accounts.google.com' ||
+      p.includes('/oauth') || p.includes('/login') || p.includes('/signin') ||
+      p.includes('/auth/') || p.includes('/callback') || p.includes('/sso/')
+  } catch { return false }
+}
+
+const AUTH_BLOCKED_TITLE_PATTERNS = [
+  "couldn't sign you in",
+  "this browser or app may not be secure",
+  "access blocked",
+  "authentication failed",
+  "sign in blocked",
+]
+function isAuthBlockedTitle(title: string): boolean {
+  const t = title.toLowerCase()
+  return AUTH_BLOCKED_TITLE_PATTERNS.some(p => t.includes(p))
+}
+
 declare global {
   interface Window {
     electronAPI?: {
+      openExternal?: (url: string) => Promise<void>
       research: {
         navigate:         (pid: string, url: string) => void
         setBounds:        (pid: string, rect: { x: number; y: number; width: number; height: number; innerWidth: number; innerHeight: number }) => void
@@ -33,7 +60,8 @@ declare global {
         onTabUpdated:     (pid: string, cb: (id: string, state: Partial<TabState>) => void) => () => void
         onTabsChanged:    (pid: string, cb: (tabs: TabState[], activeTabId: string) => void) => () => void
         onBoundsRecalc:   (cb: () => void) => () => void
-        loadWorkspace:    (tabs: Array<{ url: string; title: string; active?: boolean }>) => void
+        onFailLoad?:      (pid: string, cb: (id: string, code: number) => void) => () => void
+        loadWorkspace:    (tabs: Array<{ url: string; title: string; active?: boolean; zoom?: number }>) => void
       }
     }
   }
@@ -41,13 +69,6 @@ declare global {
 
 const MAX_TABS = 20
 
-function readSavedHome(key: string): boolean {
-  if (typeof window === 'undefined') return true
-  try {
-    const v = localStorage.getItem(key)
-    return v === null ? true : v === 'true'
-  } catch { return true }
-}
 
 function makePlaceholderTab(): TabState {
   return { id: 'tab-init', url: '', title: '', loading: false, canGoBack: false, canGoForward: false }
@@ -60,7 +81,6 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
   const panelId = 'A'
   const { addUrl, sources, pinUrlToView } = useApp()
 
-  const homeKey = 'proof-v3-browser-home'
   const tabsKey = 'proof-v3-research-tabs'
 
   const [isElectron, setIsElectron]   = useState(false)
@@ -69,23 +89,39 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
   const [urlInput, setUrlInput]       = useState('')
   const [urlFocused, setUrlFocused]   = useState(false)
   const [saveStatus, setSaveStatus]   = useState<null | 'saved' | 'duplicate'>(null)
-  const [homeMode, setHomeMode]       = useState(() => readSavedHome(homeKey))
+  const [homeMode, setHomeMode]       = useState(true)
 
   const viewportRef    = useRef<HTMLDivElement>(null)
   const urlInputRef    = useRef<HTMLInputElement>(null)
   const savedTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const homeModeRef    = useRef(readSavedHome(homeKey))
+  const homeModeRef    = useRef(true)
   const activeTabIdRef = useRef<string>('tab-init')
   const tabsRef        = useRef<TabState[]>([makePlaceholderTab()])
+
+  const [tabStatuses, setTabStatuses]   = useState<Record<string, TabStatus>>({})
+  const [showFallback, setShowFallback] = useState(false)
+  const showFallbackRef  = useRef(false)
+  const stallTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const stallTabIdRef    = useRef<string>('')
+  const stallProgressRef = useRef(false) // true if URL or title changed since stall timer started
 
   useEffect(() => { activeTabIdRef.current = activeTabId }, [activeTabId])
   useEffect(() => { tabsRef.current = tabs }, [tabs])
   useEffect(() => { setIsElectron(!!window.electronAPI) }, [])
 
-  // Persist homeMode + focus URL bar on new/blank tab
+  useEffect(() => {
+    const st = tabStatuses[activeTabId]
+    const should = !homeMode && !!(st?.authBlocked || st?.failedLoad)
+    if (should !== showFallbackRef.current) {
+      showFallbackRef.current = should
+      setShowFallback(should)
+      window.dispatchEvent(new Event('resize'))
+    }
+  }, [tabStatuses, activeTabId, homeMode])
+
+  // Sync ref + hide native view / focus URL bar when in home mode
   useEffect(() => {
     homeModeRef.current = homeMode
-    try { localStorage.setItem(homeKey, String(homeMode)) } catch {}
     if (homeMode) {
       window.electronAPI?.research?.setBounds(panelId, {
         x: 0, y: 0, width: 0, height: 0,
@@ -125,27 +161,53 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
     })
 
     const unUrl = api.onUrlChanged(panelId, (url, back, fwd) => {
-      setTabs(ts => ts.map(t => t.id === activeTabIdRef.current
-        ? { ...t, url, canGoBack: back, canGoForward: fwd } : t))
-      // Never treat about:blank or empty as real navigation — doing so would
-      // set homeMode=false and cause a white flash for blank/clearing tabs.
+      const id = activeTabIdRef.current
+      setTabs(ts => ts.map(t => t.id === id ? { ...t, url, canGoBack: back, canGoForward: fwd } : t))
       if (!url || url === 'about:blank') return
       setUrlInput(url)
       setHomeMode(false)
+      // Mark navigation progress (resets stall detection for pending timer)
+      stallProgressRef.current = true
+      // Clear any fallback status from the previous page (auto-dismisses fallback on redirect)
+      setTabStatuses(prev => ({ ...prev, [id]: {} }))
+      // Stall detection: if an auth page starts loading but shows zero progress
+      // (no URL change or title) after 20s, show the fallback.
+      if (stallTimerRef.current) clearTimeout(stallTimerRef.current)
+      stallTabIdRef.current = id
+      stallProgressRef.current = false // arm: next url/title change marks progress
+      if (isAuthUrl(url)) {
+        stallTimerRef.current = setTimeout(() => {
+          stallTimerRef.current = null
+          const currentId = stallTabIdRef.current
+          // Fire if no URL change was seen since this timer started — catches both
+          // "still loading" stalls and "loaded but blank" OAuth popup pages.
+          if (!stallProgressRef.current) {
+            setTabStatuses(prev => ({ ...prev, [currentId]: { ...prev[currentId], authBlocked: true } }))
+          }
+        }, 20000)
+      }
       try {
         const saved = JSON.parse(localStorage.getItem(tabsKey) || '[]') as Array<{ id: string; url: string }>
-        const idx = saved.findIndex(t => t.id === activeTabIdRef.current)
-        if (idx >= 0) saved[idx].url = url; else saved.push({ id: activeTabIdRef.current, url })
+        const idx = saved.findIndex(t => t.id === id)
+        if (idx >= 0) saved[idx].url = url; else saved.push({ id, url })
         localStorage.setItem(tabsKey, JSON.stringify(saved))
       } catch {}
     })
 
     const unTitle = api.onTitleChanged(panelId, title => {
-      setTabs(ts => ts.map(t => t.id === activeTabIdRef.current ? { ...t, title } : t))
+      const id = activeTabIdRef.current
+      setTabs(ts => ts.map(t => t.id === id ? { ...t, title } : t))
+      if (isAuthBlockedTitle(title)) {
+        setTabStatuses(prev => ({ ...prev, [id]: { ...prev[id], authBlocked: true } }))
+      }
     })
 
     const unLoading = api.onLoadingChanged(panelId, loading => {
       setTabs(ts => ts.map(t => t.id === activeTabIdRef.current ? { ...t, loading } : t))
+      if (!loading && stallTimerRef.current) {
+        clearTimeout(stallTimerRef.current)
+        stallTimerRef.current = null
+      }
     })
 
     const unNav = api.onCanNavigate(panelId, (back, fwd) => {
@@ -158,6 +220,9 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
         if (t.id !== id) return t
         return { ...t, ...state, title: state.title || t.title }
       }))
+      if (state.title && isAuthBlockedTitle(state.title)) {
+        setTabStatuses(prev => ({ ...prev, [id]: { ...prev[id], authBlocked: true } }))
+      }
     })
 
     const unTabsChanged = api.onTabsChanged(panelId, (newTabs, newActiveId) => {
@@ -189,9 +254,14 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
       }
     })
 
+    const unFailLoad = api.onFailLoad?.(panelId, (id, _code) => {
+      setTabStatuses(prev => ({ ...prev, [id]: { ...prev[id], failedLoad: true } }))
+    }) ?? (() => {})
+
     return () => {
       unUrl(); unTitle(); unLoading(); unNav()
-      unTabUpdated(); unTabsChanged()
+      unTabUpdated(); unTabsChanged(); unFailLoad()
+      if (stallTimerRef.current) clearTimeout(stallTimerRef.current)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panelId])
@@ -229,7 +299,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
 
     function sendBounds() {
       const iW = window.innerWidth; const iH = window.innerHeight
-      if (homeModeRef.current) {
+      if (homeModeRef.current || showFallbackRef.current) {
         if (lastKey !== 'zero') {
           lastKey = 'zero'
           window.electronAPI?.research?.setBounds(panelId, { x:0, y:0, width:0, height:0, innerWidth:iW, innerHeight:iH })
@@ -308,6 +378,10 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
     setSaveStatus(status)
     if (savedTimerRef.current) clearTimeout(savedTimerRef.current)
     savedTimerRef.current = setTimeout(() => setSaveStatus(null), 2000)
+  }
+
+  function openExternal(url: string) {
+    window.electronAPI?.openExternal?.(url)
   }
 
   function savePage() {
@@ -420,19 +494,36 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
                   background: 'none', border: '1px solid #252525', borderRadius: '3px',
                   color: '#555', fontSize: '11px', padding: '0 7px', cursor: 'pointer',
                   fontFamily: 'inherit', letterSpacing: '0.04em', outline: 'none',
-                  minWidth: '78px', justifyContent: 'center',
+                  minWidth: '54px', justifyContent: 'center',
                   transition: 'color 0.15s, border-color 0.15s',
                 }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.color = '#999' }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = '#252525'; e.currentTarget.style.color = '#555' }}
               >
-                {saveStatus === 'saved' ? 'Saved' : saveStatus === 'duplicate' ? 'Already saved' : 'Save'}
+                {saveStatus === 'saved' ? 'Saved' : saveStatus === 'duplicate' ? 'Saved' : 'Save'}
               </button>
             </>
           )}
         </div>
 
-        {/* Shortcut hint — only in homeMode to avoid shifting the native view */}
+        {/* Quick open strip — horizontal chips, only in home mode */}
+        {homeMode && (
+          <div style={{
+            height: '36px', flexShrink: 0,
+            display: 'flex', alignItems: 'center', gap: '4px',
+            padding: '0 8px',
+            background: '#060606', borderBottom: '1px solid #1a1a1a',
+            overflowX: 'auto', overflowY: 'hidden',
+            scrollbarWidth: 'none',
+            WebkitAppRegion: 'no-drag',
+          } as React.CSSProperties}>
+            {HOME_SHORTCUTS.map(([key, label]) => (
+              <ShortcutChip key={key} label={label} onClick={() => navigate(key)} />
+            ))}
+          </div>
+        )}
+
+        {/* Shortcut hint — only when typing a known shortcut */}
         {homeMode && urlFocused && getShortcutHint(urlInput) && (
           <div style={{
             height: '22px', flexShrink: 0,
@@ -451,7 +542,54 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
           ref={viewportRef}
           style={{ flex: 1, minHeight: 0, background: '#060606', position: 'relative', overflow: 'hidden', WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
-          {homeMode && <HomeScreen onNavigate={navigate} />}
+          {/* Auth / load fallback — overlays native view when login is blocked or page fails */}
+          {showFallback && (() => {
+            const st = tabStatuses[activeTabId]
+            const url = active?.url ?? ''
+            const isBlocked = st?.authBlocked && !st?.failedLoad
+            return (
+              <div style={{
+                position: 'absolute', inset: 0, zIndex: 10,
+                background: '#060606',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                gap: '8px', padding: '32px', userSelect: 'none',
+              }}>
+                <p style={{ fontSize: '13px', color: '#bbb', margin: 0, fontWeight: 500, textAlign: 'center' }}>
+                  {isBlocked ? 'This sign-in may need your browser.' : "Couldn't load this page."}
+                </p>
+                <p style={{ fontSize: '11px', color: '#555', margin: '4px 0 12px', lineHeight: 1.65, textAlign: 'center', maxWidth: '300px' }}>
+                  {isBlocked
+                    ? 'Some websites block embedded sign-in.'
+                    : 'The page failed to load. Check your connection or try again.'}
+                </p>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                  <FallbackBtn onClick={() => openExternal(url)}>Open in browser</FallbackBtn>
+                  <FallbackBtn onClick={() => {
+                    setTabStatuses(prev => ({ ...prev, [activeTabId]: {} }))
+                    window.electronAPI?.research?.reload(panelId)
+                  }}>Retry</FallbackBtn>
+                  <FallbackBtn onClick={() => { try { navigator.clipboard.writeText(url) } catch {} }}>Copy link</FallbackBtn>
+                  <FallbackBtn onClick={() => setTabStatuses(prev => ({ ...prev, [activeTabId]: {} }))}>Dismiss</FallbackBtn>
+                </div>
+              </div>
+            )
+          })()}
+          {homeMode && (
+            <div style={{
+              position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+              justifyContent: 'center', flexDirection: 'column', gap: '6px',
+              userSelect: 'none', pointerEvents: 'none',
+            }}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
+                <span style={{ fontSize: '10px', color: '#222', fontFamily: 'monospace', letterSpacing: '0.02em' }}>domain.com</span>
+                <span style={{ fontSize: '10px', color: '#1a1a1a', letterSpacing: '0.02em' }}>opens directly</span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
+                <span style={{ fontSize: '10px', color: '#222', fontFamily: 'monospace', letterSpacing: '0.02em' }}>? query</span>
+                <span style={{ fontSize: '10px', color: '#1a1a1a', letterSpacing: '0.02em' }}>forces Google search</span>
+              </div>
+            </div>
+          )}
           {!isElectron && !homeMode && (
             <div style={{
               position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
@@ -614,46 +752,11 @@ function ViewPinBtn({ label, title, onClick }: { label: string; title: string; o
   )
 }
 
-// ─── Home screen ──────────────────────────────────────────────────────────────
+// ─── Quick open ───────────────────────────────────────────────────────────────
 
 const HOME_SHORTCUTS = Object.entries(SHORTCUT_LABELS).filter(([key]) => key !== 'google docs')
 
-function HomeScreen({ onNavigate }: { onNavigate: (input: string) => void }) {
-  return (
-    <div style={{
-      position: 'absolute', inset: 0, overflowY: 'auto',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: '#060606',
-    }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', width: '200px' }}>
-
-        <div style={{ paddingBottom: '10px', borderBottom: '1px solid #111' }}>
-          <span style={{ fontSize: '10px', color: '#333', letterSpacing: '0.08em', textTransform: 'uppercase', userSelect: 'none' }}>
-            Quick open
-          </span>
-        </div>
-
-        {HOME_SHORTCUTS.map(([key, label]) => (
-          <ShortcutRow key={key} keyword={key} label={label} onClick={() => onNavigate(key)} />
-        ))}
-
-        <div style={{ marginTop: '8px', paddingTop: '10px', borderTop: '1px solid #111', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
-            <span style={{ fontSize: '10px', color: '#2e2e2e', fontFamily: 'monospace', letterSpacing: '0.02em', flexShrink: 0 }}>domain.com</span>
-            <span style={{ fontSize: '10px', color: '#222', letterSpacing: '0.02em' }}>opens directly</span>
-          </div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
-            <span style={{ fontSize: '10px', color: '#2e2e2e', fontFamily: 'monospace', letterSpacing: '0.02em', flexShrink: 0 }}>? query</span>
-            <span style={{ fontSize: '10px', color: '#222', letterSpacing: '0.02em' }}>forces Google search</span>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  )
-}
-
-function ShortcutRow({ keyword, label, onClick }: { keyword: string; label: string; onClick: () => void }) {
+function ShortcutChip({ label, onClick }: { label: string; onClick: () => void }) {
   const [hov, setHov] = useState(false)
   return (
     <button
@@ -661,19 +764,39 @@ function ShortcutRow({ keyword, label, onClick }: { keyword: string; label: stri
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
-        gap: '12px', padding: '5px 0',
-        background: 'none', border: 'none', cursor: 'pointer',
-        fontFamily: 'inherit', outline: 'none', width: '100%',
-        borderRadius: '2px',
+        height: '22px', padding: '0 10px', flexShrink: 0,
+        background: 'none',
+        border: `1px solid ${hov ? '#2e2e2e' : '#1a1a1a'}`,
+        borderRadius: '3px',
+        color: hov ? '#777' : '#444',
+        fontSize: '11px', letterSpacing: '0.02em',
+        cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
+        whiteSpace: 'nowrap',
+        transition: 'color 0.1s, border-color 0.1s',
       }}
-    >
-      <span style={{ fontSize: '11px', color: hov ? '#888' : '#555', letterSpacing: '0.02em', transition: 'color 0.1s' }}>
-        {label}
-      </span>
-      <span style={{ fontSize: '10px', color: hov ? '#444' : '#282828', letterSpacing: '0.04em', fontFamily: 'monospace', transition: 'color 0.1s' }}>
-        {keyword}
-      </span>
-    </button>
+    >{label}</button>
+  )
+}
+
+// ─── Fallback button ──────────────────────────────────────────────────────────
+
+function FallbackBtn({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        height: '26px', padding: '0 12px', flexShrink: 0,
+        background: 'none',
+        border: `1px solid ${hov ? '#333' : '#222'}`,
+        borderRadius: '3px',
+        color: hov ? '#ccc' : '#666',
+        fontSize: '11px', letterSpacing: '0.03em',
+        cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
+        transition: 'color 0.12s, border-color 0.12s',
+      }}
+    >{children}</button>
   )
 }

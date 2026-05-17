@@ -1,4 +1,4 @@
-import type { Project, HistoryEntry } from './types'
+import type { Project } from './types'
 
 const STORAGE_KEY  = 'proof-v3-projects'
 export const ACTIVE_KEY          = 'proof-v3-active'
@@ -42,46 +42,6 @@ export function newUrlSource(url: string, title?: string): import('./types').Que
   return { id: uid(), raw: url, url, label, status: 'done', error: null, fileType: 'url' }
 }
 
-const HISTORY_KEY = 'proof-v3-history'
-const MAX_HISTORY_PER_WS = 20
-
-export function loadHistory(): HistoryEntry[] {
-  try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? 'null') ?? []
-  } catch { return [] }
-}
-
-export function saveHistory(entries: HistoryEntry[]) {
-  try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(entries))
-  } catch {}
-}
-
-export function addHistoryEntry(entry: HistoryEntry) {
-  const all = loadHistory()
-  // Skip if identical to most recent entry for this workspace
-  const latest = [...all].reverse().find(e => e.wsId === entry.wsId)
-  if (latest) {
-    const same =
-      latest.wsName === entry.wsName &&
-      latest.sel1 === entry.sel1 &&
-      latest.sel2 === entry.sel2 &&
-      latest.splitView === entry.splitView &&
-      JSON.stringify(latest.view1) === JSON.stringify(entry.view1) &&
-      JSON.stringify(latest.view2) === JSON.stringify(entry.view2) &&
-      JSON.stringify(latest.docs.map(d => d.id).sort()) === JSON.stringify(entry.docs.map(d => d.id).sort()) &&
-      JSON.stringify(latest.pages.map(p => p.id).sort()) === JSON.stringify(entry.pages.map(p => p.id).sort())
-    if (same) return
-  }
-  const wsEntries = all.filter(e => e.wsId === entry.wsId)
-  const otherEntries = all.filter(e => e.wsId !== entry.wsId)
-  const trimmed = [...wsEntries.slice(-(MAX_HISTORY_PER_WS - 1)), entry]
-  saveHistory([...otherEntries, ...trimmed])
-}
-
-export function deleteHistoryEntry(id: string) {
-  saveHistory(loadHistory().filter(e => e.id !== id))
-}
 
 export function loadProjects(): Project[] {
   try {

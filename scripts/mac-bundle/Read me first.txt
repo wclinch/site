@@ -34,7 +34,7 @@ Activation
   first launch. One-time beta access. No subscription.
 
 Storage
-  250 MB for uploaded Sources. Saved Sites do not count toward storage.
+  250 MB for uploaded documents. Saved Pages do not count toward storage.
 
 Support
   Official_Site_Support@protonmail.com

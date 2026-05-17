@@ -1,16 +1,11 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { getStorageUsage, STORAGE_LIMIT_BYTES } from '@/lib/storage-limit'
+import { createPortal } from 'react-dom'
+import { getStorageUsage } from '@/lib/storage-limit'
 import { clearAllStored } from '@/lib/idb'
-import type { Project } from '@/lib/types'
+import { useApp } from '@/context/AppContext'
 
-// Keys whose values we wipe wholesale (selections / stack / active project
-// id). Project records themselves are preserved with sources stripped — see
-// reset() — so accidentally clicking "reset" never costs the user their
-// draft text.
-const PROJECTS_KEY  = 'proof-v3-projects'
-
-// Top-bar badge showing "X.X MB / 250 MB". Always visible.
+// Top-bar badge showing "X.X MB / NNN MB". Limit is tier-aware (150 MB Free, 5 GB Pro).
 //
 // Updates in response to `proof-storage-changed` events fired by AppContext
 // after any IDB write/delete. Click it to open a centered confirmation
@@ -19,8 +14,9 @@ const PROJECTS_KEY  = 'proof-v3-projects'
 //
 // The native menu (Site → Reset Site Data…) does the same thing via
 // `session.clearStorageData()` at the Electron layer; both end up at
-// `0.0 / 250 MB` after the reload.
+// `0.0 / NNN MB` after the reload.
 export default function StorageBadge() {
+  const { limits } = useApp()
   const [usage, setUsage]   = useState<number | null>(null)
   const [open,  setOpen]    = useState(false)
   const [busy,  setBusy]    = useState(false)
@@ -48,6 +44,11 @@ export default function StorageBadge() {
     return () => window.removeEventListener('proof-storage-changed', onChange)
   }, [refresh])
 
+  // Hide native WebContentsViews on close — open is handled synchronously in onClick.
+  useEffect(() => {
+    if (!open) { ;(window as any).electronAPI?.setModal?.(false) }
+  }, [open])
+
   // Close modal on Escape. Backdrop click is handled directly on the overlay.
   useEffect(() => {
     if (!open) return
@@ -63,10 +64,11 @@ export default function StorageBadge() {
 
   if (usage === null) return null
 
-  const pct     = usage / STORAGE_LIMIT_BYTES
+  const limitBytes = limits.storageBytes
+  const pct     = usage / limitBytes
   const usedMb  = usage / (1024 * 1024)
   const usedKb  = usage / 1024
-  const limitMb = Math.round(STORAGE_LIMIT_BYTES / (1024 * 1024))
+  const limitMb = Math.round(limitBytes / (1024 * 1024))
   // Granularity is unit-adaptive so per-file changes are always visible:
   //   < 1 MB  → show whole KB (a 200 KB screenshot bumps "0 KB" → "200 KB"
   //             instead of staying at "0.0 MB" and looking unchanged)
@@ -85,7 +87,7 @@ export default function StorageBadge() {
     pct >= 0.9 ? '#a55' :
     pct >= 0.5 ? '#888' :
     '#555'
-  const color = hover ? (pct >= 0.9 ? '#c66' : '#aaa') : baseColor
+  const color = hover ? (pct >= 0.9 ? '#e55' : '#aaa') : baseColor
 
   async function reset() {
     // First click arms the confirm step; second click does the actual wipe.
@@ -95,30 +97,12 @@ export default function StorageBadge() {
     }
     setBusy(true)
     try {
-      // Preserve workspace shells (id, name) so the user doesn't lose their
-      // workspace names on an accidental reset — only sources are wiped.
-      let preservedProjects: Project[] = []
-      try {
-        const raw = localStorage.getItem(PROJECTS_KEY)
-        if (raw) {
-          const ps = JSON.parse(raw) as Project[]
-          if (Array.isArray(ps)) {
-            preservedProjects = ps.map(p => ({ ...p, sources: [] }))
-          }
-        }
-      } catch {}
-
-      // Wipe IDB files + extracted content, then every `proof-` key, then
-      // put the stripped project shells back. A full reload is the
-      // cleanest way to resync React state without threading a reset
-      // callback through every consumer.
+      // Wipe IDB files + all proof- localStorage keys. On reload, init
+      // creates a fresh "Untitled" workspace from scratch.
       await clearAllStored()
       try {
         const keys = Object.keys(localStorage).filter(k => k.startsWith('proof-'))
         keys.forEach(k => localStorage.removeItem(k))
-        if (preservedProjects.length) {
-          localStorage.setItem(PROJECTS_KEY, JSON.stringify(preservedProjects))
-        }
       } catch {}
       window.dispatchEvent(new Event('proof-storage-changed'))
       window.location.reload()
@@ -130,10 +114,10 @@ export default function StorageBadge() {
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => { ;(window as any).electronAPI?.setModal?.(true); setOpen(true) }}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
-        title={`Uploaded Sources: ${usedMb.toFixed(2)} MB of ${limitMb} MB. Saved Sites do not count.`}
+        title={`Uploaded Documents: ${usedMb.toFixed(2)} MB of ${limitMb} MB. Saved Pages do not count toward storage.`}
         style={{
           background: 'none', border: 'none', padding: 0, cursor: 'pointer',
           fontSize: '11px', color, letterSpacing: '0.04em',
@@ -144,7 +128,7 @@ export default function StorageBadge() {
         {usedStr} / {limitStr}
       </button>
 
-      {open && (
+      {open && typeof document !== 'undefined' && createPortal(
         <div
           role="dialog"
           aria-modal="true"
@@ -159,7 +143,8 @@ export default function StorageBadge() {
             background: 'rgba(0,0,0,0.55)',
             backdropFilter: 'blur(2px)',
             WebkitBackdropFilter: 'blur(2px)',
-          }}
+            WebkitAppRegion: 'no-drag',
+          } as React.CSSProperties}
         >
           <div
             onClick={e => e.stopPropagation()}
@@ -172,19 +157,29 @@ export default function StorageBadge() {
           >
             {/* Header */}
             <div style={{ padding: '16px 18px 14px' }}>
-              <div style={{
-                fontSize: '11px',
-                color: armed ? '#c77' : '#777',
-                letterSpacing: '0.1em', textTransform: 'uppercase',
-                marginBottom: '10px',
-                transition: 'color 0.15s',
-              }}>
-                {armed ? 'Confirm reset' : 'Clear sources'}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <div style={{
+                  fontSize: '11px',
+                  color: armed ? '#c44' : '#777',
+                  letterSpacing: '0.1em', textTransform: 'uppercase',
+                  transition: 'color 0.15s',
+                }}>
+                  {armed ? 'Confirm' : 'Clear Documents'}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  {[1, 2].map(s => (
+                    <div key={s} style={{
+                      width: '16px', height: '2px', borderRadius: '1px',
+                      background: (s === 1 && !armed) || (s === 2 && armed) ? '#c44' : '#222',
+                      transition: 'background 0.2s',
+                    }} />
+                  ))}
+                </div>
               </div>
               <div style={{ fontSize: '12px', color: armed ? '#aaa' : '#888', lineHeight: 1.7 }}>
                 {armed
-                  ? 'Confirm to remove all sources and files on the device. Cannot be reversed.'
-                  : <>Removes all sources and files on the device. Cannot be reversed.</>}
+                  ? 'Confirm to remove all Documents and files on this device. Cannot be reversed.'
+                  : <>Removes all Documents and files on this device. Cannot be reversed.</>}
               </div>
             </div>
 
@@ -217,11 +212,12 @@ export default function StorageBadge() {
                 {armed ? 'Back' : 'Cancel'}
               </ModalButton>
               <ModalButton onClick={reset} disabled={busy} destructive>
-                {busy ? 'Clearing…' : armed ? 'Confirm clear' : 'Clear sources'}
+                {busy ? 'Clearing…' : armed ? 'Confirm clear' : 'Clear Documents'}
               </ModalButton>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   )

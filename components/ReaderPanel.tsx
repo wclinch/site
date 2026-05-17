@@ -9,7 +9,14 @@ import type { QueuedSource, ViewPage } from '@/lib/types'
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 
 // Center column — single View by default, Split View optional.
-export default function ReaderPanel() {
+// soloPane is owned by AppShell so it survives the unmount/remount cycle when
+// the research browser toggles fullscreen.
+export default function ReaderPanel({
+  soloPane, setSoloPane,
+}: {
+  soloPane: 1 | 2
+  setSoloPane: (p: 1 | 2) => void
+}) {
   const {
     selectedSource, setSelectedId,
     selectedSource2, setSelectedId2,
@@ -19,8 +26,13 @@ export default function ReaderPanel() {
     splitView, setSplitView,
   } = useApp()
 
-  function handleToggleSplit() {
-    setSplitView(!splitView)
+  function handleToggleSplitFromPane(pane: 1 | 2) {
+    if (splitView) {
+      setSoloPane(pane)
+      setSplitView(false)
+    } else {
+      setSplitView(true)
+    }
   }
 
   function handleClose1() {
@@ -31,7 +43,6 @@ export default function ReaderPanel() {
   function handleClose2() {
     if (view2Page) clearView(2)
     else setSelectedId2(null)
-    setSplitView(false)
   }
 
   // URL sources dragged onto a View pane get pinned as a live page.
@@ -48,12 +59,12 @@ export default function ReaderPanel() {
     else { clearView(2); setSelectedId2(srcId) }
   }
 
-  const hide1 = false
-  const hide2 = !splitView
+  const hide1 = !splitView && soloPane !== 1
+  const hide2 = !splitView && soloPane !== 2
 
   const label1 = view1Page
     ? truncate(view1Page.title)
-    : selectedSource ? truncate(selectedSource.label ?? selectedSource.raw) : (splitView ? 'View 1' : 'View')
+    : selectedSource ? truncate(selectedSource.label ?? selectedSource.raw) : 'View 1'
   const label2 = view2Page
     ? truncate(view2Page.title)
     : selectedSource2 ? truncate(selectedSource2.label ?? selectedSource2.raw) : 'View 2'
@@ -76,7 +87,7 @@ export default function ReaderPanel() {
             onSelectId={handleDrop1}
             uploadFiles={uploadFiles}
             patchSource={patchSource}
-            onToggleSplit={handleToggleSplit}
+            onToggleSplit={() => handleToggleSplitFromPane(1)}
             splitActive={splitView}
           />
         </div>
@@ -87,11 +98,12 @@ export default function ReaderPanel() {
             source={view2Page ? null : selectedSource2}
             viewPage={view2Page}
             isHidden={hide2}
-            onClose={handleClose2}
-            alwaysShowClose
+            onClose={(view2Page || selectedSource2) ? handleClose2 : undefined}
             onSelectId={handleDrop2}
             uploadFiles={uploadFiles}
             patchSource={patchSource}
+            onToggleSplit={() => handleToggleSplitFromPane(2)}
+            splitActive={splitView}
           />
         </div>
       </div>
@@ -124,13 +136,15 @@ function ViewPane({
   splitActive?: boolean
 }) {
   const [dragOver, setDragOver] = useState(false)
-  const viewportRef = useRef<HTMLDivElement>(null)
+  const viewportRef    = useRef<HTMLDivElement>(null)
+  const navigatedUrl   = useRef<string | null>(null)
 
   useEffect(() => {
     const api = (window as any).electronAPI?.view
     if (!api) return
 
     if (!viewPage || isHidden) {
+      if (!viewPage) navigatedUrl.current = null  // reset so same URL re-navigates after clear()
       api.setBounds?.(String(viewId), { x: 0, y: 0, width: 0, height: 0, innerWidth: window.innerWidth, innerHeight: window.innerHeight })
       return
     }
@@ -146,9 +160,14 @@ function ViewPane({
       })
     }
 
-    // Send bounds before navigate so the native view has a valid rect when loadURL fires.
-    sendBounds()
-    api.navigate?.(String(viewId), viewPage.url)
+    if (viewPage.url !== navigatedUrl.current) {
+      // URL changed — navigate and set bounds immediately so loadURL has a valid rect.
+      navigatedUrl.current = viewPage.url
+      requestAnimationFrame(() => { sendBounds(); api.navigate?.(String(viewId), viewPage.url) })
+    } else {
+      // Only isHidden changed (split toggled) — just reposition, do NOT reload the page.
+      requestAnimationFrame(() => requestAnimationFrame(() => sendBounds()))
+    }
 
     const ro = new ResizeObserver(sendBounds)
     if (viewportRef.current) ro.observe(viewportRef.current)
@@ -174,7 +193,8 @@ function ViewPane({
         overflow: 'hidden',
         background: dragOver ? 'rgba(255,255,255,0.01)' : 'transparent',
         transition: 'border-color 0.15s, background 0.15s',
-      }}
+        WebkitAppRegion: 'no-drag',
+      } as React.CSSProperties}
       onDragOver={e => {
         if (viewPage) return
         const hasStackSrc = e.dataTransfer.types.includes('application/x-proof-source-id')
@@ -205,7 +225,7 @@ function ViewPane({
         splitActive={splitActive}
       />
       {viewPage
-        ? <div ref={viewportRef} style={{ flex: 1, minHeight: 0, background: '#060606' }} />
+        ? <div ref={viewportRef} style={{ flex: 1, minHeight: 0, background: '#060606', WebkitAppRegion: 'no-drag' } as React.CSSProperties} />
         : source
           ? <SourceContent source={source} patchSource={patchSource} />
           : <EmptySource uploadFiles={uploadFiles} />

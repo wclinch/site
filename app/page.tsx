@@ -38,16 +38,13 @@ export default function Home() {
 
         {/* Welcome */}
         <div style={{ ...SECTION, gap: '0', paddingBottom: '28px' }}>
-          <div style={{ fontSize: '11px', color: '#444', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '20px' }}>
-            Site Beta
-          </div>
           <h1 style={{ fontSize: '22px', fontWeight: 500, color: '#bbb', lineHeight: 1.3, margin: '0 0 12px', letterSpacing: '-0.01em' }}>
-            Welcome to Site
+            Keep your documents, saved pages, and Web tabs together.
           </h1>
           <p style={{ ...BODY, color: '#666', marginBottom: '24px' }}>
-            A persistent research workspace. Add sources, browse, and save pages — everything stays with your workspace when you come back.
+            Come back where you left off.
           </p>
-          <a href="/app" style={{ alignSelf: 'flex-start', fontSize: '13px', color: '#777', textDecoration: 'none', letterSpacing: '0.04em' }}>Open Site →</a>
+          <a href="/app" style={{ alignSelf: 'flex-start', fontSize: '13px', color: '#aaa', textDecoration: 'none', letterSpacing: '0.04em' }}>Open Site →</a>
         </div>
 
         {/* Install */}
@@ -62,21 +59,14 @@ export default function Home() {
           <p style={NOTE}>After the first launch, macOS remembers Site and will not prompt again.</p>
         </div>
 
-        {/* License */}
-        <div style={SECTION}>
-          <span style={LABEL}>License</span>
-          <p style={BODY}>Paste your license key when Site prompts you on first open.</p>
-          <p style={NOTE}>One-time purchase. No subscription.</p>
-        </div>
-
         {/* How it works */}
         <div style={SECTION}>
           <span style={LABEL}>How it works</span>
           {([
-            ['Research',  'Browser tabs on the right. Search the web, navigate URLs, and save any page to Sites.'],
-            ['Sources',   'Add PDFs and images to Sources. Open them side by side in Source 1 and Source 2.'],
-            ['Workspace', 'Everything in a workspace — sources, saved pages, open tabs — is restored when you return.'],
-            ['Save As',   'Name and save the current workspace. Switch between workspaces from the top bar.'],
+            ['Web',       'Browser tabs on the right. Search, navigate URLs, and save any page to Pages.'],
+            ['Documents', 'Add PDFs and images. Open them side by side in View 1 and View 2.'],
+            ['Pages',     'Save any Web page to Pages. Pages are unlimited and do not count toward storage.'],
+            ['Workspace', 'Everything in a workspace — Documents, saved Pages, Views, and Web tabs — auto-saves and restores when you return.'],
           ] as const).map(([label, body]) => (
             <p key={label} style={BODY}>
               <span style={{ color: '#888' }}>{label}</span> — {body}
@@ -84,11 +74,22 @@ export default function Home() {
           ))}
         </div>
 
-        {/* Storage */}
+        {/* Free */}
         <div style={SECTION}>
-          <span style={LABEL}>Storage</span>
-          <p style={BODY}>250 MB for uploaded Sources. Saved Sites store metadata only and do not count toward storage.</p>
-          <p style={NOTE}><span style={{ color: '#555' }}>Site → Reset Site Data…</span> clears all local data. This cannot be undone.</p>
+          <span style={LABEL}>Free</span>
+          <p style={BODY}>Start with one workspace. No account required.</p>
+          {(['1 workspace', '10 Documents', '150 MB uploaded Documents', 'Unlimited Pages'] as const).map(f => (
+            <p key={f} style={NOTE}>{f}</p>
+          ))}
+        </div>
+
+        {/* Pro */}
+        <div style={SECTION}>
+          <span style={LABEL}>Pro</span>
+          <p style={BODY}>Unlock unlimited workspaces. Requires an account and active subscription.</p>
+          {(['Unlimited workspaces', 'Unlimited Documents', '5 GB uploaded Documents', 'Unlimited Pages'] as const).map(f => (
+            <p key={f} style={NOTE}>{f}</p>
+          ))}
         </div>
 
         {/* Support */}
@@ -99,11 +100,9 @@ export default function Home() {
               Official_Site_Support@protonmail.com
             </a>
           </p>
-          <p style={NOTE}>Site is in beta. Rough edges are expected — your feedback helps.</p>
         </div>
 
       </main>
-
     </div>
   )
 }

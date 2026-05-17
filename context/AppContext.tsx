@@ -1,11 +1,11 @@
 'use client'
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
-import type { Project, QueuedSource, SavedResearchTab, ViewPage, HistoryEntry } from '@/lib/types'
+import type { Project, QueuedSource, SavedResearchTab, ViewPage } from '@/lib/types'
 import {
   ACTIVE_KEY, SELECTED_KEY, SELECTED_KEY_2, STACK_KEY, STACK_LIMIT,
   newProject, newSource, newNote, newUrlSource,
   loadProjects, saveProjects,
-  uid, addHistoryEntry, deleteHistoryEntry as storageDeleteHistoryEntry,
+  uid,
 } from '@/lib/storage'
 import { storeFile, deleteFile, getFile, storeContent, getContent, deleteContent } from '@/lib/idb'
 import { extractContent } from '@/lib/extract'
@@ -88,9 +88,6 @@ interface AppState {
   newWorkspace: () => void
   saveWorkspace: (name?: string) => void
   removeWorkspace: (targetId?: string) => void
-  // History
-  restoreFromHistory: (entry: HistoryEntry) => void
-  deleteHistoryEntry: (id: string) => void
   // Stack actions
   addToStack: (id: string) => void
   removeFromStack: (id: string) => void
@@ -344,108 +341,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ─── Split restore helper ─────────────────────────────────────────────────────
 
   function restoreSplit(proj: Project): boolean {
-    if (proj.splitView === false) return false
-    if (proj.splitView === true) return true
-    return !!(proj.view2Page || proj.sel2)
-  }
-
-  // ─── History helpers ──────────────────────────────────────────────────────────
-
-  function captureHistory() {
-    const curId = activeIdRef.current
-    if (!curId) return
-    const proj = projectsRef.current.find(p => p.id === curId)
-    if (!proj) return
-    const researchTabs = readResearchTabs()
-    const fileSources = proj.sources.filter(s => s.fileType !== 'url')
-    const pageSources = proj.sources.filter(s => s.fileType === 'url')
-    addHistoryEntry({
-      id: uid(),
-      ts: Date.now(),
-      wsId: curId,
-      wsName: proj.name,
-      docs: fileSources.map(s => ({ id: s.id, label: s.label || s.raw, fileType: s.fileType })),
-      pages: pageSources.map(s => ({ id: s.id, label: s.label || s.raw, url: s.url || s.raw })),
-      sel1: selectedIdRef.current,
-      sel2: selectedId2Ref.current,
-      view1: view1PageRef.current,
-      view2: view2PageRef.current,
-      splitView: splitViewRef.current,
-      webTabs: researchTabs,
-    })
-  }
-
-  function restoreFromHistory(entry: HistoryEntry) {
-    // Source IDs are preserved from history so IDB file lookups still work.
-    // The workspace itself gets a fresh ID to avoid overwriting the current one.
-    const restoredDocs: QueuedSource[] = entry.docs.map(d => ({
-      id: d.id, raw: d.label, label: d.label,
-      status: 'queued' as const, error: null,
-      fileType: (d.fileType ?? 'pdf') as QueuedSource['fileType'],
-    }))
-    const restoredPages: QueuedSource[] = entry.pages.map(p => ({
-      id: p.id, raw: p.url, url: p.url, label: p.label,
-      status: 'done' as const, error: null, fileType: 'url' as const,
-    }))
-
-    // Build a unique restoration name: "Workspace (restored)" or "Workspace (restored 2)"
-    const baseName = `${entry.wsName} (restored)`
-    const usedNames = new Set(projectsRef.current.map(p => p.name))
-    let restoredName = baseName
-    for (let n = 2; usedNames.has(restoredName); n++) restoredName = `${baseName} ${n}`
-
-    const restoredProj: Project = {
-      id: uid(),
-      name: restoredName,
-      sources: [...restoredDocs, ...restoredPages],
-      sel1: entry.sel1,
-      sel2: entry.sel2,
-      view1Page: entry.view1,
-      view2Page: entry.view2,
-      splitView: entry.splitView,
-      researchTabs: entry.webTabs,
-    }
-
-    // Save the current workspace state before switching away
-    captureHistory()
-    setProjects(ps => [...ps, restoredProj])
-    setActiveId(restoredProj.id)
-    setSelectedId(entry.sel1)
-    setSelectedId2(entry.sel2)
-    setView1Page(entry.view1)
-    setView2Page(entry.view2)
-    setSplitView(entry.splitView)
-    loadResearchTabs(entry.webTabs)
-
-    // Re-extract PDF/image content from IDB for restored sources
-    ;(async () => {
-      for (const doc of restoredDocs) {
-        if (doc.fileType === 'note' || doc.fileType === 'url') continue
-        try {
-          if (doc.fileType === 'image') {
-            const file = await getFile(doc.id)
-            patchSource('', doc.id, file ? { status: 'done' } : { status: 'error', error: 'File not found — re-upload to restore.' })
-          } else {
-            let content = await getContent(doc.id) as import('@/lib/types').DocContent | null
-            if (!content) {
-              const file = await getFile(doc.id)
-              if (file) {
-                content = await extractContent(file)
-                storeContent(doc.id, content).catch(() => {})
-              }
-            }
-            if (content) patchSource('', doc.id, { content, status: 'done' })
-            else patchSource('', doc.id, { status: 'error', error: 'File not found — re-upload to restore.' })
-          }
-        } catch {
-          patchSource('', doc.id, { status: 'error', error: 'Failed to restore.' })
-        }
-      }
-    })()
-  }
-
-  function deleteHistoryEntryFn(id: string) {
-    storageDeleteHistoryEntry(id)
+    return proj.splitView === true && !!(proj.view2Page || proj.sel2)
   }
 
   // ─── Derived ────────────────────────────────────────────────────────────────
@@ -827,7 +723,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   function switchWorkspace(id: string) {
     if (id === activeId) return
-    captureHistory()
     const curId   = activeId
     const curSel1 = selectedId
     const curSel2 = selectedId2
@@ -860,7 +755,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   function newWorkspace() {
-    captureHistory()
     const limits = isProRef.current ? PRO_LIMITS : FREE_LIMITS
     if (!isProRef.current && projectsRef.current.length >= limits.workspaces) {
       needUpgrade('Free includes 1 workspace. Upgrade to Pro for unlimited workspaces.')
@@ -906,7 +800,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   function removeWorkspace(targetId?: string) {
     const id = targetId ?? activeId
     if (!id) return
-    captureHistory()
     if (projects.length <= 1) return
     const proj = projects.find(p => p.id === id)
     if (!proj) return
@@ -1076,7 +969,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     createNote, addUrl,
     addToStack, removeFromStack, clearStack, reorderStack, openInPane,
     switchWorkspace, newWorkspace, saveWorkspace, removeWorkspace,
-    restoreFromHistory, deleteHistoryEntry: deleteHistoryEntryFn,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
