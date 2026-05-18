@@ -17,82 +17,16 @@ import {
   signIn as authSignIn, refreshEntitlement as authRefresh, getPortalUrl,
 } from '@/lib/auth'
 import type { AuthUser, SignInResult } from '@/lib/auth'
+import type { AppState, ContextMenu } from './appTypes'
 
+// ─── Module-level constants ──────────────────────────────────────────────────
 
 // Legacy id from the pre-refactor "floating sources" model. Kept only so
 // old persisted state can be migrated on load — no new code writes it.
 const INBOX_ID = '__inbox__'
 
-interface ContextMenu { srcId: string; x: number; y: number }
-
-interface AppState {
-  mounted: boolean
-  projects: Project[]
-  activeId: string | null
-  selectedId: string | null
-  selectedId2: string | null
-  selectedIds: Set<string>
-  anchorId: string | null
-  contextMenu: ContextMenu | null
-  // derived
-  activeProject: Project | null
-  sources: QueuedSource[]
-  allSources: QueuedSource[]
-  selectedSource: QueuedSource | null
-  selectedSource2: QueuedSource | null
-  stackIds: string[]
-  stackSources: QueuedSource[]
-  stackLimit: number
-  atStackLimit: boolean
-  inStack: (id: string) => boolean
-  // center view panes
-  view1Page: ViewPage | null
-  view2Page: ViewPage | null
-  splitView: boolean
-  setSplitView: (v: boolean) => void
-  pinPageToView: (pane: 1 | 2, src: QueuedSource) => void
-  pinUrlToView:  (pane: 1 | 2, url: string, title: string) => void
-  clearView: (pane: 1 | 2) => void
-  openDocInPane: (pane: 1 | 2, srcId: string) => void
-  // auth + entitlement
-  user:              AuthUser | null
-  isPro:             boolean
-  limits:            Limits
-  signIn:            (email: string, key: string) => Promise<SignInResult>
-  signOut:           () => void
-  refreshEntitlement: () => Promise<void>
-  openBilling:       () => Promise<void>
-  // setters
-  setSelectedId: (id: string | null) => void
-  setSelectedId2: (id: string | null) => void
-  setSelectedIds: (ids: Set<string>) => void
-  setAnchorId: (id: string | null) => void
-  setContextMenu: (m: ContextMenu | null) => void
-  // actions
-  setProjects: React.Dispatch<React.SetStateAction<Project[]>>
-  updateProject: (id: string, patch: Partial<Project>) => void
-  patchSource: (projId: string, srcId: string, patch: Partial<QueuedSource>) => void
-  moveSource: (srcId: string, toIndex: number) => void
-  moveSourceToProject: (srcId: string, targetProjId: string) => void
-  moveProject: (projId: string, toIndex: number) => void
-  uploadFiles: (files: FileList | File[], targetProjId?: string) => Promise<void>
-  retrySource: (srcId: string) => Promise<void>
-  removeSource: (srcId: string) => void
-  removeSelected: () => void
-  createNote: (targetProjId?: string) => void
-  addUrl: (url: string, targetProjId?: string, label?: string) => Promise<void>
-  // Workspace actions
-  switchWorkspace: (id: string) => void
-  newWorkspace: () => void
-  saveWorkspace: (name?: string) => void
-  removeWorkspace: (targetId?: string) => void
-  // Stack actions
-  addToStack: (id: string) => void
-  removeFromStack: (id: string) => void
-  clearStack: () => void
-  reorderStack: (fromIndex: number, toIndex: number) => void
-  openInPane: (id: string) => void
-}
+const MAX_BATCH   = 10   // max files accepted in a single drop/pick
+const MAX_FILE_MB = 100  // per-file size cap before we skip with an error
 
 const AppContext = createContext<AppState | null>(null)
 
@@ -108,15 +42,21 @@ function notifyStorageChanged() {
   window.dispatchEvent(new Event('proof-storage-changed'))
 }
 
+// ─── Provider ────────────────────────────────────────────────────────────────
+
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [mounted, setMounted]                 = useState(false)
-  const [projects, setProjects]               = useState<Project[]>([])
-  const [activeId, setActiveId]               = useState<string | null>(null)
-  const [selectedId, setSelectedId]           = useState<string | null>(null)
-  const [selectedId2, setSelectedId2]         = useState<string | null>(null)
-  const [selectedIds, setSelectedIds]         = useState<Set<string>>(new Set())
-  const [anchorId, setAnchorId]               = useState<string | null>(null)
-  const [contextMenu, setContextMenu]         = useState<ContextMenu | null>(null)
+
+  // ─── State ──────────────────────────────────────────────────────────────
+
+  const [mounted, setMounted]         = useState(false)
+  const [projects, setProjects]       = useState<Project[]>([])
+  const [activeId, setActiveId]       = useState<string | null>(null)
+  const [selectedId, setSelectedId]   = useState<string | null>(null)
+  const [selectedId2, setSelectedId2] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [anchorId, setAnchorId]       = useState<string | null>(null)
+  const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
+
   // Snapshot the last active workspace ID before effects can update it,
   // so the mount effect can restore the correct workspace on reload.
   const [lastActiveId] = useState<string | null>(() => {
@@ -124,12 +64,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try { return localStorage.getItem(ACTIVE_KEY) } catch { return null }
   })
 
+  // View panes
   const [view1Page, setView1Page] = useState<ViewPage | null>(null)
   const [view2Page, setView2Page] = useState<ViewPage | null>(null)
   const [splitView, setSplitView] = useState(false)
 
+  // Auth / entitlement
   const [isPro, setIsPro] = useState(false)
   const [user,  setUser]  = useState<AuthUser | null>(null)
+
+  // ─── Refs ───────────────────────────────────────────────────────────────
 
   const projectsRef    = useRef<Project[]>([])
   const activeIdRef    = useRef(activeId)
@@ -139,14 +83,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const view2PageRef   = useRef<ViewPage | null>(null)
   const splitViewRef   = useRef(false)
   const isProRef       = useRef(false)
-  useEffect(() => { activeIdRef.current = activeId }, [activeId])
+  const autoSaveTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Sync refs on every render so async callbacks always see the latest values.
+  useEffect(() => { activeIdRef.current = activeId },    [activeId])
   useEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
   useEffect(() => { selectedId2Ref.current = selectedId2 }, [selectedId2])
-  useEffect(() => { view1PageRef.current = view1Page }, [view1Page])
-  useEffect(() => { view2PageRef.current = view2Page }, [view2Page])
-  useEffect(() => { splitViewRef.current = splitView }, [splitView])
-  useEffect(() => { isProRef.current = isPro }, [isPro])
+  useEffect(() => { view1PageRef.current = view1Page },  [view1Page])
+  useEffect(() => { view2PageRef.current = view2Page },  [view2Page])
+  useEffect(() => { splitViewRef.current = splitView },  [splitView])
+  useEffect(() => { isProRef.current = isPro },          [isPro])
 
+  // ─── Derived ────────────────────────────────────────────────────────────
+
+  const activeProject       = projects.find(p => p.id === activeId) ?? null
+  const sources             = activeProject?.sources ?? []
+  const allSources          = projects.flatMap(p => p.sources)
+  const selectedSource      = allSources.find(s => s.id === selectedId)  ?? null
+  const selectedSource2     = allSources.find(s => s.id === selectedId2) ?? null
+  const namedProjectCount   = projects.length
+
+  // Stack = active project's sources. No separate storage, no separate
+  // ordering — switching projects swaps the stack instantly.
+  const stackSources: QueuedSource[] = sources
+  const stackIds   : string[]        = sources.map(s => s.id)
+  const atStackLimit                 = sources.length >= STACK_LIMIT
+  const inStack    = (id: string)    => sources.some(s => s.id === id)
+
+  // ─── Effects: UI events ─────────────────────────────────────────────────
+
+  // Close context menu on Escape or any click outside.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setContextMenu(null)
@@ -161,6 +127,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.addEventListener('click', handler)
     return () => window.removeEventListener('click', handler)
   }, [contextMenu])
+
+  // ─── Effects: Load / restore ────────────────────────────────────────────
 
   useEffect(() => {
     const saved = loadProjects()
@@ -204,14 +172,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       // Drop any orphaned stack-key entry from the previous model — the
       // active project's sources are the stack now and no separate list
-      // is read. Also drop the legacy two-pane image-selection key —
-      // the center column is a single Source pane now, no separate
-      // "image pane" state.
+      // is read. Also drop the legacy two-pane image-selection key.
       try { localStorage.removeItem(STACK_KEY) } catch {}
       try { localStorage.removeItem('proof-v3-selected-image') } catch {}
 
       // Auto-restore the last active project (or fall back to the first one)
-      // and its saved Source selection.
+      // and its saved source selection.
       const restoredId   = fixed.find(p => p.id === lastActiveId)?.id ?? fixed[0].id
       const restoredProj = fixed.find(p => p.id === restoredId)
       setActiveId(restoredId)
@@ -267,9 +233,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setProjects([def])
       setActiveId(def.id)
     }
+
     setIsPro(checkIsPro())
 
-    // Restore auth session and recheck subscription in background
+    // Restore auth session and recheck subscription in background.
     const storedUser = getStoredUser()
     if (storedUser) {
       setUser(storedUser)
@@ -281,15 +248,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setMounted(true)
   }, [])
 
+  // ─── Effects: Persistence ───────────────────────────────────────────────
+
+  // Persist projects on every change after mount — including empty arrays. The
+  // previous `if (projects.length)` skipped the save when the user deleted
+  // the last project, letting the stale list resurrect on hard reload.
   useEffect(() => {
     projectsRef.current = projects
-    // Persist on every change AFTER mount — including empty arrays. The
-    // previous `if (projects.length)` skipped the save when the user
-    // deleted the last project, so the stale list survived in
-    // localStorage and the deleted project resurrected on hard reload.
     if (mounted) saveProjects(projects)
   }, [projects, mounted])
 
+  // Snapshot the full workspace state (tabs, view pins, selection) just
+  // before the page unloads so nothing is lost on close/refresh.
   useEffect(() => {
     function onBeforeUnload() {
       let researchTabs: SavedResearchTab[] = []
@@ -313,6 +283,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [])
 
+  // Keep individual keys in sync so other tabs / the Electron layer can read them.
   useEffect(() => {
     if (activeId) localStorage.setItem(ACTIVE_KEY, activeId)
     else          localStorage.removeItem(ACTIVE_KEY)
@@ -326,8 +297,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     else             localStorage.removeItem(SELECTED_KEY_2)
   }, [selectedId2])
 
-  // Auto-save workspace state whenever key selection/view state changes.
-  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Auto-save workspace state whenever key selection or view state changes.
   useEffect(() => {
     if (!mounted || !activeId) return
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
@@ -336,73 +306,189 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, selectedId2, view1Page, view2Page, splitView, activeId, mounted])
 
-  // ─── Split restore helper ─────────────────────────────────────────────────────
+  // ─── Workspace helpers ──────────────────────────────────────────────────
 
   function restoreSplit(proj: Project): boolean {
     return proj.splitView === true
   }
 
-  // ─── Derived ────────────────────────────────────────────────────────────────
+  function readResearchTabs(): SavedResearchTab[] {
+    try {
+      const raw = JSON.parse(localStorage.getItem('proof-v3-research-tabs') || '[]')
+      return Array.isArray(raw)
+        ? raw.filter((t: { url?: string }) => t.url)
+             .map((t: { url: string; title?: string; active?: boolean }) => ({ url: t.url, title: t.title || '', active: t.active ?? false }))
+        : []
+    } catch { return [] }
+  }
 
-  const activeProject       = projects.find(p => p.id === activeId) ?? null
-  const sources             = activeProject?.sources ?? []
-  const allSources          = projects.flatMap(p => p.sources)
-  const selectedSource      = allSources.find(s => s.id === selectedId)  ?? null
-  const selectedSource2     = allSources.find(s => s.id === selectedId2) ?? null
-  const namedProjectCount   = projects.length
-
-  // Stack = active project's sources. No separate storage, no separate
-  // ordering — switching projects swaps the stack instantly because it's
-  // a direct reference to `activeProject.sources`.
-  const stackSources: QueuedSource[] = sources
-  const stackIds   : string[]        = sources.map(s => s.id)
-  const atStackLimit                 = sources.length >= STACK_LIMIT
-  const inStack    = (id: string)    => sources.some(s => s.id === id)
-
-  // ─── Auth + entitlement ──────────────────────────────────────────────────────
-
-  async function signInFn(email: string, key: string): Promise<SignInResult> {
-    const result = await authSignIn(email, key)
-    if (result.ok) {
-      setUser(result.user)
-      setIsPro(result.isPro)
+  function loadResearchTabs(tabs: SavedResearchTab[]) {
+    try {
+      if (tabs.length > 0) {
+        localStorage.setItem('proof-v3-research-tabs', JSON.stringify(
+          tabs.map((t, i) => ({ id: `tab-A-r${i}`, url: t.url }))
+        ))
+      } else {
+        localStorage.removeItem('proof-v3-research-tabs')
+      }
+    } catch {}
+    if (typeof window !== 'undefined') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(window as any).electronAPI?.research?.loadWorkspace?.(tabs)
     }
-    return result
   }
 
-  function signOut() {
-    clearStoredSession()
-    setUser(null)
-    setIsPro(checkIsPro())
+  // ─── Workspace actions ──────────────────────────────────────────────────
+
+  function saveWorkspace(name?: string) {
+    if (!activeId) return
+    const researchTabs = readResearchTabs()
+    setProjects(ps => ps.map(p => {
+      if (p.id !== activeId) return p
+      return { ...p, sel1: selectedId, sel2: selectedId2, view1Page, view2Page, splitView, researchTabs, ...(name !== undefined ? { name } : {}) }
+    }))
   }
 
-  async function refreshEntitlementFn() {
-    if (!user) return
-    const pro = await authRefresh(user.email, user.licenseKey).catch(() => null)
-    if (pro !== null) setIsPro(pro)
+  function switchWorkspace(id: string) {
+    if (id === activeId) return
+    const curId   = activeId
+    const curSel1 = selectedId
+    const curSel2 = selectedId2
+    const researchTabs = readResearchTabs()
+
+    // Persist state of the workspace we're leaving.
+    setProjects(ps => ps.map(p => p.id === curId
+      ? { ...p, sel1: curSel1, sel2: curSel2, view1Page, view2Page, splitView, researchTabs }
+      : p))
+
+    const newProj = projects.find(p => p.id === id)
+    setActiveId(id)
+    setSelectedId(newProj?.sel1 ?? null)
+    setSelectedId2(newProj?.sel2 ?? null)
+    setSelectedIds(new Set())
+    setAnchorId(null)
+
+    const nv1 = newProj?.view1Page ?? null
+    const nv2 = newProj?.view2Page ?? null
+    setView1Page(nv1)
+    setView2Page(nv2)
+    setSplitView(newProj ? restoreSplit(newProj) : false)
+    // Clear immediately when no page; navigate handled by ViewPane useEffect when page is set.
+    if (typeof window !== 'undefined') {
+      if (!nv1) (window as any).electronAPI?.view?.clear?.('1')
+      if (!nv2) (window as any).electronAPI?.view?.clear?.('2')
+    }
+
+    loadResearchTabs(newProj?.researchTabs ?? [])
   }
 
-  async function openBilling() {
-    const customerId = user?.customerId
-    const url = customerId
-      ? await getPortalUrl(customerId).catch(() => null)
-      : null
-    if (url) window.open(url, '_blank', 'noopener,noreferrer')
-    else window.open('https://polar.sh/site-official/portal', '_blank', 'noopener,noreferrer')
+  function newWorkspace() {
+    const limits = isProRef.current ? PRO_LIMITS : FREE_LIMITS
+    if (!isProRef.current && projectsRef.current.length >= limits.workspaces) {
+      needUpgrade('Free includes 1 workspace. Upgrade to Pro for unlimited workspaces.')
+      return
+    }
+
+    const curId   = activeId
+    const curSel1 = selectedId
+    const curSel2 = selectedId2
+    const researchTabs = readResearchTabs()
+
+    if (curId) {
+      setProjects(ps => ps.map(p => p.id === curId
+        ? { ...p, sel1: curSel1, sel2: curSel2, view1Page, view2Page, splitView, researchTabs }
+        : p))
+    }
+
+    const p = newProject(namedProjectCount + 1)
+    const usedNames = new Set(projectsRef.current.map(w => w.name))
+    let untitledName = 'Untitled'
+    for (let i = 1; i <= projectsRef.current.length + 1; i++) {
+      const candidate = `Untitled-${String(i).padStart(2, '0')}`
+      if (!usedNames.has(candidate)) { untitledName = candidate; break }
+    }
+    p.name = untitledName
+    setProjects(ps => [...ps, p])
+    setActiveId(p.id)
+    setSelectedId(null)
+    setSelectedId2(null)
+    setSelectedIds(new Set())
+    setAnchorId(null)
+    setView1Page(null)
+    setView2Page(null)
+    setSplitView(false)
+    if (typeof window !== 'undefined') {
+      ;(window as any).electronAPI?.view?.clear?.('1')
+      ;(window as any).electronAPI?.view?.clear?.('2')
+    }
+
+    loadResearchTabs([])
   }
 
-  function needUpgrade(msg: string) {
-    warn(msg)
-    if (typeof window !== 'undefined') window.dispatchEvent(new Event('proof:upgrade-needed'))
+  function removeWorkspace(targetId?: string) {
+    const id = targetId ?? activeId
+    if (!id) return
+    if (projects.length <= 1) return
+    const proj = projects.find(p => p.id === id)
+    if (!proj) return
+
+    const sourceIds = proj.sources.map(s => s.id)
+    function reapSources() {
+      if (sourceIds.length) {
+        Promise.allSettled(sourceIds.flatMap(sid => [deleteFile(sid), deleteContent(sid)]))
+          .then(notifyStorageChanged)
+      }
+    }
+
+    // Non-active workspace — just remove it.
+    if (id !== activeId) {
+      setProjects(ps => ps.filter(p => p.id !== id))
+      reapSources()
+      return
+    }
+
+    // Active workspace — delete it and switch to the adjacent workspace.
+    const remaining = projects.filter(p => p.id !== id)
+    const idx       = projects.findIndex(p => p.id === id)
+
+    setProjects(remaining)
+    setSelectedIds(new Set())
+    setAnchorId(null)
+
+    if (remaining.length === 0) {
+      setActiveId(null)
+      setSelectedId(null)
+      setSelectedId2(null)
+      setSplitView(false)
+      loadResearchTabs([])
+    } else {
+      const nextProj = remaining[Math.max(0, idx - 1)]
+      setActiveId(nextProj.id)
+      setSelectedId(nextProj.sel1 ?? null)
+      setSelectedId2(nextProj.sel2 ?? null)
+      const rv1 = nextProj.view1Page ?? null
+      const rv2 = nextProj.view2Page ?? null
+      setView1Page(rv1)
+      setView2Page(rv2)
+      setSplitView(restoreSplit(nextProj))
+      // Clear immediately when no page; navigate handled by ViewPane useEffect when page is set.
+      if (typeof window !== 'undefined') {
+        if (!rv1) (window as any).electronAPI?.view?.clear?.('1')
+        if (!rv2) (window as any).electronAPI?.view?.clear?.('2')
+      }
+      loadResearchTabs(nextProj.researchTabs ?? [])
+    }
+
+    reapSources()
   }
 
-  // ─── Helpers ────────────────────────────────────────────────────────────────
+  // ─── Project / source helpers ───────────────────────────────────────────
 
   function updateProject(id: string, patch: Partial<Project>) {
     setProjects(ps => ps.map(p => p.id === id ? { ...p, ...patch } : p))
   }
 
-  // projId is kept in signature for backward compat but ignored — scans all projects
+  // projId is kept in signature for backward compat but ignored — scans all projects.
   function patchSource(_projId: string, srcId: string, patch: Partial<QueuedSource>) {
     setProjects(ps => ps.map(p => ({
       ...p,
@@ -459,10 +545,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
   }
 
-  // ─── Actions ────────────────────────────────────────────────────────────────
-
-  const MAX_BATCH   = 10
-  const MAX_FILE_MB = 100
+  // ─── Document actions ───────────────────────────────────────────────────
 
   async function uploadFiles(files: FileList | File[], targetProjId?: string) {
     const projId = targetProjId ?? activeIdRef.current
@@ -628,25 +711,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // the Stack, the right Browser keeps showing whatever it had.
   }
 
-  // ─── Stack actions (aliases over project-scoped source ops) ───────────────
+  // ─── Library (stack) actions ────────────────────────────────────────────
 
   // Drag-source-into-stack semantics: if the source already lives in the
-  // active project, no-op. If it lives in another project, move it into
-  // the active project (respecting the cap).
+  // active project, no-op. If it lives in another project, move it here.
   function addToStack(id: string) {
     const projId = activeIdRef.current
     if (!projId) return
     moveSourceToProject(id, projId)
   }
 
-  // Unpinning IS removing the source in the new model — there's no
-  // separate "pinned" set to detach from, so the only meaningful
-  // operation is to delete it from the project (and IDB).
+  // Unpinning IS removing the source — there's no separate "pinned" set
+  // to detach from, so the only meaningful operation is delete.
   function removeFromStack(id: string) {
     removeSource(id)
   }
 
-  // Empty out the active project. Removes every source + reaps IDB.
+  // Empty out the active project. Removes every source and reaps IDB.
   function clearStack() {
     const proj = projects.find(p => p.id === activeIdRef.current)
     if (!proj || proj.sources.length === 0) return
@@ -674,175 +755,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }))
   }
 
-  // ─── Workspace helpers ────────────────────────────────────────────────────────
-
-  function readResearchTabs(): SavedResearchTab[] {
-    try {
-      const raw = JSON.parse(localStorage.getItem('proof-v3-research-tabs') || '[]')
-      return Array.isArray(raw)
-        ? raw.filter((t: { url?: string }) => t.url)
-             .map((t: { url: string; title?: string; active?: boolean }) => ({ url: t.url, title: t.title || '', active: t.active ?? false }))
-        : []
-    } catch { return [] }
-  }
-
-  function loadResearchTabs(tabs: SavedResearchTab[]) {
-    try {
-      if (tabs.length > 0) {
-        localStorage.setItem('proof-v3-research-tabs', JSON.stringify(
-          tabs.map((t, i) => ({ id: `tab-A-r${i}`, url: t.url }))
-        ))
-      } else {
-        localStorage.removeItem('proof-v3-research-tabs')
-      }
-    } catch {}
-    if (typeof window !== 'undefined') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(window as any).electronAPI?.research?.loadWorkspace?.(tabs)
-    }
-  }
-
-  function saveWorkspace(name?: string) {
-    if (!activeId) return
-    const researchTabs = readResearchTabs()
-    setProjects(ps => ps.map(p => {
-      if (p.id !== activeId) return p
-      return { ...p, sel1: selectedId, sel2: selectedId2, view1Page, view2Page, splitView, researchTabs, ...(name !== undefined ? { name } : {}) }
-    }))
-  }
-
-  function switchWorkspace(id: string) {
-    if (id === activeId) return
-    const curId   = activeId
-    const curSel1 = selectedId
-    const curSel2 = selectedId2
-    const researchTabs = readResearchTabs()
-
-    // Persist state of the workspace we're leaving
-    setProjects(ps => ps.map(p => p.id === curId
-      ? { ...p, sel1: curSel1, sel2: curSel2, view1Page, view2Page, splitView, researchTabs }
-      : p))
-
-    const newProj = projects.find(p => p.id === id)
-    setActiveId(id)
-    setSelectedId(newProj?.sel1 ?? null)
-    setSelectedId2(newProj?.sel2 ?? null)
-    setSelectedIds(new Set())
-    setAnchorId(null)
-
-    const nv1 = newProj?.view1Page ?? null
-    const nv2 = newProj?.view2Page ?? null
-    setView1Page(nv1)
-    setView2Page(nv2)
-    setSplitView(newProj ? restoreSplit(newProj) : false)
-    // Clear immediately when no page; navigate handled by ViewPane useEffect when page is set.
-    if (typeof window !== 'undefined') {
-      if (!nv1) (window as any).electronAPI?.view?.clear?.('1')
-      if (!nv2) (window as any).electronAPI?.view?.clear?.('2')
-    }
-
-    loadResearchTabs(newProj?.researchTabs ?? [])
-  }
-
-  function newWorkspace() {
-    const limits = isProRef.current ? PRO_LIMITS : FREE_LIMITS
-    if (!isProRef.current && projectsRef.current.length >= limits.workspaces) {
-      needUpgrade('Free includes 1 workspace. Upgrade to Pro for unlimited workspaces.')
-      return
-    }
-
-    const curId   = activeId
-    const curSel1 = selectedId
-    const curSel2 = selectedId2
-    const researchTabs = readResearchTabs()
-
-    if (curId) {
-      setProjects(ps => ps.map(p => p.id === curId
-        ? { ...p, sel1: curSel1, sel2: curSel2, view1Page, view2Page, splitView, researchTabs }
-        : p))
-    }
-
-    const p = newProject(namedProjectCount + 1)
-    const usedNames = new Set(projectsRef.current.map(w => w.name))
-    let untitledName = 'Untitled'
-    for (let i = 1; i <= projectsRef.current.length + 1; i++) {
-      const candidate = `Untitled-${String(i).padStart(2, '0')}`
-      if (!usedNames.has(candidate)) { untitledName = candidate; break }
-    }
-    p.name = untitledName
-    setProjects(ps => [...ps, p])
-    setActiveId(p.id)
-    setSelectedId(null)
-    setSelectedId2(null)
-    setSelectedIds(new Set())
-    setAnchorId(null)
-    setView1Page(null)
-    setView2Page(null)
-    setSplitView(false)
-    if (typeof window !== 'undefined') {
-      ;(window as any).electronAPI?.view?.clear?.('1')
-      ;(window as any).electronAPI?.view?.clear?.('2')
-    }
-
-    loadResearchTabs([])
-  }
-
-  function removeWorkspace(targetId?: string) {
-    const id = targetId ?? activeId
-    if (!id) return
-    if (projects.length <= 1) return
-    const proj = projects.find(p => p.id === id)
-    if (!proj) return
-
-    const sourceIds = proj.sources.map(s => s.id)
-    function reapSources() {
-      if (sourceIds.length) {
-        Promise.allSettled(sourceIds.flatMap(sid => [deleteFile(sid), deleteContent(sid)]))
-          .then(notifyStorageChanged)
-      }
-    }
-
-    // Non-active workspace — just remove it.
-    if (id !== activeId) {
-      setProjects(ps => ps.filter(p => p.id !== id))
-      reapSources()
-      return
-    }
-
-    // Active workspace — delete it and switch to adjacent if one exists.
-    const remaining = projects.filter(p => p.id !== id)
-    const idx       = projects.findIndex(p => p.id === id)
-
-    setProjects(remaining)
-    setSelectedIds(new Set())
-    setAnchorId(null)
-
-    if (remaining.length === 0) {
-      setActiveId(null)
-      setSelectedId(null)
-      setSelectedId2(null)
-      setSplitView(false)
-      loadResearchTabs([])
-    } else {
-      const nextProj = remaining[Math.max(0, idx - 1)]
-      setActiveId(nextProj.id)
-      setSelectedId(nextProj.sel1 ?? null)
-      setSelectedId2(nextProj.sel2 ?? null)
-      const rv1 = nextProj.view1Page ?? null
-      const rv2 = nextProj.view2Page ?? null
-      setView1Page(rv1)
-      setView2Page(rv2)
-      setSplitView(restoreSplit(nextProj))
-      // Clear immediately when no page; navigate handled by ViewPane useEffect when page is set.
-      if (typeof window !== 'undefined') {
-        if (!rv1) (window as any).electronAPI?.view?.clear?.('1')
-        if (!rv2) (window as any).electronAPI?.view?.clear?.('2')
-      }
-      loadResearchTabs(nextProj.researchTabs ?? [])
-    }
-
-    reapSources()
-  }
+  // ─── View actions ───────────────────────────────────────────────────────
 
   function openInPane(id: string) {
     const src = allSources.find(s => s.id === id)
@@ -932,7 +845,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // ─── Context value ──────────────────────────────────────────────────────────
+  // ─── Auth / entitlement ─────────────────────────────────────────────────
+
+  async function signInFn(email: string, key: string): Promise<SignInResult> {
+    const result = await authSignIn(email, key)
+    if (result.ok) {
+      setUser(result.user)
+      setIsPro(result.isPro)
+    }
+    return result
+  }
+
+  function signOut() {
+    clearStoredSession()
+    setUser(null)
+    setIsPro(checkIsPro())
+  }
+
+  async function refreshEntitlementFn() {
+    if (!user) return
+    const pro = await authRefresh(user.email, user.licenseKey).catch(() => null)
+    if (pro !== null) setIsPro(pro)
+  }
+
+  async function openBilling() {
+    const customerId = user?.customerId
+    const url = customerId
+      ? await getPortalUrl(customerId).catch(() => null)
+      : null
+    if (url) window.open(url, '_blank', 'noopener,noreferrer')
+    else window.open('https://polar.sh/site-official/portal', '_blank', 'noopener,noreferrer')
+  }
+
+  function needUpgrade(msg: string) {
+    warn(msg)
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('proof:upgrade-needed'))
+  }
+
+  // ─── Context value ──────────────────────────────────────────────────────
 
   const limits: Limits = isPro ? PRO_LIMITS : FREE_LIMITS
 
