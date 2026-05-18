@@ -44,6 +44,16 @@ export default function StorageBadge() {
     return () => window.removeEventListener('proof-storage-changed', onChange)
   }, [refresh])
 
+  // Restore if this modal was open before hard reload
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('proof-modal-open') === 'storage') {
+        ;(window as any).electronAPI?.setModal?.(true)
+        setOpen(true)
+      }
+    } catch {}
+  }, [])
+
   // Hide native WebContentsViews on close — open is handled synchronously in onClick.
   useEffect(() => {
     if (!open) { ;(window as any).electronAPI?.setModal?.(false) }
@@ -54,6 +64,7 @@ export default function StorageBadge() {
     if (!open) return
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape' && !busy) {
+        try { localStorage.removeItem('proof-modal-open') } catch {}
         setOpen(false)
         setArmed(false)
       }
@@ -114,7 +125,7 @@ export default function StorageBadge() {
   return (
     <>
       <button
-        onClick={() => { ;(window as any).electronAPI?.setModal?.(true); setOpen(true) }}
+        onClick={() => { try { localStorage.setItem('proof-modal-open', 'storage') } catch {}; ;(window as any).electronAPI?.setModal?.(true); setOpen(true) }}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
         title={`Documents: ${usedMb.toFixed(2)} MB of ${limitMb} MB. Pages do not count toward storage.`}
@@ -134,6 +145,7 @@ export default function StorageBadge() {
           aria-modal="true"
           onClick={() => {
             if (busy) return
+            try { localStorage.removeItem('proof-modal-open') } catch {}
             setOpen(false)
             setArmed(false)
           }}
@@ -202,10 +214,8 @@ export default function StorageBadge() {
             <div style={{ padding: '14px 18px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
               <ModalButton
                 onClick={() => {
-                  // While armed, Cancel disarms in place instead of closing —
-                  // gives an easy "I didn't mean it" without losing context.
                   if (armed) setArmed(false)
-                  else setOpen(false)
+                  else { try { localStorage.removeItem('proof-modal-open') } catch {}; setOpen(false) }
                 }}
                 disabled={busy}
               >

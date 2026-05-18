@@ -8,12 +8,14 @@ export default function ProjectBar() {
     projects, activeId,
     user, isPro,
     switchWorkspace, newWorkspace, removeWorkspace,
-    updateProject,
+    updateProject, setProjects,
   } = useApp()
 
   const [editingProjId, setEditingProjId] = useState<string | null>(null)
   const [nameInput,     setNameInput]     = useState('')
   const [pendingRmId,   setPendingRmId]   = useState<string | null>(null)
+  const [draggedId,     setDraggedId]     = useState<string | null>(null)
+  const [dragOverId,    setDragOverId]    = useState<string | null>(null)
 
   const rmTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
   const tabStripRef   = useRef<HTMLDivElement>(null)
@@ -65,6 +67,18 @@ export default function ProjectBar() {
     return 'Untitled'
   }
 
+  function reorderProjects(fromId: string, toId: string) {
+    if (fromId === toId) return
+    setProjects(ps => {
+      const from = ps.findIndex(p => p.id === fromId)
+      const to   = ps.findIndex(p => p.id === toId)
+      if (from === -1 || to === -1) return ps
+      const next = [...ps]
+      next.splice(to, 0, next.splice(from, 1)[0])
+      return next
+    })
+  }
+
   function commitRename(projId: string) {
     const name = nameInput.trim()
     setEditingProjId(null)
@@ -95,54 +109,32 @@ export default function ProjectBar() {
       overflow: 'hidden',
     } as React.CSSProperties}>
 
-      {/* ── Left: logo + new workspace + tab strip ── */}
+      {/* ── Left: tab strip + new workspace ── */}
       <div style={{
         flex: 1, minWidth: 0,
         display: 'flex', alignItems: 'center',
         overflow: 'hidden',
+        paddingLeft: '8px',
       }}>
 
-        {/* Logo */}
+        {/* Logo — links back to landing */}
         <a
           href="/"
           aria-label="Site"
           style={{
             display: 'flex', alignItems: 'center', flexShrink: 0,
             textDecoration: 'none', lineHeight: 1,
-            padding: '0 12px 0 18px',
-            opacity: 0.6, transition: 'opacity 0.15s',
+            padding: '0 10px 0 4px',
+            opacity: 0.5, transition: 'opacity 0.15s',
             WebkitAppRegion: 'no-drag',
           } as React.CSSProperties}
           onMouseEnter={e => (e.currentTarget.style.opacity = '0.9')}
-          onMouseLeave={e => (e.currentTarget.style.opacity = '0.6')}
+          onMouseLeave={e => (e.currentTarget.style.opacity = '0.5')}
         >
-          <svg width="18" height="18" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+          <svg width="16" height="16" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
             <text x="16" y="26" fontFamily="Georgia, serif" fontSize="30" fontWeight="500" fill="#e8e8e8" textAnchor="middle">{'{'}</text>
           </svg>
         </a>
-
-        {/* New workspace + */}
-        <button
-          onClick={() => newWorkspace()}
-          title="New workspace"
-          style={{
-            width: '26px', height: '26px', flexShrink: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'none', border: 'none',
-            color: '#3a3a3a', cursor: 'pointer', padding: 0, outline: 'none',
-            transition: 'color 0.15s',
-            WebkitAppRegion: 'no-drag',
-          } as React.CSSProperties}
-          onMouseEnter={e => { e.currentTarget.style.color = '#777' }}
-          onMouseLeave={e => { e.currentTarget.style.color = '#363636' }}
-        >
-          <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-            <line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" />
-          </svg>
-        </button>
-
-        {/* Divider */}
-        <div style={{ width: '1px', height: '12px', background: '#1a1a1a', flexShrink: 0, margin: '0 8px 0 6px' }} />
 
         {/* Tab strip — outer div stays draggable; individual tabs are no-drag */}
         <div
@@ -150,7 +142,7 @@ export default function ProjectBar() {
           style={{
             flex: 1, minWidth: 0,
             display: 'flex', alignItems: 'center',
-            overflowX: 'auto', overflowY: 'hidden', gap: '1px',
+            overflowX: 'auto', overflowY: 'hidden', gap: '2px',
             scrollbarWidth: 'none',
           } as React.CSSProperties}
         >
@@ -165,6 +157,7 @@ export default function ProjectBar() {
                   key={p.id}
                   autoFocus
                   value={nameInput}
+                  onFocus={e => e.currentTarget.select()}
                   onChange={e => setNameInput(e.target.value)}
                   onKeyDown={e => {
                     if (e.key === 'Enter')  { commitRename(p.id) }
@@ -190,12 +183,36 @@ export default function ProjectBar() {
                 active={isActive}
                 rmArmed={rmArmed}
                 canRemove={projects.length > 1}
+                dragOver={dragOverId === p.id && draggedId !== p.id}
                 onClick={() => { if (!isActive) switchWorkspace(p.id) }}
                 onDoubleClick={() => startEditing(p.id, p.name || '')}
                 onRemoveClick={e => handleRemoveClick(e, p.id)}
+                onDragStart={() => setDraggedId(p.id)}
+                onDragOver={() => setDragOverId(p.id)}
+                onDrop={() => { if (draggedId) reorderProjects(draggedId, p.id) }}
+                onDragEnd={() => { setDraggedId(null); setDragOverId(null) }}
               />
             )
           })}
+          {/* New workspace — at end of tab strip */}
+          <button
+            onClick={() => newWorkspace()}
+            title="New workspace"
+            style={{
+              width: '24px', height: '24px', flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'none', border: 'none',
+              color: '#2e2e2e', cursor: 'pointer', padding: 0, outline: 'none',
+              transition: 'color 0.15s', marginLeft: '2px',
+              WebkitAppRegion: 'no-drag',
+            } as React.CSSProperties}
+            onMouseEnter={e => { e.currentTarget.style.color = '#666' }}
+            onMouseLeave={e => { e.currentTarget.style.color = '#2e2e2e' }}
+          >
+            <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+              <line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" />
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -251,14 +268,19 @@ export default function ProjectBar() {
 
 // ─── Workspace tab ────────────────────────────────────────────────────────────
 
-function WorkspaceTab({ name, active, rmArmed, canRemove, onClick, onDoubleClick, onRemoveClick }: {
+function WorkspaceTab({ name, active, rmArmed, canRemove, dragOver, onClick, onDoubleClick, onRemoveClick, onDragStart, onDragOver, onDrop, onDragEnd }: {
   name: string
   active: boolean
   rmArmed: boolean
   canRemove: boolean
+  dragOver: boolean
   onClick: () => void
   onDoubleClick: () => void
   onRemoveClick: (e: React.MouseEvent) => void
+  onDragStart: () => void
+  onDragOver: () => void
+  onDrop: () => void
+  onDragEnd: () => void
 }) {
   const [hovered, setHovered]   = useState(false)
   const [xHovered, setXHovered] = useState(false)
@@ -268,23 +290,29 @@ function WorkspaceTab({ name, active, rmArmed, canRemove, onClick, onDoubleClick
   return (
     <div
       data-active={active}
+      draggable
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; onDragStart() }}
+      onDragOver={e => { e.preventDefault(); onDragOver() }}
+      onDrop={e => { e.preventDefault(); onDrop() }}
+      onDragEnd={onDragEnd}
       style={{
         display: 'flex', alignItems: 'center',
         height: '28px',
         padding: canRemove ? '0 2px 0 10px' : '0 10px',
         flexShrink: 0, gap: '1px',
         background: active ? '#111' : hovered ? '#0d0d0d' : 'transparent',
-        border: `1px solid ${active ? '#1e1e1e' : 'transparent'}`,
+        border: `1px solid ${dragOver ? '#333' : active ? '#1e1e1e' : 'transparent'}`,
         borderRadius: '4px',
-        cursor: active ? 'default' : 'pointer',
+        cursor: 'grab',
         userSelect: 'none',
-        transition: 'background 0.1s',
+        transition: 'background 0.1s, border-color 0.1s',
         WebkitAppRegion: 'no-drag',
         maxWidth: '180px',
+        opacity: 1,
       } as React.CSSProperties}
     >
       <span style={{

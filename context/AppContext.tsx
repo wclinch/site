@@ -339,7 +339,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ─── Split restore helper ─────────────────────────────────────────────────────
 
   function restoreSplit(proj: Project): boolean {
-    return proj.splitView === true && !!(proj.view2Page || proj.sel2)
+    return proj.splitView === true
   }
 
   // ─── Derived ────────────────────────────────────────────────────────────────

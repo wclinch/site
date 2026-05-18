@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useApp } from '@/context/AppContext'
 import { resolveCommandToUrl, getShortcutHint, SHORTCUTS, SHORTCUT_LABELS } from '@/lib/url'
 
@@ -796,58 +796,46 @@ function ViewPinBtn({ label, title, onClick, disabled }: { label: string; title:
 
 // ─── Quick open ───────────────────────────────────────────────────────────────
 
-const HOME_SHORTCUTS: [string, string][] = [
-  ['chatgpt',      'ChatGPT'],
-  ['google',       'Google'],
-  ['youtube',      'YouTube'],
-  ['gmail',        'Gmail'],
-  ['docs',         'Docs'],
-  ['drive',        'Drive'],
-  ['sheets',       'Sheets'],
-  ['slides',       'Slides'],
-  ['maps',         'Maps'],
-  ['calendar',     'Calendar'],
-  ['meet',         'Meet'],
-  ['wikipedia',    'Wikipedia'],
-  ['reddit',       'Reddit'],
-  ['hn',           'HN'],
-  ['scholar',      'Scholar'],
-  ['canvas',       'Canvas'],
-  ['mdn',          'MDN'],
-  ['stackoverflow','Stack Overflow'],
-  ['github',       'GitHub'],
-  ['notion',       'Notion'],
-  ['figma',        'Figma'],
-  ['linear',       'Linear'],
-  ['vercel',       'Vercel'],
-  ['canva',        'Canva'],
-  ['framer',       'Framer'],
-  ['webflow',      'Webflow'],
-  ['airtable',     'Airtable'],
-  ['claude',       'Claude'],
-  ['perplexity',   'Perplexity'],
-  ['gemini',       'Gemini'],
-  ['grok',         'Grok'],
-  ['mistral',      'Mistral'],
-  ['x',            'X'],
-  ['linkedin',     'LinkedIn'],
-  ['instagram',    'Instagram'],
-  ['discord',      'Discord'],
-  ['slack',        'Slack'],
-  ['zoom',         'Zoom'],
-  ['loom',         'Loom'],
-  ['medium',       'Medium'],
-  ['substack',     'Substack'],
-  ['bbc',          'BBC'],
-  ['reuters',      'Reuters'],
-  ['amazon',       'Amazon'],
-  ['spotify',      'Spotify'],
-  ['unsplash',     'Unsplash'],
-  ['dribbble',     'Dribbble'],
-  ['stripe',       'Stripe'],
-  ['npm',          'npm'],
-  ['dropbox',      'Dropbox'],
+type ShortcutSection = { label: string; shortcuts: [string, string][] }
+
+const HOME_SECTIONS: ShortcutSection[] = [
+  { label: 'AI', shortcuts: [
+    ['claude', 'Claude'], ['chatgpt', 'ChatGPT'], ['perplexity', 'Perplexity'],
+    ['gemini', 'Gemini'], ['grok', 'Grok'], ['mistral', 'Mistral'],
+  ]},
+  { label: 'Google', shortcuts: [
+    ['gmail', 'Gmail'], ['docs', 'Docs'], ['drive', 'Drive'], ['sheets', 'Sheets'],
+    ['slides', 'Slides'], ['calendar', 'Calendar'], ['meet', 'Meet'], ['maps', 'Maps'],
+  ]},
+  { label: 'Search', shortcuts: [
+    ['google', 'Google'], ['wikipedia', 'Wikipedia'], ['reddit', 'Reddit'],
+    ['hn', 'HN'], ['scholar', 'Scholar'],
+  ]},
+  { label: 'Dev', shortcuts: [
+    ['github', 'GitHub'], ['stackoverflow', 'Stack Overflow'], ['mdn', 'MDN'],
+    ['npm', 'npm'], ['vercel', 'Vercel'], ['linear', 'Linear'],
+  ]},
+  { label: 'Design', shortcuts: [
+    ['figma', 'Figma'], ['canva', 'Canva'], ['framer', 'Framer'],
+    ['webflow', 'Webflow'], ['dribbble', 'Dribbble'], ['unsplash', 'Unsplash'],
+  ]},
+  { label: 'Work', shortcuts: [
+    ['notion', 'Notion'], ['airtable', 'Airtable'], ['slack', 'Slack'],
+    ['zoom', 'Zoom'], ['loom', 'Loom'], ['dropbox', 'Dropbox'],
+  ]},
+  { label: 'Social', shortcuts: [
+    ['youtube', 'YouTube'], ['x', 'X'], ['linkedin', 'LinkedIn'],
+    ['instagram', 'Instagram'], ['discord', 'Discord'], ['spotify', 'Spotify'],
+  ]},
+  { label: 'News', shortcuts: [
+    ['medium', 'Medium'], ['substack', 'Substack'], ['bbc', 'BBC'], ['reuters', 'Reuters'],
+  ]},
+  { label: 'Other', shortcuts: [
+    ['amazon', 'Amazon'], ['stripe', 'Stripe'], ['canvas', 'Canvas'],
+  ]},
 ]
+
+const HOME_SHORTCUTS: [string, string][] = HOME_SECTIONS.flatMap(s => s.shortcuts)
 
 function pinsKey(workspaceId: string) { return `proof-quickopen-pins:${workspaceId}` }
 
@@ -868,13 +856,7 @@ function QuickOpenStrip({ urlInput, navigate, workspaceId }: {
     typeof window !== 'undefined' ? loadPins(workspaceId) : []
   )
 
-  // Reload pins when workspace switches
-  useEffect(() => {
-    setPinnedKeys(loadPins(workspaceId))
-  }, [workspaceId])
-  const [shuffled] = useState<[string, string][]>(() =>
-    [...HOME_SHORTCUTS].sort(() => Math.random() - 0.5)
-  )
+  useEffect(() => { setPinnedKeys(loadPins(workspaceId)) }, [workspaceId])
 
   function togglePin(key: string) {
     setPinnedKeys(prev => {
@@ -886,49 +868,68 @@ function QuickOpenStrip({ urlInput, navigate, workspaceId }: {
 
   const q = urlInput.trim().toLowerCase()
   const isUrl = /^https?:\/\//i.test(q) || /^[?g]\s+/.test(q) || /^[a-zA-Z0-9]([a-zA-Z0-9-]*\.)+[a-zA-Z]{2,}/.test(q)
-  const filtered = (!q || isUrl)
-    ? shuffled
-    : shuffled.filter(([key, label]) => key.includes(q) || label.toLowerCase().includes(q))
-
-  if (filtered.length === 0) return null
-
   const isFiltering = !(!q || isUrl)
-  const pinned   = filtered.filter(([key]) => pinnedKeys.includes(key))
-  const unpinned = filtered.filter(([key]) => !pinnedKeys.includes(key))
 
-  return (
-    <>
-      <div style={{
-        height: '36px', flexShrink: 0,
-        display: 'flex', alignItems: 'center', gap: '4px',
-        padding: '0 8px',
-        background: '#060606', borderBottom: '1px solid #1a1a1a',
-        overflowX: 'auto', overflowY: 'hidden',
-        scrollbarWidth: 'none',
-        WebkitAppRegion: 'no-drag',
-      } as React.CSSProperties}>
-        {pinned.map(([key, label]) => (
-          <ShortcutChip
-            key={key} label={label} pinned
-            onClick={() => navigate(key)}
-            onPin={() => togglePin(key)}
-          />
-        ))}
-        {!isFiltering && pinned.length > 0 && unpinned.length > 0 && (
-          <div style={{ width: '1px', height: '14px', background: '#1e1e1e', flexShrink: 0, margin: '0 4px' }} />
-        )}
-        {unpinned.map(([key, label]) => (
-          <ShortcutChip
-            key={key} label={label} pinned={false}
-            onClick={() => navigate(key)}
-            onPin={() => togglePin(key)}
-          />
+  // Filtering mode: flat list sorted pinned-first
+  if (isFiltering) {
+    const matches = HOME_SHORTCUTS.filter(([k, l]) => k.includes(q) || l.toLowerCase().includes(q))
+    if (matches.length === 0) return null
+    const sorted = [...matches].sort(([ka], [kb]) =>
+      (pinnedKeys.includes(kb) ? 1 : 0) - (pinnedKeys.includes(ka) ? 1 : 0)
+    )
+    return (
+      <div style={stripStyle}>
+        {sorted.map(([key, label]) => (
+          <ShortcutChip key={key} label={label} pinned={pinnedKeys.includes(key)}
+            onClick={() => navigate(key)} onPin={() => togglePin(key)} />
         ))}
       </div>
+    )
+  }
 
-    </>
+  const pinnedEntries = HOME_SHORTCUTS.filter(([k]) => pinnedKeys.includes(k))
+
+  return (
+    <div style={stripStyle}>
+      {/* Pinned chips */}
+      {pinnedEntries.map(([key, label]) => (
+        <ShortcutChip key={key} label={label} pinned
+          onClick={() => navigate(key)} onPin={() => togglePin(key)} />
+      ))}
+
+      {/* Grouped sections */}
+      {HOME_SECTIONS.map((section, si) => {
+        const chips = section.shortcuts.filter(([k]) => !pinnedKeys.includes(k))
+        if (chips.length === 0) return null
+        const showDivider = si > 0 || pinnedEntries.length > 0
+        return (
+          <React.Fragment key={section.label}>
+            {showDivider && <SectionDivider />}
+            {chips.map(([key, label]) => (
+              <ShortcutChip key={key} label={label} pinned={false}
+                onClick={() => navigate(key)} onPin={() => togglePin(key)} />
+            ))}
+          </React.Fragment>
+        )
+      })}
+    </div>
   )
 }
+
+const stripStyle = {
+  height: '36px', flexShrink: 0,
+  display: 'flex', alignItems: 'center', gap: '4px',
+  padding: '0 8px',
+  background: '#060606', borderBottom: '1px solid #1a1a1a',
+  overflowX: 'auto' as const, overflowY: 'hidden' as const,
+  scrollbarWidth: 'none' as const,
+  WebkitAppRegion: 'no-drag' as const,
+}
+
+function SectionDivider() {
+  return <div style={{ width: '1px', height: '14px', background: '#2e2e2e', flexShrink: 0, margin: '0 6px' }} />
+}
+
 
 function ShortcutChip({ label, pinned, onClick, onPin }: {
   label: string

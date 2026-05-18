@@ -232,21 +232,79 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+type WorkspaceLayout = { researchFocused: boolean; viewFocused: boolean; soloPane: 1 | 2 }
+const DEFAULT_LAYOUT: WorkspaceLayout = { researchFocused: false, viewFocused: false, soloPane: 1 }
+
+function layoutKey(id: string) { return `proof-layout:${id}` }
+function saveLayout(id: string, l: WorkspaceLayout) {
+  try { localStorage.setItem(layoutKey(id), JSON.stringify(l)) } catch {}
+}
+function loadLayout(id: string): WorkspaceLayout {
+  try {
+    const raw = localStorage.getItem(layoutKey(id))
+    if (raw) return { ...DEFAULT_LAYOUT, ...JSON.parse(raw) }
+  } catch {}
+  return DEFAULT_LAYOUT
+}
+
 function AppShell() {
-  const { mounted } = useApp()
+  const { mounted, activeId } = useApp()
   const [researchFocused, setResearchFocused] = useState(false)
   const [viewFocused,     setViewFocused]     = useState(false)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [showAccount, setShowAccount] = useState(false)
   const [soloPane, setSoloPane] = useState<1 | 2>(1)
 
+  const layoutMapRef    = useRef<Record<string, WorkspaceLayout>>({})
+  const prevActiveRef   = useRef<string | null>(null)
+  const currentLayout   = useRef<WorkspaceLayout>(DEFAULT_LAYOUT)
+  currentLayout.current = { researchFocused, viewFocused, soloPane }
+
+  // Save current layout on page unload (covers hard reload)
+  useEffect(() => {
+    function onUnload() {
+      if (activeId) saveLayout(activeId, currentLayout.current)
+    }
+    window.addEventListener('beforeunload', onUnload)
+    return () => window.removeEventListener('beforeunload', onUnload)
+  }, [activeId])
+
+  // Save layout for outgoing workspace, restore for incoming
+  useEffect(() => {
+    const prev = prevActiveRef.current
+    if (prev) {
+      const layout = currentLayout.current
+      layoutMapRef.current[prev] = layout
+      saveLayout(prev, layout)
+    }
+    prevActiveRef.current = activeId ?? null
+    if (activeId) {
+      const saved = layoutMapRef.current[activeId] ?? loadLayout(activeId)
+      layoutMapRef.current[activeId] = saved
+      setResearchFocused(saved.researchFocused)
+      setViewFocused(saved.viewFocused)
+      setSoloPane(saved.soloPane)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId])
+
+  // Restore whichever modal was open before hard reload
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('proof-modal-open')
+      if (saved === 'account') { ;(window as any).electronAPI?.setModal?.(true); setShowAccount(true) }
+      else if (saved === 'upgrade') { ;(window as any).electronAPI?.setModal?.(true); setShowUpgrade(true) }
+    } catch {}
+  }, [])
+
   useEffect(() => {
     function onUpgradeNeeded() {
-      // setModal synchronously — useEffect fires after render, too late for native views
+      try { localStorage.setItem('proof-modal-open', 'upgrade') } catch {}
       ;(window as any).electronAPI?.setModal?.(true)
       setShowUpgrade(true)
     }
     function onShowAccount() {
+      try { localStorage.setItem('proof-modal-open', 'account') } catch {}
       ;(window as any).electronAPI?.setModal?.(true)
       setShowAccount(true)
     }
@@ -289,13 +347,12 @@ function AppShell() {
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#080808', WebkitAppRegion: 'drag' } as React.CSSProperties}>
         <ProjectBar />
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden', paddingRight: '5px' }}>
-          {!viewFocused && <SourcePanel width={DEF_SOURCE} />}
-          {!researchFocused && (
-            <ReaderPanel
-              soloPane={soloPane} setSoloPane={setSoloPane}
-              isFocused={viewFocused} onFocusToggle={() => setViewFocused(f => !f)}
-            />
-          )}
+          <SourcePanel width={DEF_SOURCE} hidden={viewFocused} />
+          <ReaderPanel
+            soloPane={soloPane} setSoloPane={setSoloPane}
+            isFocused={viewFocused} onFocusToggle={() => setViewFocused(f => !f)}
+            hidden={researchFocused}
+          />
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <RightPanel
               isFocused={researchFocused}
@@ -312,8 +369,8 @@ function AppShell() {
         </div>
         <SourceContextMenu />
       </div>
-      {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
-      {showAccount && <AccountModal onClose={() => setShowAccount(false)} />}
+      {showUpgrade && <UpgradeModal onClose={() => { try { localStorage.removeItem('proof-modal-open') } catch {} setShowUpgrade(false) }} />}
+      {showAccount && <AccountModal onClose={() => { try { localStorage.removeItem('proof-modal-open') } catch {} setShowAccount(false) }} />}
     </>
   )
 }

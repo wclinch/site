@@ -12,12 +12,13 @@ pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 // soloPane is owned by AppShell so it survives the unmount/remount cycle when
 // the research browser toggles fullscreen.
 export default function ReaderPanel({
-  soloPane, setSoloPane, isFocused, onFocusToggle,
+  soloPane, setSoloPane, isFocused, onFocusToggle, hidden,
 }: {
   soloPane: 1 | 2
   setSoloPane: (p: 1 | 2) => void
   isFocused: boolean
   onFocusToggle: () => void
+  hidden?: boolean
 }) {
   const {
     selectedSource, setSelectedId,
@@ -65,7 +66,7 @@ export default function ReaderPanel({
   const hide2 = !splitView && soloPane !== 2
 
   return (
-    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ flexGrow: hidden ? 0 : 1, flexShrink: 1, flexBasis: 0, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'flex-grow 0.22s ease' }}>
       <div style={{
         flex: 1, minHeight: 0, padding: '5px',
         display: 'flex', flexDirection: 'column',
