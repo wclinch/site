@@ -645,12 +645,6 @@ function setupResearchBrowser(win) {
     }
   })
 
-  ipcMain.handle('shell:open-external', (_e, url) => {
-    try {
-      const { protocol: p } = new URL(url)
-      if (p === 'https:' || p === 'http:') shell.openExternal(url)
-    } catch {}
-  })
 
   // ── nav controls ───────────────────────────────────────────────────────────
   ipcMain.on('research:go-back', (_e, pid) => {
@@ -1166,6 +1160,12 @@ app.whenReady().then(() => {
   session.fromPartition('persist:site-research-A').setUserAgent(CHROME_UA)
 
   buildMenu()
+  ipcMain.handle('shell:open-external', (_e, url) => {
+    try {
+      const { protocol: p } = new URL(url)
+      if (p === 'https:' || p === 'http:') shell.openExternal(url)
+    } catch {}
+  })
   setupAuth()
   createWindow()
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
