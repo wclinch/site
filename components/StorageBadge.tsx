@@ -117,7 +117,7 @@ export default function StorageBadge() {
         onClick={() => { ;(window as any).electronAPI?.setModal?.(true); setOpen(true) }}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
-        title={`Uploaded Documents: ${usedMb.toFixed(2)} MB of ${limitMb} MB. Saved Pages do not count toward storage.`}
+        title={`Documents: ${usedMb.toFixed(2)} MB of ${limitMb} MB. Pages do not count toward storage.`}
         style={{
           background: 'none', border: 'none', padding: 0, cursor: 'pointer',
           fontSize: '11px', color, letterSpacing: '0.04em',
@@ -212,7 +212,7 @@ export default function StorageBadge() {
                 {armed ? 'Back' : 'Cancel'}
               </ModalButton>
               <ModalButton onClick={reset} disabled={busy} destructive>
-                {busy ? 'Clearing…' : armed ? 'Confirm clear' : 'Clear Documents'}
+                {busy ? 'Clearing…' : armed ? 'Confirm Clear' : 'Clear Documents'}
               </ModalButton>
             </div>
           </div>

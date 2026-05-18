@@ -355,10 +355,27 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
 
   useEffect(() => () => { if (savedTimerRef.current) clearTimeout(savedTimerRef.current) }, [])
 
-  // Recalculate WebContentsView bounds when focus mode changes
+  // Bypass lastKey dedup when focus mode changes — layout reflows after the state update
+  // so the guard fires before the new rect is available.
   useEffect(() => {
-    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')))
-  }, [isFocused])
+    const start = Date.now()
+    const id = setInterval(() => {
+      const el = viewportRef.current
+      if (!el) return
+      if (homeModeRef.current || showFallbackRef.current) return
+      const iW = window.innerWidth, iH = window.innerHeight
+      const r = el.getBoundingClientRect()
+      const x = Math.floor(r.left)
+      const y = Math.floor(r.top)
+      const w = Math.max(0, Math.ceil(r.left + r.width) - x)
+      const h = Math.max(0, Math.ceil(r.top + r.height) - y)
+      if (w > 0 && h > 0)
+        window.electronAPI?.research?.setBounds(panelId, { x, y, width: w, height: h, innerWidth: iW, innerHeight: iH })
+      if (Date.now() - start > 600) clearInterval(id)
+    }, 32)
+    return () => clearInterval(id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFocused, panelId])
 
   function navigateUrl(url: string) {
     if (!url) return
@@ -464,7 +481,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
             <TabBarBtn
               key={String(isFocused)}
               onClick={onFocusToggle}
-              title={isFocused ? 'Exit Focus' : 'Focus Web'}
+              title={isFocused ? 'Exit expanded Web' : 'Expand Web'}
             >
               {isFocused ? <FocusCollapseIcon /> : <FocusExpandIcon />}
             </TabBarBtn>
@@ -538,7 +555,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
         </div>
 
         {/* Quick open strip — horizontal chips, only in home mode */}
-        {homeMode && <QuickOpenStrip urlInput={urlInput} navigate={navigate} workspaceId={activeId} />}
+        {homeMode && <QuickOpenStrip urlInput={urlInput} navigate={navigate} workspaceId={activeId ?? ''} />}
 
         {/* Shortcut hint — only when typing a known shortcut */}
         {homeMode && urlFocused && getShortcutHint(urlInput) && (
@@ -952,7 +969,7 @@ function ShortcutChip({ label, pinned, onClick, onPin }: {
         onClick={e => { e.stopPropagation(); onPin() }}
         onMouseEnter={() => setPinHov(true)}
         onMouseLeave={() => setPinHov(false)}
-        title={pinned ? 'Unpin' : 'Pin to left'}
+        title={pinned ? 'Unpin from this workspace' : 'Pin to this workspace'}
         style={{
           height: '100%', padding: '0 6px 0 2px',
           background: 'none', border: 'none', outline: 'none',

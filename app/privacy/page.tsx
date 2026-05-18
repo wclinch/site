@@ -22,7 +22,7 @@ export default function Privacy() {
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Storage</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Uploaded Documents (PDFs and images) are stored in IndexedDB on your device and count toward your storage limit. Saved Pages store metadata only — title, URL, hostname, and timestamp — and do not count toward storage. Saved Pages do not store website passwords.
+            Documents (PDFs and images) are stored in IndexedDB on your device and count toward your storage limit. Pages store metadata only — title, URL, hostname, and timestamp — and do not count toward storage. Pages do not store website passwords.
           </p>
         </div>
 
@@ -36,7 +36,7 @@ export default function Privacy() {
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Billing</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Billing is handled by Polar. License or subscription validation may contact Polar to verify your access. No other data is transmitted.
+            Billing is handled by Polar. Subscription validation may contact Polar to verify your access. No other data is transmitted.
           </p>
         </div>
 

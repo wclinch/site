@@ -301,7 +301,7 @@ function WorkspaceTab({ name, active, rmArmed, canRemove, onClick, onDoubleClick
         <button
           onClick={onRemoveClick}
           onDoubleClick={e => e.stopPropagation()}
-          title={rmArmed ? 'Click again to remove' : 'Close'}
+          title={rmArmed ? 'Click again to delete' : 'Close'}
           onMouseEnter={() => setXHovered(true)}
           onMouseLeave={() => setXHovered(false)}
           style={{

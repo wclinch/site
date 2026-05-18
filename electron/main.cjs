@@ -65,13 +65,10 @@ function makePanel() {
   return {
     tabViews:    new Map(),   // id → WebContentsView
     tabStates:   new Map(),   // id → { url, title, loading, canGoBack, canGoForward }
-    tabZoom:     new Map(),   // id → last-applied auto zoom factor (dedupe)
     activeTabId: null,
     lastBounds:  null,        // most recent valid { x, y, width, height } in physical px
-    lastCssWidth: 0,          // most recent CSS width of the Web panel (drives auto zoom)
     pendingUrl:  null,        // URL deferred until bounds are known
     pendingTimer: null,
-    zoomTimer:   null,        // debounce for scheduleAutoZoom
   }
 }
 
@@ -100,49 +97,6 @@ let scrollRestoreTimer   = null
 // Returns true if view exists and its webContents is alive.
 function wcAlive(view) {
   return !!(view && view.webContents && !view.webContents.isDestroyed())
-}
-
-// ─── Auto-readable Web zoom ───────────────────────────────────────────────────
-// Per-tab automatic zoom for the right Web panel only — view panes stay at 1.0.
-// Picks a readable factor from CSS panel width; hard floor 0.85, prefer >= 0.9.
-// Debounced so it doesn't flicker mid-resize, deduped so we don't churn the
-// zoom on every set-bounds tick. setZoomFactor only — no CSS transform, no
-// reload, no UA spoofing.
-const AUTO_ZOOM_MIN          = 0.80
-const AUTO_ZOOM_MAX          = 1.00
-// Width anchors for the linear zoom ramp: at FLOOR_PX the zoom hits MIN, at
-// CEIL_PX it hits MAX. Typical Web panel widths (~700–1100 CSS px) land near
-// the floor, so app shells like Google Docs get room to breathe.
-const AUTO_ZOOM_FLOOR_PX     = 800
-const AUTO_ZOOM_CEIL_PX      = 1600
-const AUTO_ZOOM_DEBOUNCE_MS  = 80
-
-// Linear width → zoom ramp, quantized to 0.05 steps so tiny width drift doesn't
-// re-emit IPC. Below FLOOR_PX everything pins to MIN, above CEIL_PX to MAX.
-function computeAutoZoom(cssWidth) {
-  if (!cssWidth || cssWidth <= 0) return AUTO_ZOOM_MAX
-  const span = AUTO_ZOOM_CEIL_PX - AUTO_ZOOM_FLOOR_PX
-  const t    = Math.max(0, Math.min(1, (cssWidth - AUTO_ZOOM_FLOOR_PX) / span))
-  const z    = AUTO_ZOOM_MIN + t * (AUTO_ZOOM_MAX - AUTO_ZOOM_MIN)
-  return Math.round(z * 20) / 20
-}
-
-function applyAutoZoom(panel, view, id, cssWidth) {
-  if (!wcAlive(view) || !id) return
-  const factor = computeAutoZoom(cssWidth)
-  if (panel.tabZoom.get(id) === factor) return
-  panel.tabZoom.set(id, factor)
-  try { view.webContents.setZoomFactor(factor) } catch {}
-}
-
-function scheduleAutoZoom(panel) {
-  if (panel.zoomTimer) clearTimeout(panel.zoomTimer)
-  panel.zoomTimer = setTimeout(() => {
-    panel.zoomTimer = null
-    if (!panel.activeTabId) return
-    const view = panel.tabViews.get(panel.activeTabId)
-    applyAutoZoom(panel, view, panel.activeTabId, panel.lastCssWidth)
-  }, AUTO_ZOOM_DEBOUNCE_MS)
 }
 
 // Debounced scroll restore — called from set-bounds after applying new bounds.
@@ -430,14 +384,6 @@ function createTabView(win, pid, id) {
     win.webContents.send('research:fail-load', pid, id, code)
   })
 
-  // Re-apply zoom after every navigation (cross-origin resets zoom to per-origin stored value).
-  // Clear dedupe entry so the auto-zoom re-applies even if the cached factor matches.
-  wc.on('did-finish-load', () => {
-    if (wcAlive(view) && id === panel.activeTabId) {
-      panel.tabZoom.delete(id)
-      applyAutoZoom(panel, view, id, panel.lastCssWidth)
-    }
-  })
 
   panel.tabViews.set(id, view)
   return view
@@ -473,8 +419,6 @@ function switchToTab(win, pid, id) {
       }
     }
   }
-
-  if (wcAlive(switchView)) applyAutoZoom(panel, switchView, id, panel.lastCssWidth)
 
   // Only send url-changed for real URLs. Sending '' triggers setHomeMode(false)
   // in the renderer which would flash white before homeMode corrects itself.
@@ -629,12 +573,10 @@ function setupResearchBrowser(win) {
     if (w > 0 && h > 0) {
       if (x <= cw / 10) return
       panel.lastBounds   = { x, y, width: w, height: h }
-      panel.lastCssWidth = rect.width
       if (!modalOpen) {
         const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
         if (view) {
           view.setBounds({ x, y, width: w, height: h })
-          scheduleAutoZoom(panel)
           if (!panel.pendingUrl) scheduleScrollRestore()
         }
         tryFirePending(win, pid)
@@ -721,7 +663,6 @@ function setupResearchBrowser(win) {
     try { if (wcAlive(view)) view.webContents.loadURL('about:blank').catch(() => {}) } catch {}
     panel.tabViews.delete(id)
     panel.tabStates.delete(id)
-    panel.tabZoom.delete(id)
 
     if (panel.tabViews.size === 0) {
       const newId = `tab-${pid}-${Date.now()}`
@@ -759,8 +700,6 @@ function setupResearchBrowser(win) {
     }
     panel.tabViews.clear()
     panel.tabStates.clear()
-    panel.tabZoom.clear()
-    if (panel.zoomTimer) { clearTimeout(panel.zoomTimer); panel.zoomTimer = null }
     panel.activeTabId = null
     panel.lastBounds  = savedBounds
 
@@ -923,13 +862,10 @@ function setupResearchBrowser(win) {
     const panel = panels['A']
     panel.tabViews.clear()
     panel.tabStates.clear()
-    panel.tabZoom.clear()
     panel.activeTabId = null
     panel.lastBounds  = null
-    panel.lastCssWidth = 0
     panel.pendingUrl  = null
     if (panel.pendingTimer) { clearTimeout(panel.pendingTimer); panel.pendingTimer = null }
-    if (panel.zoomTimer)    { clearTimeout(panel.zoomTimer);    panel.zoomTimer    = null }
 
     for (const pid of Object.keys(viewPanes)) {
       const pane = viewPanes[pid]

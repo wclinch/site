@@ -29,7 +29,7 @@ export default function About() {
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Site keeps your documents, saved pages, and web tabs together. Web on the right, save pages and files to the left, open documents in the center. Come back later and everything is still there.
+            Site keeps your documents, saved pages, and Web tabs together. Work in Views, browse in Web, open Library when you need it. Come back later and everything is still there.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
             Documents, Pages, Views, and Web tabs all restore with each workspace. Switch workspaces and everything comes back.
@@ -39,16 +39,16 @@ export default function About() {
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Layout</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Documents / Pages</span> — The left column. Documents are files you add. Pages are web pages you save from Web. Both stay saved with the workspace.
+            <span style={{ color: '#999' }}>Library</span> — Documents and Pages for the workspace. Documents are files you add. Pages are Web pages you save. Both stay with the workspace.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>View 1 / View 2</span> — The center column. Two panes for opening Documents or Pages. Each opens independently and restores on return.
+            <span style={{ color: '#999' }}>View 1 / View 2</span> — Hold a Document or Page while you keep browsing. Each View opens independently and restores on return.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Web</span> — The right column. Browser tabs with a URL bar. Save the current page to Pages.
+            <span style={{ color: '#999' }}>Web</span> — Browse, search, and navigate. Use 1, 2, or Save to keep what matters.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Workspace</span> — A named restore point. Documents, Pages, View 1 and View 2, and Web tabs all come back when you return.
+            <span style={{ color: '#999' }}>Workspace</span> — Everything in a workspace — Documents, Pages, Views, and Web tabs — comes back when you return.
           </p>
         </div>
 
@@ -57,17 +57,19 @@ export default function About() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {[
               { keys: ['Drop file'],           desc: 'Add a PDF or image to Documents' },
-              { keys: ['+'],                 desc: 'Add a PDF or image to Documents via file picker' },
-              { keys: ['Click document'],    desc: 'Open in View 1 or View 2' },
-              { keys: ['Drag document'],     desc: 'Drop onto View 1 or View 2 to open in that view' },
-              { keys: ['× on document row'], desc: 'Remove from Documents' },
-              { keys: ['Click page'],        desc: 'Open in View' },
-              { keys: ['× on page row'],     desc: 'Remove from Pages' },
-              { keys: ['URL bar'],           desc: 'Navigate or search in Web' },
-              { keys: ['Save'],              desc: 'Save the current Web page to Pages' },
-              { keys: ['Double-click tab'],  desc: 'Rename the workspace' },
-              { keys: ['+'],                desc: 'Start a blank workspace' },
-              { keys: ['Esc'],              desc: 'Close menus and overlays' },
+              { keys: ['+'],                   desc: 'Add a PDF or image to Documents via file picker' },
+              { keys: ['Click document'],      desc: 'Open in View 1 or View 2' },
+              { keys: ['Drag document'],       desc: 'Drop onto View 1 or View 2 to open in that View' },
+              { keys: ['× on document row'],   desc: 'Remove from Documents' },
+              { keys: ['Click page'],          desc: 'Open in Web' },
+              { keys: ['× on page row'],       desc: 'Remove from Pages' },
+              { keys: ['URL bar'],             desc: 'Navigate or search in Web' },
+              { keys: ['1'],                   desc: 'Open current Web page in View' },
+              { keys: ['2'],                   desc: 'Open current Web page in View 2' },
+              { keys: ['Save'],                desc: 'Save the current Web page to Pages' },
+              { keys: ['Double-click tab'],    desc: 'Rename the workspace' },
+              { keys: ['+'],                   desc: 'Start a blank workspace' },
+              { keys: ['Esc'],                 desc: 'Close menus and overlays' },
             ].map((row, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
                 <div style={{ display: 'flex', gap: '4px', flexShrink: 0, minWidth: '160px' }}>
@@ -92,7 +94,7 @@ export default function About() {
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Storage</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Free: 150 MB</span> for uploaded Documents. <span style={{ color: '#999' }}>Pro: 5 GB.</span> Saved Pages store metadata only and do not count toward storage. Nothing is transmitted.
+            <span style={{ color: '#999' }}>Free: 150 MB</span> for Documents. <span style={{ color: '#999' }}>Pro: 5 GB.</span> Pages store metadata only and do not count toward storage. Nothing is transmitted.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
             <span style={{ color: '#999' }}>Site → Reset Site Data…</span> (desktop menu) clears all local state. Cannot be reversed.

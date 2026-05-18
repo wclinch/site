@@ -50,8 +50,8 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
       setView('signed_in')
     } else {
       const msg =
-        result.error === 'invalid_key'    ? 'License key not found or subscription inactive.' :
-        result.error === 'email_mismatch' ? 'Email does not match the license key.' :
+        result.error === 'invalid_key'    ? 'Subscription not found or inactive.' :
+        result.error === 'email_mismatch' ? 'Email does not match this subscription.' :
         result.error === 'not_configured' ? 'Sign-in is not configured in this build.' :
                                             'Network unavailable. Try again when online.'
       setErrorMsg(msg)
@@ -114,7 +114,7 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
               Sign in
             </h2>
             <p style={{ fontSize: '13px', color: '#666', lineHeight: 1.65, margin: '0 0 24px' }}>
-              Enter your account email and license key.
+              Sign in with your account email and subscription key.
             </p>
 
             {view === 'error' && errorMsg && (

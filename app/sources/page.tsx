@@ -14,25 +14,25 @@ export default function Sources() {
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Documents are uploaded files. Pages are saved web pages. Web is where you browse.
+            Documents are files you add to the workspace. Pages are Web pages you save. Web is where you browse and move.
           </p>
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Documents</span> — Uploaded files: PDFs and images. They appear in the Documents panel on the left. Open them in View 1 or View 2 in the center.
+            <span style={{ color: '#999' }}>Documents</span> — PDFs and images you add to the workspace. Open them in View 1 or View 2 to hold them while you keep browsing.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Pages</span> — Web pages saved from the Web panel. They appear in the Pages section on the left. Open them in View 1 or View 2 using the 1 or 2 buttons.
+            <span style={{ color: '#999' }}>Pages</span> — Web pages saved from the Web panel. Click a Page to open it in Web, or use the 1 or 2 buttons to open it in a View.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>View 1 / View 2</span> — The two panes in the center column. Each holds one Document or Page independently. Click a Document to open it, or click 1 or 2 to choose which View.
+            <span style={{ color: '#999' }}>View 1 / View 2</span> — Hold a Document or Page while you keep browsing. Each View opens independently and restores on return.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Web</span> — Browser tabs on the right. Navigate URLs, search, and save pages to Pages using the Save button in the URL bar.
+            <span style={{ color: '#999' }}>Web</span> — Browse, search, and navigate. Use 1 or 2 to open the current page in a View. Use Save to keep it in Pages.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Workspace</span> — Everything in a workspace auto-saves. Documents, Pages, open Views, and Web tabs all come back when you return. Double-click a workspace tab to rename it.
+            <span style={{ color: '#999' }}>Workspace</span> — Documents, Pages, Views, and Web tabs all come back when you return. Double-click a workspace tab to rename it.
           </p>
         </div>
 

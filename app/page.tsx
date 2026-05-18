@@ -63,10 +63,10 @@ export default function Home() {
         <div style={SECTION}>
           <span style={LABEL}>How it works</span>
           {([
-            ['Web',       'Browser tabs on the right. Search, navigate URLs, and save any page to Pages.'],
-            ['Documents', 'Add PDFs and images. Open them side by side in View 1 and View 2.'],
-            ['Pages',     'Save any Web page to Pages. Pages are unlimited and do not count toward storage.'],
-            ['Workspace', 'Everything in a workspace — Documents, saved Pages, Views, and Web tabs — auto-saves and restores when you return.'],
+            ['Web',       'Browse, search, and navigate. Send any page to View or save it to Pages without losing your place.'],
+            ['Documents', 'Add PDFs and images. Hold them in View while you keep browsing in Web.'],
+            ['Pages',     'Save Web pages to the workspace. Pages are unlimited and do not count toward storage.'],
+            ['Workspace', 'Everything in a workspace — Documents, Pages, Views, and Web tabs — comes back when you return.'],
           ] as const).map(([label, body]) => (
             <p key={label} style={BODY}>
               <span style={{ color: '#888' }}>{label}</span> — {body}
@@ -78,7 +78,7 @@ export default function Home() {
         <div style={SECTION}>
           <span style={LABEL}>Free</span>
           <p style={BODY}>Start with one workspace. No account required.</p>
-          {(['1 workspace', '10 Documents', '150 MB uploaded Documents', 'Unlimited Pages'] as const).map(f => (
+          {(['1 workspace', '10 Documents', '150 MB Documents', 'Unlimited Pages'] as const).map(f => (
             <p key={f} style={NOTE}>{f}</p>
           ))}
         </div>
@@ -86,8 +86,8 @@ export default function Home() {
         {/* Pro */}
         <div style={SECTION}>
           <span style={LABEL}>Pro</span>
-          <p style={BODY}>Unlock unlimited workspaces. $8.99 / month. Requires an account and active subscription.</p>
-          {(['Unlimited workspaces', 'Unlimited Documents', '5 GB uploaded Documents', 'Unlimited Pages'] as const).map(f => (
+          <p style={BODY}>Unlimited workspaces and more Documents. $8.99 / month.</p>
+          {(['Unlimited workspaces', 'Unlimited Documents', '5 GB Documents', 'Unlimited Pages'] as const).map(f => (
             <p key={f} style={NOTE}>{f}</p>
           ))}
         </div>

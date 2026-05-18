@@ -12,10 +12,12 @@ pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 // soloPane is owned by AppShell so it survives the unmount/remount cycle when
 // the research browser toggles fullscreen.
 export default function ReaderPanel({
-  soloPane, setSoloPane,
+  soloPane, setSoloPane, isFocused, onFocusToggle,
 }: {
   soloPane: 1 | 2
   setSoloPane: (p: 1 | 2) => void
+  isFocused: boolean
+  onFocusToggle: () => void
 }) {
   const {
     selectedSource, setSelectedId,
@@ -62,24 +64,21 @@ export default function ReaderPanel({
   const hide1 = !splitView && soloPane !== 1
   const hide2 = !splitView && soloPane !== 2
 
-  const label1 = view1Page
-    ? truncate(view1Page.title)
-    : selectedSource ? truncate(selectedSource.label ?? selectedSource.raw) : 'View 1'
-  const label2 = view2Page
-    ? truncate(view2Page.title)
-    : selectedSource2 ? truncate(selectedSource2.label ?? selectedSource2.raw) : 'View 2'
-
   return (
     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{
         flex: 1, minHeight: 0, padding: '5px',
         display: 'flex', flexDirection: 'column',
         gap: splitView ? '4px' : 0,
+        transition: 'gap 0.2s ease',
       }}>
-        <div style={{ flex: hide1 ? 0 : 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div style={{
+          flex: hide1 ? 0 : 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column',
+          transition: 'flex 0.2s ease',
+        }}>
           <ViewPane
             viewId={1}
-            label={label1}
+            label="View 1"
             source={view1Page ? null : selectedSource}
             viewPage={view1Page}
             isHidden={hide1}
@@ -89,12 +88,17 @@ export default function ReaderPanel({
             patchSource={patchSource}
             onToggleSplit={() => handleToggleSplitFromPane(1)}
             splitActive={splitView}
+            isFocused={isFocused}
+            onFocusToggle={onFocusToggle}
           />
         </div>
-        <div style={{ flex: hide2 ? 0 : 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div style={{
+          flex: hide2 ? 0 : 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column',
+          transition: 'flex 0.2s ease',
+        }}>
           <ViewPane
             viewId={2}
-            label={label2}
+            label="View 2"
             source={view2Page ? null : selectedSource2}
             viewPage={view2Page}
             isHidden={hide2}
@@ -104,6 +108,8 @@ export default function ReaderPanel({
             patchSource={patchSource}
             onToggleSplit={() => handleToggleSplitFromPane(2)}
             splitActive={splitView}
+            isFocused={isFocused}
+            onFocusToggle={onFocusToggle}
           />
         </div>
       </div>
@@ -111,16 +117,12 @@ export default function ReaderPanel({
   )
 }
 
-function truncate(name: string): string {
-  return name.length > 64 ? name.slice(0, 62) + '…' : name
-}
-
 // ─── View pane ───────────────────────────────────────────────────────────────
 
 function ViewPane({
   viewId, label, source, viewPage, isHidden, alwaysShowClose,
   onClose, onSelectId, uploadFiles, patchSource,
-  onToggleSplit, splitActive,
+  onToggleSplit, splitActive, isFocused, onFocusToggle,
 }: {
   viewId: 1 | 2
   label: string
@@ -134,6 +136,8 @@ function ViewPane({
   patchSource: (projId: string, srcId: string, patch: Partial<QueuedSource>) => void
   onToggleSplit?: () => void
   splitActive?: boolean
+  isFocused?: boolean
+  onFocusToggle?: () => void
 }) {
   const [dragOver, setDragOver] = useState(false)
   const viewportRef    = useRef<HTMLDivElement>(null)
@@ -223,12 +227,14 @@ function ViewPane({
         onClose={showClose ? onClose : undefined}
         onToggleSplit={onToggleSplit}
         splitActive={splitActive}
+        isFocused={isFocused}
+        onFocusToggle={onFocusToggle}
       />
       {viewPage
         ? <div ref={viewportRef} style={{ flex: 1, minHeight: 0, background: '#060606', WebkitAppRegion: 'no-drag' } as React.CSSProperties} />
         : source
           ? <SourceContent source={source} patchSource={patchSource} />
-          : <EmptySource uploadFiles={uploadFiles} />
+          : <EmptySource viewId={viewId} uploadFiles={uploadFiles} />
       }
     </div>
   )
@@ -247,14 +253,14 @@ function SourceContent({
   if (source.fileType === 'image') return <ImageViewer source={source} />
   return (
     <div style={{ flex: 1, background: '#080808', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <Empty label="Unsupported source type" />
+      <Empty label="Unsupported file type" />
     </div>
   )
 }
 
 // ─── Empty pane ──────────────────────────────────────────────────────────────
 
-function EmptySource({ uploadFiles }: { uploadFiles: (files: FileList | File[]) => Promise<void> }) {
+function EmptySource({ viewId, uploadFiles }: { viewId: 1 | 2; uploadFiles: (files: FileList | File[]) => Promise<void> }) {
   const [fileDragOver, setFileDragOver] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -291,14 +297,14 @@ function EmptySource({ uploadFiles }: { uploadFiles: (files: FileList | File[]) 
           fontSize: '12px', color: fileDragOver ? '#888' : '#555',
           letterSpacing: '0.04em', textAlign: 'center', transition: 'color 0.15s',
         }}>
-          {fileDragOver ? 'Release to add' : 'Hold a Document or Page here.'}
+          {fileDragOver ? 'Release to add' : viewId === 2 ? 'Hold another Document or Page here.' : 'Hold a Document or Page here.'}
         </span>
         {!fileDragOver && (
           <span style={{
             fontSize: '11px', color: '#333',
             letterSpacing: '0.03em', textAlign: 'center',
           }}>
-            Open from the left, or send from Web.
+            {viewId === 2 ? 'Send from Web with 2.' : 'Open from Library, or send from Web.'}
           </span>
         )}
       </div>
@@ -315,11 +321,13 @@ function EmptySource({ uploadFiles }: { uploadFiles: (files: FileList | File[]) 
 
 // ─── Pane header ─────────────────────────────────────────────────────────────
 
-function PaneHeader({ label, onClose, onToggleSplit, splitActive }: {
+function PaneHeader({ label, onClose, onToggleSplit, splitActive, isFocused, onFocusToggle }: {
   label: string
   onClose?: () => void
   onToggleSplit?: () => void
   splitActive?: boolean
+  isFocused?: boolean
+  onFocusToggle?: () => void
 }) {
   return (
     <div style={{
@@ -330,11 +338,12 @@ function PaneHeader({ label, onClose, onToggleSplit, splitActive }: {
       gap: '4px',
       WebkitAppRegion: 'no-drag',
     } as React.CSSProperties}>
-      <span style={{ flex: 1, fontSize: '10px', color: '#777', letterSpacing: '0.05em', userSelect: 'none' }}>
+      <span style={{ flex: 1, fontSize: '10px', color: '#555', letterSpacing: '0.04em', userSelect: 'none' }}>
         {label}
       </span>
       {onToggleSplit && <SplitBtn active={!!splitActive} onClick={onToggleSplit} />}
-      {onClose && <IconBtn onClick={onClose} title="Close"><CloseIcon /></IconBtn>}
+      {onFocusToggle && <FocusBtn active={!!isFocused} onClick={onFocusToggle} />}
+      {onClose && <IconBtn onClick={onClose} title="Clear View"><CloseIcon /></IconBtn>}
     </div>
   )
 }
@@ -510,6 +519,37 @@ function SplitBtn({ active, onClick }: { active: boolean; onClick: () => void })
         <rect x="0.65" y="0.65" width="4.1" height="7.7" rx="0.7" />
         <rect x="6.25" y="0.65" width="4.1" height="7.7" rx="0.7" />
       </svg>
+    </button>
+  )
+}
+
+function FocusBtn({ active, onClick }: { active: boolean; onClick: () => void }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      title={active ? 'Exit expanded View' : 'Expand View'}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        background: 'none', border: 'none', cursor: 'pointer',
+        padding: '4px', lineHeight: 0, flexShrink: 0,
+        color: active ? '#555' : hov ? '#555' : '#2e2e2e',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        borderRadius: '2px', transition: 'color 0.12s',
+      }}
+    >
+      {active ? (
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="1,3 3,3 3,1" /><polyline points="9,3 7,3 7,1" />
+          <polyline points="1,7 3,7 3,9" /><polyline points="9,7 7,7 7,9" />
+        </svg>
+      ) : (
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="3,1 1,1 1,3" /><polyline points="7,1 9,1 9,3" />
+          <polyline points="3,9 1,9 1,7" /><polyline points="7,9 9,9 9,7" />
+        </svg>
+      )}
     </button>
   )
 }

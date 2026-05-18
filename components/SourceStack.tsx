@@ -83,7 +83,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
           <>
             <button
               onClick={() => fileInputRef.current?.click()}
-              title="Add document"
+              title="Add Document"
               style={{
                 background: 'none', border: 'none', padding: '4px 2px',
                 cursor: 'pointer', color: '#444', lineHeight: 0,
@@ -106,7 +106,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
         } />
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 0 8px', display: 'flex', flexDirection: 'column' }}>
           {fileSources.length === 0 ? (
-            <EmptyRow text="Files you add stay with this workspace." />
+            <EmptyRow text="Documents you add stay with this workspace." />
           ) : (
             fileSources.map(src => (
               <StackRow
@@ -151,7 +151,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
                 onRenameChange={rowProps.onRenameChange}
                 onRenameCommit={rowProps.onRenameCommit}
                 onRenameCancel={rowProps.onRenameCancel}
-                onClick={() => pinPageToView(getEffectivePref(src.id) === 2 ? 2 : 1, src)}
+                onClick={() => src.raw && window.dispatchEvent(new CustomEvent('proof:browser-navigate', { detail: src.raw }))}
                 onContextMenu={e => rowProps.onContextMenu(src.id, e)}
                 pinButtons={{
                   onPin1: () => pinPageToView(1, src),

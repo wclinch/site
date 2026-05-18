@@ -6,7 +6,6 @@ import SourcePanel       from '@/components/SourcePanel'
 import RightPanel        from '@/components/RightPanel'
 import SourceContextMenu from '@/components/SourceContextMenu'
 import AccountModal      from '@/components/AccountModal'
-import OnboardingOverlay, { ONBOARDING_KEY } from '@/components/OnboardingOverlay'
 import { useApp }        from '@/context/AppContext'
 import { getCheckoutUrl } from '@/lib/auth'
 import { useState, useEffect, useRef } from 'react'
@@ -14,14 +13,13 @@ import { useState, useEffect, useRef } from 'react'
 // pdfjs-dist uses DOMMatrix at module init — must not run during SSR
 const ReaderPanel = dynamic(() => import('@/components/ReaderPanel'), { ssr: false })
 
-const DEF_SOURCE       = '20%'
-const DEF_BROWSER_PX   = 560   // default browser panel width in pixels
+const DEF_SOURCE = '20%'
 
 
 const PRO_FEATURES = [
   'Unlimited workspaces',
   'Unlimited Documents',
-  '5 GB uploaded Documents',
+  '5 GB Documents',
 ]
 
 function UpgradeModal({ onClose }: { onClose: () => void }) {
@@ -46,8 +44,8 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
       if (result.isPro) { onClose(); return }
     } else {
       setError(
-        result.error === 'invalid_key'    ? 'License key not found or subscription inactive.' :
-        result.error === 'email_mismatch' ? 'Email does not match the license key.' :
+        result.error === 'invalid_key'    ? 'Subscription not found or inactive.' :
+        result.error === 'email_mismatch' ? 'Email does not match this subscription.' :
         result.error === 'network_error'  ? 'Network unavailable. Try again when online.' :
         result.error === 'not_configured' ? 'Sign-in is not configured in this build.' :
                                             'Sign in failed. Try again.'
@@ -237,33 +235,10 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
 function AppShell() {
   const { mounted } = useApp()
   const [researchFocused, setResearchFocused] = useState(false)
-  const [showOnboarding, setShowOnboarding] = useState(false)
-  const [showUpgrade,    setShowUpgrade]    = useState(false)
-  const [showAccount,    setShowAccount]    = useState(false)
-  // soloPane lifted out of ReaderPanel so it survives the unmount that happens
-  // when researchFocused toggles. Otherwise solo View 2 would snap back to View 1
-  // after exiting research fullscreen.
+  const [viewFocused,     setViewFocused]     = useState(false)
+  const [showUpgrade, setShowUpgrade] = useState(false)
+  const [showAccount, setShowAccount] = useState(false)
   const [soloPane, setSoloPane] = useState<1 | 2>(1)
-
-  // Show onboarding once on first launch. Dev reset: localStorage.removeItem(ONBOARDING_KEY)
-  useEffect(() => {
-    if (!mounted) return
-    try {
-      if (localStorage.getItem(ONBOARDING_KEY) !== 'done') {
-        ;(window as any).electronAPI?.setModal?.(true)
-        setShowOnboarding(true)
-      }
-    } catch {}
-  }, [mounted])
-
-  function handleOnboardingClose() {
-    try { localStorage.setItem(ONBOARDING_KEY, 'done') } catch {}
-    setShowOnboarding(false)
-    if (!showUpgrade && !showAccount) {
-      ;(window as any).electronAPI?.setModal?.(false)
-    }
-    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')))
-  }
 
   useEffect(() => {
     function onUpgradeNeeded() {
@@ -285,10 +260,21 @@ function AppShell() {
 
   // Hide native WebContentsViews on close — keep in sync when modals dismiss.
   useEffect(() => {
-    if (!showUpgrade && !showAccount && !showOnboarding) {
+    if (!showUpgrade && !showAccount) {
       ;(window as any).electronAPI?.setModal?.(false)
     }
-  }, [showUpgrade, showAccount, showOnboarding])
+  }, [showUpgrade, showAccount])
+
+  // Poll resize events after focus mode changes so Electron WebContentsViews
+  // recapture their bounds after the flex layout settles.
+  useEffect(() => {
+    const start = Date.now()
+    const id = setInterval(() => {
+      window.dispatchEvent(new Event('resize'))
+      if (Date.now() - start > 500) clearInterval(id)
+    }, 32)
+    return () => clearInterval(id)
+  }, [researchFocused, viewFocused])
 
   if (!mounted) {
     return (
@@ -303,18 +289,29 @@ function AppShell() {
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#080808', WebkitAppRegion: 'drag' } as React.CSSProperties}>
         <ProjectBar />
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden', paddingRight: '5px' }}>
-          <SourcePanel width={DEF_SOURCE} />
-          {!researchFocused && <ReaderPanel soloPane={soloPane} setSoloPane={setSoloPane} />}
-          <div style={researchFocused
-            ? { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
-            : { width: DEF_BROWSER_PX, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
-          }>
-            <RightPanel isFocused={researchFocused} onFocusToggle={() => setResearchFocused(f => !f)} />
+          {!viewFocused && <SourcePanel width={DEF_SOURCE} />}
+          {!researchFocused && (
+            <ReaderPanel
+              soloPane={soloPane} setSoloPane={setSoloPane}
+              isFocused={viewFocused} onFocusToggle={() => setViewFocused(f => !f)}
+            />
+          )}
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <RightPanel
+              isFocused={researchFocused}
+              onFocusToggle={() => {
+                if (researchFocused) {
+                  setResearchFocused(false)
+                } else {
+                  setViewFocused(false)
+                  setResearchFocused(true)
+                }
+              }}
+            />
           </div>
         </div>
         <SourceContextMenu />
       </div>
-      {showOnboarding && <OnboardingOverlay onClose={handleOnboardingClose} />}
       {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
       {showAccount && <AccountModal onClose={() => setShowAccount(false)} />}
     </>

@@ -2,7 +2,7 @@
   "name": "site",
   "version": "1.0.0",
   "private": true,
-  "description": "A local-first research workspace. Read sources. Write beside them.",
+  "description": "Keep your documents, saved pages, and Web tabs together.",
   "author": "wclinch07",
   "type": "module",
   "main": "electron/main.cjs",
