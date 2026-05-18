@@ -194,7 +194,7 @@ function ViewPane({
     <div
       style={{
         flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
-        border: `1px solid ${dragOver ? '#333' : '#1e1e1e'}`, borderRadius: '4px',
+        border: `1px solid ${dragOver ? '#444' : '#1e1e1e'}`, borderRadius: '4px',
         overflow: 'hidden',
         background: dragOver ? 'rgba(255,255,255,0.01)' : 'transparent',
         transition: 'border-color 0.15s, background 0.15s',
@@ -276,7 +276,7 @@ function EmptySource({ viewId, uploadFiles }: { viewId: 1 | 2; uploadFiles: (fil
   return (
     <div
       style={{
-        flex: 1, background: fileDragOver ? '#0d0d0d' : '#080808',
+        flex: 1, background: fileDragOver ? '#0f0f0f' : '#0a0a0a',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
         padding: '32px', gap: '20px',
@@ -295,14 +295,14 @@ function EmptySource({ viewId, uploadFiles }: { viewId: 1 | 2; uploadFiles: (fil
     >
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
         <span style={{
-          fontSize: '12px', color: fileDragOver ? '#888' : '#555',
+          fontSize: '12px', color: fileDragOver ? '#999' : '#666',
           letterSpacing: '0.04em', textAlign: 'center', transition: 'color 0.15s',
         }}>
           {fileDragOver ? 'Release to add' : viewId === 2 ? 'Hold another Document or Page here.' : 'Hold a Document or Page here.'}
         </span>
         {!fileDragOver && (
           <span style={{
-            fontSize: '11px', color: '#333',
+            fontSize: '11px', color: '#444',
             letterSpacing: '0.03em', textAlign: 'center',
           }}>
             {viewId === 2 ? 'Send from Web with 2.' : 'Open from Library, or send from Web.'}
@@ -335,11 +335,11 @@ function PaneHeader({ label, onClose, onToggleSplit, splitActive, isFocused, onF
       height: '28px', flexShrink: 0,
       display: 'flex', alignItems: 'center',
       padding: '0 8px 0 14px',
-      borderBottom: '1px solid #1a1a1a',
+      borderBottom: '1px solid #1e1e1e',
       gap: '4px',
       WebkitAppRegion: 'no-drag',
     } as React.CSSProperties}>
-      <span style={{ flex: 1, fontSize: '10px', color: '#555', letterSpacing: '0.04em', userSelect: 'none' }}>
+      <span style={{ flex: 1, fontSize: '10px', color: '#666', letterSpacing: '0.04em', userSelect: 'none' }}>
         {label}
       </span>
       {onToggleSplit && <SplitBtn active={!!splitActive} onClick={onToggleSplit} />}
@@ -511,7 +511,7 @@ function SplitBtn({ active, onClick }: { active: boolean; onClick: () => void })
       style={{
         background: 'none', border: 'none', cursor: 'pointer',
         padding: '4px', lineHeight: 0, flexShrink: 0,
-        color: active ? '#555' : hov ? '#555' : '#2e2e2e',
+        color: active ? '#666' : hov ? '#666' : '#3a3a3a',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         borderRadius: '2px', transition: 'color 0.12s',
       }}
@@ -535,7 +535,7 @@ function FocusBtn({ active, onClick }: { active: boolean; onClick: () => void })
       style={{
         background: 'none', border: 'none', cursor: 'pointer',
         padding: '4px', lineHeight: 0, flexShrink: 0,
-        color: active ? '#555' : hov ? '#555' : '#2e2e2e',
+        color: active ? '#666' : hov ? '#666' : '#3a3a3a',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         borderRadius: '2px', transition: 'color 0.12s',
       }}
@@ -567,7 +567,7 @@ function IconBtn({ onClick, title, children }: {
       style={{
         background: 'none', border: 'none', cursor: 'pointer',
         padding: '4px', lineHeight: 0,
-        color: hov ? '#999' : '#555',
+        color: hov ? '#aaa' : '#666',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         borderRadius: '2px', flexShrink: 0,
       }}
@@ -594,7 +594,7 @@ function Msg({ children }: { children: React.ReactNode }) {
     <div style={{
       flex: 1, minHeight: '40px',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: '11px', color: '#666', letterSpacing: '0.02em',
+      fontSize: '11px', color: '#555', letterSpacing: '0.02em',
     }}>
       {children}
     </div>

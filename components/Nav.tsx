@@ -15,7 +15,7 @@ export default function Nav() {
     <nav style={{
       padding: '0 20px', height: '44px',
       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      borderBottom: '1px solid #1a1a1a', flexShrink: 0,
+      borderBottom: '1px solid #1e1e1e', flexShrink: 0,
       WebkitAppRegion: 'drag',
     } as React.CSSProperties}>
       <Link href="/app" aria-label="Site"

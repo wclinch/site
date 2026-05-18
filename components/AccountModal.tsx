@@ -7,11 +7,14 @@ type View = 'sign_in' | 'loading' | 'error' | 'signed_in'
 export default function AccountModal({ onClose }: { onClose: () => void }) {
   const { user, isPro, signIn, signOut, openBilling, refreshEntitlement } = useApp()
 
-  const [view,     setView]     = useState<View>(user ? 'signed_in' : 'sign_in')
-  const [email,    setEmail]    = useState('')
-  const [key,      setKey]      = useState('')
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [armed,    setArmed]    = useState(false)
+  const [view,          setView]          = useState<View>(user ? 'signed_in' : 'sign_in')
+  const [email,         setEmail]         = useState('')
+  const [key,           setKey]           = useState('')
+  const [errorMsg,      setErrorMsg]      = useState<string | null>(null)
+  const [armed,         setArmed]         = useState(false)
+  const [showQuickOpen, setShowQuickOpen] = useState(() => {
+    try { return localStorage.getItem('proof-show-quick-open') !== 'false' } catch { return true }
+  })
 
   useEffect(() => {
     if (user) {
@@ -80,7 +83,7 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
         onClick={e => e.stopPropagation()}
         style={{
           width: '360px', maxWidth: 'calc(100vw - 48px)',
-          background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: '4px',
+          background: '#111', border: '1px solid #222', borderRadius: '4px',
           boxShadow: '0 12px 40px rgba(0,0,0,0.6)',
           fontFamily: 'inherit',
         }}
@@ -98,7 +101,7 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
               <div style={{ fontSize: '12px', color: view === 'error' ? '#aaa' : '#888', lineHeight: 1.7 }}>
                 {view === 'error' && errorMsg
                   ? errorMsg
-                  : 'Sign in with your account email and subscription key.'}
+                  : 'Sign in with your email and subscription key.'}
               </div>
             </div>
 
@@ -173,45 +176,61 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
         {/* ── Signed in ── */}
         {view === 'signed_in' && user && (
           <>
-            <div style={{ padding: '16px 18px 14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <div style={{
-                  fontSize: '11px',
-                  color: armed ? '#c44' : '#777',
-                  letterSpacing: '0.1em', textTransform: 'uppercase',
-                  transition: 'color 0.15s',
-                }}>
-                  {armed ? 'Confirm' : 'Account'}
+            {/* Header — only shows confirmation text when armed */}
+            {armed && (
+              <>
+                <div style={{ padding: '16px 18px 14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <div style={{ fontSize: '11px', color: '#c44', letterSpacing: '0.1em', textTransform: 'uppercase', transition: 'color 0.15s' }}>
+                      Confirm
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      {[1, 2].map(s => (
+                        <div key={s} style={{
+                          width: '16px', height: '2px', borderRadius: '1px',
+                          background: s === 1 ? '#1e1e1e' : '#c44',
+                          transition: 'background 0.2s',
+                        }} />
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#aaa', lineHeight: 1.7 }}>
+                    You will be signed out on this device.
+                  </div>
+                </div>
+                <div style={{ height: '1px', background: '#1e1e1e' }} />
+              </>
+            )}
+
+            {/* Account header row — always visible when not armed */}
+            {!armed && (
+              <div style={{ padding: '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ fontSize: '11px', color: '#777', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                  Account
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                   {[1, 2].map(s => (
                     <div key={s} style={{
                       width: '16px', height: '2px', borderRadius: '1px',
-                      background: s === 1 ? (armed ? '#1e1e1e' : '#3a3a3a') : (armed ? '#c44' : '#1e1e1e'),
-                      transition: 'background 0.2s',
+                      background: s === 1 ? '#3a3a3a' : '#1e1e1e',
                     }} />
                   ))}
                 </div>
               </div>
-              <div style={{ fontSize: '12px', color: armed ? '#aaa' : '#888', lineHeight: 1.7 }}>
-                {armed
-                  ? 'You will be signed out on this device.'
-                  : user.email}
-              </div>
-            </div>
+            )}
 
             <div style={{ height: '1px', background: '#1e1e1e' }} />
 
             <div style={{ padding: '12px 18px', fontSize: '11px', color: '#666', letterSpacing: '0.04em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Email</span>
-              <span style={{ color: '#555', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</span>
+              <span style={{ color: '#888', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</span>
             </div>
 
             <div style={{ height: '1px', background: '#1e1e1e' }} />
 
             <div style={{ padding: '12px 18px', fontSize: '11px', color: '#666', letterSpacing: '0.04em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Plan</span>
-              <span style={{ color: isPro ? '#5c9e6e' : '#555' }}>{isPro ? 'Pro' : 'Free'}</span>
+              <span style={{ color: isPro ? '#5c9e6e' : '#666' }}>{isPro ? 'Pro' : 'Free'}</span>
             </div>
 
             {isPro && (
@@ -226,8 +245,29 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
               </>
             )}
 
+            {/* Settings */}
             <div style={{ height: '1px', background: '#1e1e1e' }} />
+            <div style={{ padding: '14px 18px 12px' }}>
+              <div style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '12px' }}>
+                Settings
+              </div>
+              <SettingToggle
+                label="Show Quick Open"
+                helper="Show shortcuts below the Web bar."
+                value={showQuickOpen}
+                onChange={val => {
+                  try {
+                    if (val) localStorage.removeItem('proof-show-quick-open')
+                    else localStorage.setItem('proof-show-quick-open', 'false')
+                  } catch {}
+                  setShowQuickOpen(val)
+                  window.dispatchEvent(new Event('proof:settings-changed'))
+                }}
+              />
+            </div>
 
+            {/* Actions */}
+            <div style={{ height: '1px', background: '#1e1e1e' }} />
             <div style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
               <ModalButton onClick={onClose} disabled={armed}>← Back</ModalButton>
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -255,6 +295,51 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+function SettingToggle({ label, helper, value, onChange }: {
+  label: string
+  helper: string
+  value: boolean
+  onChange: (v: boolean) => void
+}) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={() => onChange(!value)}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'flex', alignItems: 'flex-start', gap: '10px', width: '100%',
+        background: 'none', border: 'none', padding: 0,
+        cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+      }}
+    >
+      <div style={{
+        flexShrink: 0, marginTop: '1px',
+        width: '13px', height: '13px',
+        border: `1px solid ${value ? '#444' : '#2a2a2a'}`,
+        borderRadius: '2px',
+        background: value ? '#1e1e1e' : 'transparent',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'border-color 0.15s, background 0.15s',
+      }}>
+        {value && (
+          <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="1.5,4 3,5.5 6.5,2" />
+          </svg>
+        )}
+      </div>
+      <div>
+        <div style={{ fontSize: '12px', color: hov ? '#aaa' : '#777', letterSpacing: '0.02em', transition: 'color 0.15s' }}>
+          {label}
+        </div>
+        <div style={{ fontSize: '11px', color: '#444', letterSpacing: '0.02em', marginTop: '2px', lineHeight: 1.5 }}>
+          {helper}
+        </div>
+      </div>
+    </button>
+  )
+}
+
 function ManageRow({ onClick }: { onClick: () => void }) {
   const [hov, setHov] = useState(false)
   return (
@@ -265,7 +350,7 @@ function ManageRow({ onClick }: { onClick: () => void }) {
       style={{
         display: 'flex', width: '100%', padding: '12px 18px',
         background: 'none', border: 'none', cursor: 'pointer',
-        fontSize: '11px', color: hov ? '#888' : '#444', letterSpacing: '0.04em',
+        fontSize: '11px', color: hov ? '#999' : '#555', letterSpacing: '0.04em',
         fontFamily: 'inherit', textAlign: 'left',
         transition: 'color 0.15s',
       }}
@@ -286,8 +371,8 @@ function ModalButton({ children, onClick, disabled, destructive, accent }: {
 
   const idleBorder  = destructive ? '#2a1515' : accent ? '#2a2a2a' : '#252525'
   const hoverBorder = destructive ? '#3a1515' : accent ? '#444'    : '#333'
-  const idleColor   = destructive ? '#c44'    : accent ? '#888'    : '#555'
-  const hoverColor  = destructive ? '#e55'    : accent ? '#ddd'    : '#999'
+  const idleColor   = destructive ? '#c44'    : accent ? '#888'    : '#666'
+  const hoverColor  = destructive ? '#e55'    : accent ? '#ddd'    : '#aaa'
 
   return (
     <button
@@ -296,7 +381,7 @@ function ModalButton({ children, onClick, disabled, destructive, accent }: {
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
-        background: '#0f0f0f',
+        background: '#111',
         border: `1px solid ${hover && !disabled ? hoverBorder : idleBorder}`,
         borderRadius: '3px',
         padding: '7px 14px',

@@ -4,7 +4,7 @@ import BackButton from '@/components/BackButton'
 const mono: React.CSSProperties = {
   fontFamily: 'inherit',
   background: '#111',
-  border: '1px solid #1a1a1a',
+  border: '1px solid #1e1e1e',
   borderRadius: '3px',
   padding: '1px 6px',
   fontSize: '12px',
@@ -23,11 +23,11 @@ export default function About() {
 
       <main style={{ flex: 1, maxWidth: '580px', width: '100%', margin: '0 auto', padding: '56px 20px', display: 'flex', flexDirection: 'column' }}>
 
-        <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', paddingBottom: '14px', borderBottom: '1px solid #1a1a1a' }}>
+        <span style={{ fontSize: '11px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase', paddingBottom: '14px', borderBottom: '1px solid #1e1e1e' }}>
           About Site
         </span>
 
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div style={{ padding: '20px 0', borderBottom: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
             Site keeps your documents, saved pages, and Web tabs together. Work in Views, browse in Web, open Library when you need it. Come back later and everything is still there.
           </p>
@@ -36,8 +36,8 @@ export default function About() {
           </p>
         </div>
 
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Layout</span>
+        <div style={{ padding: '20px 0', borderBottom: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <span style={{ fontSize: '11px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Layout</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
             <span style={{ color: '#999' }}>Library</span> — Documents and Pages for the workspace. Documents are files you add. Pages are Web pages you save. Both stay with the workspace.
           </p>
@@ -52,8 +52,8 @@ export default function About() {
           </p>
         </div>
 
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Interactions</span>
+        <div style={{ padding: '20px 0', borderBottom: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <span style={{ fontSize: '11px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Interactions</span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {[
               { keys: ['Drop file'],           desc: 'Add a PDF or image to Documents' },
@@ -81,8 +81,8 @@ export default function About() {
           </div>
         </div>
 
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Document types</span>
+        <div style={{ padding: '20px 0', borderBottom: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <span style={{ fontSize: '11px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Document types</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
             <span style={{ color: '#999' }}>PDF</span> — Selectable text. Scanned documents render as image-only.
           </p>
@@ -91,8 +91,8 @@ export default function About() {
           </p>
         </div>
 
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Storage</span>
+        <div style={{ padding: '20px 0', borderBottom: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <span style={{ fontSize: '11px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Storage</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
             <span style={{ color: '#999' }}>Free: 150 MB</span> for Documents. <span style={{ color: '#999' }}>Pro: 5 GB.</span> Pages store metadata only and do not count toward storage. Nothing is transmitted.
           </p>
@@ -101,8 +101,8 @@ export default function About() {
           </p>
         </div>
 
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Support</span>
+        <div style={{ padding: '20px 0', borderBottom: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <span style={{ fontSize: '11px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Support</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
             <a href="mailto:Official_Site_Support@protonmail.com?subject=Site%20support" style={{ color: '#999', textDecoration: 'underline', textDecorationColor: '#333', textUnderlineOffset: '3px' }}>
               Official_Site_Support@protonmail.com

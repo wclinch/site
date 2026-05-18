@@ -202,12 +202,12 @@ export default function ProjectBar() {
               width: '24px', height: '24px', flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               background: 'none', border: 'none',
-              color: '#2e2e2e', cursor: 'pointer', padding: 0, outline: 'none',
+              color: '#333', cursor: 'pointer', padding: 0, outline: 'none',
               transition: 'color 0.15s', marginLeft: '2px',
               WebkitAppRegion: 'no-drag',
             } as React.CSSProperties}
-            onMouseEnter={e => { e.currentTarget.style.color = '#666' }}
-            onMouseLeave={e => { e.currentTarget.style.color = '#2e2e2e' }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#777' }}
+            onMouseLeave={e => { e.currentTarget.style.color = '#333' }}
           >
             <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
               <line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" />
@@ -222,6 +222,9 @@ export default function ProjectBar() {
         padding: '0 18px 0 12px', gap: '2px', flexShrink: 0,
         WebkitAppRegion: 'no-drag',
       } as React.CSSProperties}>
+
+        {/* Workspace search trigger */}
+        <SearchBtn onClick={() => window.dispatchEvent(new Event('proof:workspace-search'))} />
 
         {/* Tier label */}
         <span style={{
@@ -304,8 +307,8 @@ function WorkspaceTab({ name, active, rmArmed, canRemove, dragOver, onClick, onD
         height: '28px',
         padding: canRemove ? '0 2px 0 10px' : '0 10px',
         flexShrink: 0, gap: '1px',
-        background: active ? '#111' : hovered ? '#0d0d0d' : 'transparent',
-        border: `1px solid ${dragOver ? '#333' : active ? '#1e1e1e' : 'transparent'}`,
+        background: active ? '#141414' : hovered ? '#0f0f0f' : 'transparent',
+        border: `1px solid ${dragOver ? '#444' : active ? '#2a2a2a' : 'transparent'}`,
         borderRadius: '4px',
         cursor: 'grab',
         userSelect: 'none',
@@ -317,7 +320,7 @@ function WorkspaceTab({ name, active, rmArmed, canRemove, dragOver, onClick, onD
     >
       <span style={{
         fontSize: '11px', letterSpacing: '0.03em',
-        color: active ? '#999' : hovered ? '#555' : '#444',
+        color: active ? '#c2c2c2' : hovered ? '#888' : '#666',
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         flex: 1, minWidth: 0,
         transition: 'color 0.1s',
@@ -329,7 +332,7 @@ function WorkspaceTab({ name, active, rmArmed, canRemove, dragOver, onClick, onD
         <button
           onClick={onRemoveClick}
           onDoubleClick={e => e.stopPropagation()}
-          title={rmArmed ? 'Click again to delete' : 'Close'}
+          title={rmArmed ? 'Click again to remove' : 'Close'}
           onMouseEnter={() => setXHovered(true)}
           onMouseLeave={() => setXHovered(false)}
           style={{
@@ -361,7 +364,7 @@ function RightBtn({ children, onClick, accent }: { children: React.ReactNode; on
         background: 'none',
         border: accent ? `1px solid ${hov ? '#333' : '#252525'}` : 'none',
         borderRadius: '3px',
-        color: hov ? (accent ? '#bbb' : '#888') : (accent ? '#777' : '#3a3a3a'),
+        color: hov ? (accent ? '#ccc' : '#999') : (accent ? '#888' : '#555'),
         fontSize: '11px', letterSpacing: '0.04em',
         cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
         transition: 'color 0.12s, border-color 0.12s',
@@ -373,12 +376,38 @@ function RightBtn({ children, onClick, accent }: { children: React.ReactNode; on
   )
 }
 
+// ─── Search button ───────────────────────────────────────────────────────────
+
+function SearchBtn({ onClick }: { onClick: () => void }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      title="Search workspace"
+      style={{
+        width: '22px', height: '22px', flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'none', border: 'none', borderRadius: '3px',
+        color: hov ? '#777' : '#333',
+        cursor: 'pointer', padding: 0, outline: 'none',
+        transition: 'color 0.12s',
+      }}
+    >
+      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <circle cx="5" cy="5" r="3.5" /><line x1="7.5" y1="7.5" x2="11" y2="11" />
+      </svg>
+    </button>
+  )
+}
+
 // ─── Separator / dot ─────────────────────────────────────────────────────────
 
 function Separator() {
-  return <div style={{ width: '1px', height: '12px', background: '#1a1a1a', margin: '0 4px', flexShrink: 0 }} />
+  return <div style={{ width: '1px', height: '12px', background: '#1e1e1e', margin: '0 4px', flexShrink: 0 }} />
 }
 
 function Dot() {
-  return <span style={{ fontSize: '11px', color: '#252525', userSelect: 'none', padding: '0 1px' }}>·</span>
+  return <span style={{ fontSize: '11px', color: '#2a2a2a', userSelect: 'none', padding: '0 1px' }}>·</span>
 }

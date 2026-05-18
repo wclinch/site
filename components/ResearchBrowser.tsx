@@ -90,6 +90,12 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
   const [urlFocused, setUrlFocused]   = useState(false)
   const [actionFeedback, setActionFeedback] = useState<null | 'view1' | 'view2' | 'saved' | 'duplicate'>(null)
   const [homeMode, setHomeMode]       = useState(true)
+  const [showQuickOpen, setShowQuickOpen] = useState(() => {
+    try { return localStorage.getItem('proof-show-quick-open') !== 'false' } catch { return true }
+  })
+  const [showSearch, setShowSearch] = useState(() => {
+    try { return localStorage.getItem('proof-workspace-search') === 'true' } catch { return false }
+  })
 
   const viewportRef    = useRef<HTMLDivElement>(null)
   const urlInputRef    = useRef<HTMLInputElement>(null)
@@ -100,8 +106,9 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
 
   const [tabStatuses, setTabStatuses]   = useState<Record<string, TabStatus>>({})
   const [showFallback, setShowFallback] = useState(false)
-  const showFallbackRef  = useRef(false)
-  const stallTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const showFallbackRef     = useRef(false)
+  const suppressBoundsRef   = useRef(false)
+  const stallTimerRef       = useRef<ReturnType<typeof setTimeout> | null>(null)
   const stallTabIdRef    = useRef<string>('')
   const stallProgressRef = useRef(false) // true if URL or title changed since stall timer started
 
@@ -306,6 +313,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
     let lastKey = ''
 
     function sendBounds() {
+      if (suppressBoundsRef.current) return
       const iW = window.innerWidth; const iH = window.innerHeight
       if (homeModeRef.current || showFallbackRef.current) {
         if (lastKey !== 'zero') {
@@ -316,13 +324,13 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
       }
       const r = viewportRef.current?.getBoundingClientRect()
       if (!r) return
-      // floor on start + ceil on end so the native view fully covers the viewport
-      // even when the bounding rect lands on a subpixel boundary — otherwise
-      // round() can leave a hairline gap on whichever side rounded up.
+      // Floor both start and end so the native view never extends past the
+      // viewport element's actual edge — prevents the native layer from
+      // covering the 1px CSS border on the right/bottom of the panel.
       const x = Math.floor(r.left)
       const y = Math.floor(r.top)
-      const w = Math.max(0, Math.ceil(r.left + r.width)  - x)
-      const h = Math.max(0, Math.ceil(r.top  + r.height) - y)
+      const w = Math.max(0, Math.floor(r.right)  - x)
+      const h = Math.max(0, Math.floor(r.bottom) - y)
       if (w <= 0 || h <= 0) {
         if (lastKey !== 'zero') {
           lastKey = 'zero'
@@ -354,6 +362,42 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
   }, [panelId])
 
   useEffect(() => () => { if (savedTimerRef.current) clearTimeout(savedTimerRef.current) }, [])
+
+  useEffect(() => {
+    function onSettingsChanged() {
+      try { setShowQuickOpen(localStorage.getItem('proof-show-quick-open') !== 'false') } catch {}
+    }
+    window.addEventListener('proof:settings-changed', onSettingsChanged)
+    return () => window.removeEventListener('proof:settings-changed', onSettingsChanged)
+  }, [])
+
+  useEffect(() => {
+    try { localStorage.setItem('proof-workspace-search', showSearch ? 'true' : 'false') } catch {}
+  }, [showSearch])
+
+  useEffect(() => {
+    function onToggle() {
+      setShowSearch(v => {
+        // If the native view is visible, hide it instantly and suppress bounds
+        // updates for the duration of the CSS transition so the animation isn't
+        // throttled by per-frame IPC calls to Electron.
+        if (!homeModeRef.current && !showFallbackRef.current) {
+          suppressBoundsRef.current = true
+          window.electronAPI?.research?.setBounds(panelId, {
+            x: 0, y: 0, width: 0, height: 0,
+            innerWidth: window.innerWidth, innerHeight: window.innerHeight,
+          })
+          setTimeout(() => {
+            suppressBoundsRef.current = false
+            window.dispatchEvent(new Event('resize'))
+          }, 280)
+        }
+        return !v
+      })
+    }
+    window.addEventListener('proof:workspace-search', onToggle)
+    return () => window.removeEventListener('proof:workspace-search', onToggle)
+  }, [])
 
   // Bypass lastKey dedup when focus mode changes — layout reflows after the state update
   // so the guard fires before the new rect is available.
@@ -414,6 +458,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
     flash(view === 1 ? 'view1' : 'view2')
   }
 
+
   function openExternal(url: string) {
     window.electronAPI?.openExternal?.(url)
   }
@@ -441,10 +486,28 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
         border: '1px solid #1e1e1e', borderRadius: '4px', overflow: 'hidden',
       }}>
 
+        {/* Workspace search panel — top 50%, pushes browser UI to bottom */}
+        <div style={{
+          flexGrow: showSearch ? 1 : 0,
+          flexShrink: 1, flexBasis: 0,
+          minHeight: 0, overflow: 'hidden',
+          transition: 'flex-grow 0.22s ease',
+          display: 'flex', flexDirection: 'column',
+        }}>
+          <WorkspaceSearch
+            visible={showSearch}
+            tabs={tabs}
+            panelId={panelId}
+            onClose={() => setShowSearch(false)}
+            onNavigate={navigateUrl}
+            onSwitchTab={id => window.electronAPI?.research?.switchTab(panelId, id)}
+          />
+        </div>
+
         {/* Tab bar */}
         <div style={{
           height: '28px', flexShrink: 0, display: 'flex', alignItems: 'center',
-          background: '#050505', borderBottom: '1px solid #1a1a1a',
+          background: '#050505', borderBottom: '1px solid #1e1e1e',
           WebkitAppRegion: 'no-drag',
         } as React.CSSProperties}>
           <div
@@ -491,12 +554,15 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
         {/* URL / nav toolbar */}
         <div style={{
           height: '36px', flexShrink: 0, display: 'flex', alignItems: 'center',
-          gap: '3px', padding: '0 8px', borderBottom: '1px solid #1a1a1a', background: '#060606',
+          gap: '3px', padding: '0 8px', borderBottom: '1px solid #1e1e1e', background: '#060606',
           WebkitAppRegion: 'no-drag',
         } as React.CSSProperties}>
           <NavBtn disabled={!active?.canGoBack}    onClick={() => window.electronAPI?.research?.goBack(panelId)}    title="Back">‹</NavBtn>
           <NavBtn disabled={!active?.canGoForward} onClick={() => window.electronAPI?.research?.goForward(panelId)} title="Forward">›</NavBtn>
-          <NavBtn onClick={() => window.electronAPI?.research?.reload(panelId)} title={active?.loading ? 'Stop' : 'Reload'}>
+          <NavBtn onClick={() => {
+            if (!active?.loading && homeMode && urlInput) navigateUrl(urlInput)
+            else window.electronAPI?.research?.reload(panelId)
+          }} title={active?.loading ? 'Stop' : 'Reload'}>
             {active?.loading ? '×' : '↺'}
           </NavBtn>
           <NavBtn onClick={() => setHomeMode(true)} title="Home">⌂</NavBtn>
@@ -538,14 +604,14 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
                   disabled={!hasUrl}
                   style={{
                     height: '22px', flexShrink: 0, display: 'flex', alignItems: 'center',
-                    background: 'none', border: `1px solid ${hasUrl ? '#252525' : '#1a1a1a'}`, borderRadius: '3px',
-                    color: hasUrl ? '#555' : '#2e2e2e', fontSize: '11px', padding: '0 7px',
+                    background: 'none', border: `1px solid ${hasUrl ? '#252525' : '#1e1e1e'}`, borderRadius: '3px',
+                    color: hasUrl ? '#666' : '#333', fontSize: '11px', padding: '0 7px',
                     cursor: hasUrl ? 'pointer' : 'default',
                     fontFamily: 'inherit', letterSpacing: '0.04em', outline: 'none',
                     transition: 'color 0.15s, border-color 0.15s',
                   }}
-                  onMouseEnter={e => { if (hasUrl) { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.color = '#999' } }}
-                  onMouseLeave={e => { if (hasUrl) { e.currentTarget.style.borderColor = '#252525'; e.currentTarget.style.color = '#555' } }}
+                  onMouseEnter={e => { if (hasUrl) { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.color = '#aaa' } }}
+                  onMouseLeave={e => { if (hasUrl) { e.currentTarget.style.borderColor = '#252525'; e.currentTarget.style.color = '#666' } }}
                 >
                   {actionFeedback === 'saved' ? 'Saved to Pages' : actionFeedback === 'duplicate' ? 'Already saved' : 'Save'}
                 </button>
@@ -554,8 +620,8 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
           })()}
         </div>
 
-        {/* Quick open strip — horizontal chips, only in home mode */}
-        {homeMode && <QuickOpenStrip urlInput={urlInput} navigate={navigate} workspaceId={activeId ?? ''} />}
+        {/* Quick open strip — horizontal chips, only in home mode and when enabled */}
+        {homeMode && showQuickOpen && !showSearch && <QuickOpenStrip urlInput={urlInput} navigate={navigate} workspaceId={activeId ?? ''} />}
 
         {/* Shortcut hint — only when typing a known shortcut */}
         {homeMode && urlFocused && getShortcutHint(urlInput) && (
@@ -594,7 +660,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
                 <p style={{ fontSize: '11px', color: '#555', margin: '4px 0 12px', lineHeight: 1.65, textAlign: 'center', maxWidth: '300px' }}>
                   {isBlocked
                     ? 'Some websites block embedded sign-in.'
-                    : 'The page failed to load. Check your connection or try again.'}
+                    : 'Check your connection or try again.'}
                 </p>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
                   <FallbackBtn onClick={() => openExternal(url)}>Open in browser</FallbackBtn>
@@ -614,20 +680,20 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
               justifyContent: 'center', flexDirection: 'column', gap: '5px',
               userSelect: 'none', pointerEvents: 'none',
             }}>
-              <span style={{ fontSize: '12px', color: '#2e2e2e', letterSpacing: '0.03em' }}>
+              <span style={{ fontSize: '12px', color: '#3a3a3a', letterSpacing: '0.03em' }}>
                 Browse for this workspace.
               </span>
-              <span style={{ fontSize: '11px', color: '#222', letterSpacing: '0.025em' }}>
+              <span style={{ fontSize: '11px', color: '#2e2e2e', letterSpacing: '0.025em' }}>
                 Use 1, 2, or Save to keep what matters.
               </span>
               <div style={{ height: '10px' }} />
               <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
-                <span style={{ fontSize: '10px', color: '#1e1e1e', fontFamily: 'monospace', letterSpacing: '0.02em' }}>domain.com</span>
-                <span style={{ fontSize: '10px', color: '#1a1a1a', letterSpacing: '0.02em' }}>opens directly</span>
+                <span style={{ fontSize: '10px', color: '#2a2a2a', fontFamily: 'monospace', letterSpacing: '0.02em' }}>domain.com</span>
+                <span style={{ fontSize: '10px', color: '#222', letterSpacing: '0.02em' }}>opens directly</span>
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
-                <span style={{ fontSize: '10px', color: '#1e1e1e', fontFamily: 'monospace', letterSpacing: '0.02em' }}>? query</span>
-                <span style={{ fontSize: '10px', color: '#1a1a1a', letterSpacing: '0.02em' }}>searches Google</span>
+                <span style={{ fontSize: '10px', color: '#2a2a2a', fontFamily: 'monospace', letterSpacing: '0.02em' }}>? query</span>
+                <span style={{ fontSize: '10px', color: '#222', letterSpacing: '0.02em' }}>searches Google</span>
               </div>
             </div>
           )}
@@ -653,7 +719,7 @@ function TabBarBtn({ children, onClick, title, active, borderLeft = true }: {
   active?: boolean
   borderLeft?: boolean
 }) {
-  const baseColor = active ? '#666' : '#3a3a3a'
+  const baseColor = active ? '#777' : '#444'
   return (
     <button
       onClick={onClick}
@@ -703,7 +769,7 @@ function TabChip({ tab, active, onSelect, onClose }: {
         <span style={{ fontSize: '8px', color: '#444', flexShrink: 0, animation: 'pulse-dot 1.2s ease-in-out infinite' }}>●</span>
       )}
       <span style={{
-        fontSize: '10px', color: active ? '#aaa' : '#555',
+        fontSize: '10px', color: active ? '#c2c2c2' : '#666',
         overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
         flex: 1, letterSpacing: '0.02em', transition: 'color 0.1s',
       }}>
@@ -715,11 +781,11 @@ function TabChip({ tab, active, onSelect, onClose }: {
           width: '16px', height: '16px', flexShrink: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'none', border: 'none', borderRadius: '2px',
-          color: '#3a3a3a', fontSize: '13px', cursor: 'pointer',
+          color: '#444', fontSize: '13px', cursor: 'pointer',
           padding: 0, outline: 'none', fontFamily: 'inherit', lineHeight: 1,
         }}
         onMouseEnter={e => { e.currentTarget.style.color = '#777' }}
-        onMouseLeave={e => { e.currentTarget.style.color = '#3a3a3a' }}
+        onMouseLeave={e => { e.currentTarget.style.color = '#444' }}
       >×</button>
     </div>
   )
@@ -738,11 +804,11 @@ function NavBtn({ children, onClick, disabled, title }: {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'none', border: 'none', borderRadius: '3px',
         cursor: disabled ? 'default' : 'pointer',
-        color: disabled ? '#2a2a2a' : '#555',
+        color: disabled ? '#333' : '#666',
         fontSize: '16px', fontFamily: 'inherit', padding: 0, outline: 'none',
       }}
-      onMouseEnter={e => { if (!disabled) e.currentTarget.style.color = '#999' }}
-      onMouseLeave={e => { if (!disabled) e.currentTarget.style.color = '#555' }}
+      onMouseEnter={e => { if (!disabled) e.currentTarget.style.color = '#aaa' }}
+      onMouseLeave={e => { if (!disabled) e.currentTarget.style.color = '#666' }}
     >{children}</button>
   )
 }
@@ -781,9 +847,9 @@ function ViewPinBtn({ label, title, onClick, disabled }: { label: string; title:
       style={{
         height: '22px', flexShrink: 0, display: 'flex', alignItems: 'center',
         background: 'none',
-        border: `1px solid ${disabled ? '#1a1a1a' : hover ? '#333' : '#252525'}`,
+        border: `1px solid ${disabled ? '#1e1e1e' : hover ? '#333' : '#252525'}`,
         borderRadius: '3px',
-        color: disabled ? '#2e2e2e' : hover ? '#999' : '#555',
+        color: disabled ? '#333' : hover ? '#aaa' : '#666',
         fontSize: '11px', padding: '0 7px', cursor: disabled ? 'default' : 'pointer',
         fontFamily: 'inherit', letterSpacing: '0.04em', outline: 'none',
         transition: 'color 0.15s, border-color 0.15s',
@@ -837,7 +903,17 @@ const HOME_SECTIONS: ShortcutSection[] = [
 
 const HOME_SHORTCUTS: [string, string][] = HOME_SECTIONS.flatMap(s => s.shortcuts)
 
+function shuffleArray<T>(arr: T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
 function pinsKey(workspaceId: string) { return `proof-quickopen-pins:${workspaceId}` }
+function shuffleKey(workspaceId: string) { return `proof-quickopen-shuffle:${workspaceId}` }
 
 function loadPins(workspaceId: string): string[] {
   try { return JSON.parse(localStorage.getItem(pinsKey(workspaceId)) || '[]') } catch { return [] }
@@ -845,6 +921,35 @@ function loadPins(workspaceId: string): string[] {
 
 function savePins(workspaceId: string, pins: string[]) {
   try { localStorage.setItem(pinsKey(workspaceId), JSON.stringify(pins)) } catch {}
+}
+
+function loadShuffleOrder(workspaceId: string): [string, string][] {
+  try {
+    const saved = JSON.parse(localStorage.getItem(shuffleKey(workspaceId)) || '[]') as string[]
+    if (!saved.length) return []
+    const map = new Map(HOME_SHORTCUTS)
+    const seen = new Set<string>()
+    const ordered: [string, string][] = []
+    for (const k of saved) {
+      if (map.has(k)) { ordered.push([k, map.get(k)!]); seen.add(k) }
+    }
+    for (const [k, l] of HOME_SHORTCUTS) {
+      if (!seen.has(k)) ordered.push([k, l])
+    }
+    return ordered
+  } catch { return [] }
+}
+
+function saveShuffleOrder(workspaceId: string, order: [string, string][]) {
+  try { localStorage.setItem(shuffleKey(workspaceId), JSON.stringify(order.map(([k]) => k))) } catch {}
+}
+
+function getOrCreateShuffle(workspaceId: string): [string, string][] {
+  const saved = loadShuffleOrder(workspaceId)
+  if (saved.length) return saved
+  const fresh = shuffleArray(HOME_SHORTCUTS)
+  saveShuffleOrder(workspaceId, fresh)
+  return fresh
 }
 
 function QuickOpenStrip({ urlInput, navigate, workspaceId }: {
@@ -855,8 +960,14 @@ function QuickOpenStrip({ urlInput, navigate, workspaceId }: {
   const [pinnedKeys, setPinnedKeys] = useState<string[]>(() =>
     typeof window !== 'undefined' ? loadPins(workspaceId) : []
   )
+  const [shuffled, setShuffled] = useState<[string, string][]>(() =>
+    typeof window !== 'undefined' ? getOrCreateShuffle(workspaceId) : shuffleArray(HOME_SHORTCUTS)
+  )
 
-  useEffect(() => { setPinnedKeys(loadPins(workspaceId)) }, [workspaceId])
+  useEffect(() => {
+    setPinnedKeys(loadPins(workspaceId))
+    setShuffled(getOrCreateShuffle(workspaceId))
+  }, [workspaceId])
 
   function togglePin(key: string) {
     setPinnedKeys(prev => {
@@ -872,7 +983,7 @@ function QuickOpenStrip({ urlInput, navigate, workspaceId }: {
 
   // Filtering mode: flat list sorted pinned-first
   if (isFiltering) {
-    const matches = HOME_SHORTCUTS.filter(([k, l]) => k.includes(q) || l.toLowerCase().includes(q))
+    const matches = shuffled.filter(([k, l]) => k.includes(q) || l.toLowerCase().includes(q))
     if (matches.length === 0) return null
     const sorted = [...matches].sort(([ka], [kb]) =>
       (pinnedKeys.includes(kb) ? 1 : 0) - (pinnedKeys.includes(ka) ? 1 : 0)
@@ -887,31 +998,20 @@ function QuickOpenStrip({ urlInput, navigate, workspaceId }: {
     )
   }
 
-  const pinnedEntries = HOME_SHORTCUTS.filter(([k]) => pinnedKeys.includes(k))
+  const pinnedEntries = shuffled.filter(([k]) => pinnedKeys.includes(k))
+  const unpinned      = shuffled.filter(([k]) => !pinnedKeys.includes(k))
 
   return (
     <div style={stripStyle}>
-      {/* Pinned chips */}
       {pinnedEntries.map(([key, label]) => (
         <ShortcutChip key={key} label={label} pinned
           onClick={() => navigate(key)} onPin={() => togglePin(key)} />
       ))}
-
-      {/* Grouped sections */}
-      {HOME_SECTIONS.map((section, si) => {
-        const chips = section.shortcuts.filter(([k]) => !pinnedKeys.includes(k))
-        if (chips.length === 0) return null
-        const showDivider = si > 0 || pinnedEntries.length > 0
-        return (
-          <React.Fragment key={section.label}>
-            {showDivider && <SectionDivider />}
-            {chips.map(([key, label]) => (
-              <ShortcutChip key={key} label={label} pinned={false}
-                onClick={() => navigate(key)} onPin={() => togglePin(key)} />
-            ))}
-          </React.Fragment>
-        )
-      })}
+      {pinnedEntries.length > 0 && <SectionDivider />}
+      {unpinned.map(([key, label]) => (
+        <ShortcutChip key={key} label={label} pinned={false}
+          onClick={() => navigate(key)} onPin={() => togglePin(key)} />
+      ))}
     </div>
   )
 }
@@ -920,7 +1020,7 @@ const stripStyle = {
   height: '36px', flexShrink: 0,
   display: 'flex', alignItems: 'center', gap: '4px',
   padding: '0 8px',
-  background: '#060606', borderBottom: '1px solid #1a1a1a',
+  background: '#060606', borderBottom: '1px solid #1e1e1e',
   overflowX: 'auto' as const, overflowY: 'hidden' as const,
   scrollbarWidth: 'none' as const,
   WebkitAppRegion: 'no-drag' as const,
@@ -947,7 +1047,7 @@ function ShortcutChip({ label, pinned, onClick, onPin }: {
       style={{
         display: 'flex', alignItems: 'center', flexShrink: 0,
         height: '22px',
-        border: `1px solid ${hov ? '#2a2a2a' : pinned ? '#222' : '#1a1a1a'}`,
+        border: `1px solid ${hov ? '#2a2a2a' : pinned ? '#252525' : '#1e1e1e'}`,
         borderRadius: '3px',
         transition: 'border-color 0.1s',
       }}
@@ -957,7 +1057,7 @@ function ShortcutChip({ label, pinned, onClick, onPin }: {
         style={{
           height: '100%', padding: '0 8px 0 10px',
           background: 'none', border: 'none', outline: 'none',
-          color: hov ? '#888' : pinned ? '#555' : '#444',
+          color: hov ? '#999' : pinned ? '#777' : '#555',
           fontSize: '11px', letterSpacing: '0.02em',
           cursor: 'pointer', fontFamily: 'inherit',
           whiteSpace: 'nowrap',
@@ -989,6 +1089,204 @@ function ShortcutChip({ label, pinned, onClick, onPin }: {
   )
 }
 
+// ─── Workspace search panel ───────────────────────────────────────────────────
+
+function WorkspaceSearch({ visible, tabs, panelId, onClose, onNavigate, onSwitchTab }: {
+  visible: boolean
+  tabs: TabState[]
+  panelId: string
+  onClose: () => void
+  onNavigate: (url: string) => void
+  onSwitchTab: (id: string) => void
+}) {
+  const { sources, view1Page, view2Page, openDocInPane } = useApp()
+  const [query, setQuery] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (visible) requestAnimationFrame(() => inputRef.current?.focus())
+    else setQuery('')
+  }, [visible])
+
+  const q = query.trim().toLowerCase()
+
+  const isPage = (s: { fileType?: string; url?: string; raw: string }) =>
+    s.fileType === 'url' || !!s.url || /^https?:\/\//i.test(s.raw || '')
+
+  const docs  = sources.filter(s => !isPage(s))
+  const pages = sources.filter(s =>  isPage(s))
+
+  const matchSrc = (s: { label?: string; url?: string; raw: string }) => {
+    const label = (s.label || s.raw || '').toLowerCase()
+    const url   = (s.url   || s.raw || '').toLowerCase()
+    return label.includes(q) || url.includes(q)
+  }
+
+  const liveTabs = tabs.filter(t => t.url)
+
+  const matchedDocs  = (!q ? docs  : docs.filter(matchSrc)).slice(0, 8)
+  const matchedPages = (!q ? pages : pages.filter(matchSrc)).slice(0, 8)
+  const matchedTabs  = (!q ? liveTabs : liveTabs.filter(t =>
+    (t.title || '').toLowerCase().includes(q) || t.url.toLowerCase().includes(q)
+  )).slice(0, 6)
+
+  const viewItems: Array<{ pane: 1 | 2; url: string; title: string }> = []
+  if (view1Page) viewItems.push({ pane: 1, url: view1Page.url, title: view1Page.title || view1Page.url })
+  if (view2Page) viewItems.push({ pane: 2, url: view2Page.url, title: view2Page.title || view2Page.url })
+  const matchedViews = (!q ? viewItems : viewItems.filter(v =>
+    v.title.toLowerCase().includes(q) || v.url.toLowerCase().includes(q)
+  ))
+
+  const hasResults = matchedDocs.length > 0 || matchedPages.length > 0 ||
+    matchedTabs.length > 0 || matchedViews.length > 0
+  const emptyWorkspace = !q && sources.length === 0 && liveTabs.length === 0 && viewItems.length === 0
+
+  function act(fn: () => void) { fn(); onClose() }
+
+  return (
+    <div style={{
+      flex: 1, minHeight: 0, overflow: 'hidden',
+      display: 'flex', flexDirection: 'column',
+      borderBottom: '1px solid #1e1e1e', background: '#060606',
+    }}>
+      {/* Input row */}
+      <div style={{
+        height: '36px', flexShrink: 0,
+        display: 'flex', alignItems: 'center', gap: '8px',
+        padding: '0 10px', borderBottom: '1px solid #1e1e1e',
+        WebkitAppRegion: 'no-drag',
+      } as React.CSSProperties}>
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="#555" strokeWidth="1.5" strokeLinecap="round">
+          <circle cx="5" cy="5" r="3.5" /><line x1="7.5" y1="7.5" x2="11" y2="11" />
+        </svg>
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Escape') onClose() }}
+          placeholder="Search this workspace…"
+          spellCheck={false}
+          style={{
+            flex: 1, background: 'none', border: 'none', outline: 'none',
+            fontSize: '12px', color: '#c2c2c2', fontFamily: 'inherit', letterSpacing: '0.02em',
+          }}
+        />
+        <button
+          onClick={onClose}
+          style={{
+            background: 'none', border: 'none', padding: '0 2px',
+            color: '#333', cursor: 'pointer', fontSize: '16px',
+            lineHeight: 1, outline: 'none', fontFamily: 'inherit',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#777')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#333')}
+        >×</button>
+      </div>
+
+      {/* Results */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollbarWidth: 'none' } as React.CSSProperties}>
+
+        {/* Empty workspace */}
+        {emptyWorkspace && (
+          <div style={{ padding: '28px 16px', textAlign: 'center', fontSize: '11px', color: '#555', letterSpacing: '0.04em' }}>
+            Nothing in this workspace yet.
+          </div>
+        )}
+
+        {/* No matches */}
+        {!hasResults && q && (
+          <div style={{ padding: '28px 16px', textAlign: 'center', fontSize: '11px', color: '#555', letterSpacing: '0.04em' }}>
+            No matches.
+          </div>
+        )}
+
+        {/* DOCUMENTS */}
+        {matchedDocs.length > 0 && (
+          <>
+            <SearchSectionLabel>Documents</SearchSectionLabel>
+            {matchedDocs.map(s => (
+              <SearchResultRow key={s.id} label={s.label || s.raw}
+                onClick={() => act(() => openDocInPane(1, s.id))} />
+            ))}
+          </>
+        )}
+
+        {/* PAGES */}
+        {matchedPages.length > 0 && (
+          <>
+            <SearchSectionLabel>Pages</SearchSectionLabel>
+            {matchedPages.map(s => (
+              <SearchResultRow key={s.id} label={s.label || s.raw} sub={s.url || s.raw}
+                onClick={() => act(() => onNavigate(s.url || s.raw))} />
+            ))}
+          </>
+        )}
+
+        {/* WEB TABS */}
+        {matchedTabs.length > 0 && (
+          <>
+            <SearchSectionLabel>Web Tabs</SearchSectionLabel>
+            {matchedTabs.map(t => (
+              <SearchResultRow key={t.id} label={t.title || t.url} sub={t.url}
+                onClick={() => act(() => onSwitchTab(t.id))} />
+            ))}
+          </>
+        )}
+
+        {/* VIEWS */}
+        {matchedViews.length > 0 && (
+          <>
+            <SearchSectionLabel>Views</SearchSectionLabel>
+            {matchedViews.map(v => (
+              <SearchResultRow key={v.pane} label={v.title} sub={`View ${v.pane} — ${v.url}`}
+                onClick={() => act(() => onNavigate(v.url))} />
+            ))}
+          </>
+        )}
+
+      </div>
+    </div>
+  )
+}
+
+function SearchSectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{
+      fontSize: '10px', color: '#555', letterSpacing: '0.08em',
+      textTransform: 'uppercase', padding: '8px 10px 3px', userSelect: 'none',
+    }}>{children}</div>
+  )
+}
+
+function SearchResultRow({ label, sub, onClick }: { label: string; sub?: string; onClick: () => void }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'block', width: '100%', textAlign: 'left',
+        background: hov ? '#0d0d0d' : 'none', border: 'none', outline: 'none',
+        padding: '5px 10px', cursor: 'pointer', fontFamily: 'inherit',
+        transition: 'background 0.1s',
+      }}
+    >
+      <div style={{
+        fontSize: '12px', color: hov ? '#ccc' : '#888',
+        letterSpacing: '0.01em', transition: 'color 0.1s',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }}>{label}</div>
+      {sub && sub !== label && (
+        <div style={{
+          fontSize: '10px', color: '#555', letterSpacing: '0.02em', marginTop: '1px',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{sub}</div>
+      )}
+    </button>
+  )
+}
+
 // ─── Fallback button ──────────────────────────────────────────────────────────
 
 function FallbackBtn({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
@@ -1003,7 +1301,7 @@ function FallbackBtn({ children, onClick }: { children: React.ReactNode; onClick
         background: 'none',
         border: `1px solid ${hov ? '#333' : '#252525'}`,
         borderRadius: '3px',
-        color: hov ? '#ccc' : '#666',
+        color: hov ? '#ccc' : '#777',
         fontSize: '11px', letterSpacing: '0.03em',
         cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
         transition: 'color 0.12s, border-color 0.12s',

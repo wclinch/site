@@ -79,7 +79,7 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
         onClick={e => e.stopPropagation()}
         style={{
           width: '440px', maxWidth: 'calc(100vw - 48px)',
-          background: '#080808', border: '1px solid #1e1e1e',
+          background: '#111', border: '1px solid #222',
           borderRadius: '6px', boxShadow: '0 24px 60px rgba(0,0,0,0.7)',
           padding: '32px 28px 28px', fontFamily: 'inherit',
         }}
@@ -92,19 +92,19 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
           <h2 style={{ fontSize: '18px', fontWeight: 500, color: '#bbb', margin: 0, letterSpacing: '-0.01em' }}>
             Unlock unlimited workspaces.
           </h2>
-          <span style={{ fontSize: '13px', color: '#444', letterSpacing: '0.01em' }}>$8.99 / mo</span>
+          <span style={{ fontSize: '13px', color: '#555', letterSpacing: '0.01em' }}>$8.99 / mo</span>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '26px' }}>
           {PRO_FEATURES.map(f => (
             <div key={f} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '11px', color: '#333' }}>—</span>
-              <span style={{ fontSize: '13px', color: '#666' }}>{f}</span>
+              <span style={{ fontSize: '11px', color: '#444' }}>—</span>
+              <span style={{ fontSize: '13px', color: '#777' }}>{f}</span>
             </div>
           ))}
         </div>
 
-        <div style={{ height: '1px', background: '#111', marginBottom: '22px' }} />
+        <div style={{ height: '1px', background: '#1e1e1e', marginBottom: '22px' }} />
 
         {/* Checkout button — always shown when not Pro */}
         {!isPro && (
@@ -133,11 +133,11 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
             onClick={() => setShowSignIn(true)}
             style={{
               background: 'none', border: 'none', padding: 0,
-              fontSize: '12px', color: '#444', fontFamily: 'inherit',
+              fontSize: '12px', color: '#555', fontFamily: 'inherit',
               cursor: 'pointer', transition: 'color 0.15s',
             }}
             onMouseEnter={e => (e.currentTarget.style.color = '#888')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#444')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#555')}
           >
             Already subscribed? Sign in →
           </button>
@@ -149,7 +149,7 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
             {!user && (
               <>
                 <div style={{
-                  background: '#0d0d0d', border: `1px solid ${error ? '#3a1f1f' : '#1a1a1a'}`,
+                  background: '#0d0d0d', border: `1px solid ${error ? '#3a1f1f' : '#1e1e1e'}`,
                   borderRadius: '4px', padding: '11px 14px', marginBottom: '8px',
                 }}>
                   <input
@@ -162,7 +162,7 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
                   />
                 </div>
                 <div style={{
-                  background: '#0d0d0d', border: `1px solid ${error ? '#3a1f1f' : '#1a1a1a'}`,
+                  background: '#0d0d0d', border: `1px solid ${error ? '#3a1f1f' : '#1e1e1e'}`,
                   borderRadius: '4px', padding: '11px 14px', marginBottom: error ? '8px' : '12px',
                 }}>
                   <input
@@ -220,12 +220,12 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
           onClick={onClose}
           style={{
             marginTop: '28px', background: 'none', border: 'none', padding: 0,
-            fontSize: '11px', color: '#333', letterSpacing: '0.06em',
+            fontSize: '11px', color: '#444', letterSpacing: '0.06em',
             cursor: 'pointer', fontFamily: 'inherit', transition: 'color 0.15s',
             display: 'block',
           }}
           onMouseEnter={e => (e.currentTarget.style.color = '#888')}
-          onMouseLeave={e => (e.currentTarget.style.color = '#333')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#444')}
         >← Back</button>
       </div>
     </div>

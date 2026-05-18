@@ -76,7 +76,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
     <>
       {/* ── Sources box ── */}
       <div style={{
-        flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        flex: '0 1 42%', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden',
         border: '1px solid #1e1e1e', borderRadius: '4px',
       }}>
         <SectionHeader title="Documents" action={
@@ -86,11 +86,11 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
               title="Add Document"
               style={{
                 background: 'none', border: 'none', padding: '4px 2px',
-                cursor: 'pointer', color: '#444', lineHeight: 0,
+                cursor: 'pointer', color: '#555', lineHeight: 0,
                 display: 'flex', alignItems: 'center',
               }}
               onMouseEnter={e => { e.currentTarget.style.color = '#999' }}
-              onMouseLeave={e => { e.currentTarget.style.color = '#444' }}
+              onMouseLeave={e => { e.currentTarget.style.color = '#555' }}
             >
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                 <line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" />
@@ -177,10 +177,10 @@ function SectionHeader({ title, action }: { title: string; action?: React.ReactN
       height: '28px', flexShrink: 0,
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       padding: '0 10px 0 14px',
-      borderBottom: '1px solid #1a1a1a',
+      borderBottom: '1px solid #1e1e1e',
       userSelect: 'none',
     }}>
-      <span style={{ fontSize: '10px', color: '#666', letterSpacing: '0.05em' }}>
+      <span style={{ fontSize: '10px', color: '#777', letterSpacing: '0.05em' }}>
         {title}
       </span>
       {action}
@@ -238,8 +238,8 @@ function StackRow({
         display: 'flex', alignItems: 'center', gap: '6px',
         padding: '8px 10px 8px 14px',
         cursor: renaming ? 'text' : 'pointer', userSelect: 'none',
-        background: isActive ? '#131313' : hov ? '#0d0d0d' : 'transparent',
-        borderLeft: isActive ? '2px solid #383838' : '2px solid transparent',
+        background: isActive ? '#141414' : hov ? '#0f0f0f' : 'transparent',
+        borderLeft: isActive ? '2px solid #2a2a2a' : '2px solid transparent',
         transition: 'background 0.1s, border-color 0.1s',
       }}
     >
@@ -259,7 +259,7 @@ function StackRow({
           style={{
             flex: 1, minWidth: 0,
             background: 'transparent', border: 'none', outline: 'none',
-            fontSize: '12px', color: '#bbb', fontFamily: 'inherit',
+            fontSize: '12px', color: '#c2c2c2', fontFamily: 'inherit',
             padding: 0, letterSpacing: '0.01em',
           }}
         />
@@ -269,7 +269,7 @@ function StackRow({
           style={{
             flex: 1, minWidth: 0,
             fontSize: '12px', letterSpacing: '0.01em',
-            color: '#bbb',
+            color: '#c2c2c2',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}
         >
@@ -298,7 +298,7 @@ function StackRow({
       {/* View pin buttons — Pages only */}
       {pinButtons && !renaming && (
         <>
-          <PinBtn label="1" title="Open in View 1" active={!!pinButtons.active1} onClick={e => { e.stopPropagation(); pinButtons.onPin1() }} />
+          <PinBtn label="1" title="Open in View" active={!!pinButtons.active1} onClick={e => { e.stopPropagation(); pinButtons.onPin1() }} />
           <PinBtn label="2" title="Open in View 2" active={!!pinButtons.active2} onClick={e => { e.stopPropagation(); pinButtons.onPin2() }} />
           {pinButtons.onWeb && (
             <PinBtn
@@ -352,7 +352,7 @@ function TypeBadge({ kind }: { kind: 'IMG' | 'PDF' }) {
     <span style={{
       flexShrink: 0,
       fontSize: '8px', letterSpacing: '0.08em',
-      color: '#3a3a3a',
+      color: '#444',
       border: '1px solid #1e1e1e', borderRadius: '2px',
       padding: '1px 4px',
       fontVariantNumeric: 'tabular-nums',

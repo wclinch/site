@@ -3,45 +3,40 @@
 html { color-scheme: dark; }
 
 :root {
-  /* ── Backgrounds ─────────────────────────────── */
-  --bg-app:         #080808;  /* main app / panel backgrounds */
-  --bg-tab-bar:     #050505;  /* web tab bar (darkest surface) */
-  --bg-toolbar:     #060606;  /* url bar / toolbar rows */
-  --bg-elevated:    #0f0f0f;  /* raised modals (storage confirm) */
-  --bg-modal:       #080808;  /* main modals (upgrade, account, onboarding) */
-  --bg-input:       #0d0d0d;  /* text input fields */
-  --bg-input-url:   #111;     /* url bar input (slightly lighter) */
-  --bg-hover:       #0d0d0d;  /* row hover state */
-  --bg-active:      #131313;  /* selected / active row */
-  --bg-tab-active:  #111;     /* active web / workspace tab */
-  --bg-button:      #141414;  /* filled button background */
+  /* Backgrounds */
+  --bg-app:         #080808;
+  --bg-panel:       #0c0c0c;
+  --bg-elevated:    #111111;
+  --bg-input:       #0e0e0e;
+  --bg-hover:       #0f0f0f;
+  --bg-active:      #151515;
+  --bg-tab-bar:     #050505;
+  --bg-toolbar:     #080808;
 
-  /* ── Borders ─────────────────────────────────── */
-  --border-nav:      #161616;  /* top nav bottom edge */
-  --border-panel:    #1e1e1e;  /* outer panel borders */
-  --border-inner:    #1a1a1a;  /* internal section dividers */
-  --border-control:  #252525;  /* button / chip / input borders */
-  --border-hover:    #333;     /* control hover border */
-  --border-active:   #2a2a2a;  /* active tab / modal borders */
+  /* Borders */
+  --border:         #1e1e1e;
+  --border-strong:  #2a2a2a;
 
-  /* ── Text ────────────────────────────────────── */
-  --text-primary:     #bbb;    /* headings, primary content */
-  --text-secondary:   #777;    /* body text, descriptions */
-  --text-muted:       #555;    /* section labels, quiet ui */
-  --text-dim:         #3a3a3a; /* very subdued (tier label, dots) */
-  --text-disabled:    #2e2e2e; /* disabled controls */
-  --text-placeholder: #444;    /* input placeholders, empty row text */
+  /* Text */
+  --text-primary:   #c2c2c2;
+  --text-secondary: #888888;
+  --text-muted:     #666666;
+  --text-dim:       #444444;
+  --text-disabled:  #333333;
 
-  /* ── Status ──────────────────────────────────── */
-  --color-danger:        #a55;     /* error / warning text */
-  --color-danger-bold:   #c44;     /* destructive action text */
-  --color-danger-border: #2a1515;  /* destructive button border */
-  --color-pro:           #5c9e6e;  /* pro tier indicator */
+  /* Status */
+  --color-green:    #5c9e6e;
+  --color-danger:   #a55555;
+  --color-danger-bold: #cc4444;
+  --color-danger-border: #2a1515;
+
+  /* Elevation */
+  --shadow-modal:   0 16px 48px rgba(0,0,0,0.65);
 }
 
 body {
   background: #080808;
-  color: #999;
+  color: #888;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -52,9 +47,9 @@ button, nav, label { user-select: none; }
 /* Scrollbars */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: #252525; border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
-* { scrollbar-width: thin; scrollbar-color: #2a2a2a transparent; }
+* { scrollbar-width: thin; scrollbar-color: #252525 transparent; }
 
 ::selection {
   background: #333;
