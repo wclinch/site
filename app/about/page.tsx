@@ -61,7 +61,7 @@ export default function About() {
               { keys: ['Click document'],    desc: 'Open in View 1 or View 2' },
               { keys: ['Drag document'],     desc: 'Drop onto View 1 or View 2 to open in that view' },
               { keys: ['× on document row'], desc: 'Remove from Documents' },
-              { keys: ['Click page'],        desc: 'Open in Web' },
+              { keys: ['Click page'],        desc: 'Open in View' },
               { keys: ['× on page row'],     desc: 'Remove from Pages' },
               { keys: ['URL bar'],           desc: 'Navigate or search in Web' },
               { keys: ['Save'],              desc: 'Save the current Web page to Pages' },

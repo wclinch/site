@@ -2,6 +2,43 @@
 
 html { color-scheme: dark; }
 
+:root {
+  /* ── Backgrounds ─────────────────────────────── */
+  --bg-app:         #080808;  /* main app / panel backgrounds */
+  --bg-tab-bar:     #050505;  /* web tab bar (darkest surface) */
+  --bg-toolbar:     #060606;  /* url bar / toolbar rows */
+  --bg-elevated:    #0f0f0f;  /* raised modals (storage confirm) */
+  --bg-modal:       #080808;  /* main modals (upgrade, account, onboarding) */
+  --bg-input:       #0d0d0d;  /* text input fields */
+  --bg-input-url:   #111;     /* url bar input (slightly lighter) */
+  --bg-hover:       #0d0d0d;  /* row hover state */
+  --bg-active:      #131313;  /* selected / active row */
+  --bg-tab-active:  #111;     /* active web / workspace tab */
+  --bg-button:      #141414;  /* filled button background */
+
+  /* ── Borders ─────────────────────────────────── */
+  --border-nav:      #161616;  /* top nav bottom edge */
+  --border-panel:    #1e1e1e;  /* outer panel borders */
+  --border-inner:    #1a1a1a;  /* internal section dividers */
+  --border-control:  #252525;  /* button / chip / input borders */
+  --border-hover:    #333;     /* control hover border */
+  --border-active:   #2a2a2a;  /* active tab / modal borders */
+
+  /* ── Text ────────────────────────────────────── */
+  --text-primary:     #bbb;    /* headings, primary content */
+  --text-secondary:   #777;    /* body text, descriptions */
+  --text-muted:       #555;    /* section labels, quiet ui */
+  --text-dim:         #3a3a3a; /* very subdued (tier label, dots) */
+  --text-disabled:    #2e2e2e; /* disabled controls */
+  --text-placeholder: #444;    /* input placeholders, empty row text */
+
+  /* ── Status ──────────────────────────────────── */
+  --color-danger:        #a55;     /* error / warning text */
+  --color-danger-bold:   #c44;     /* destructive action text */
+  --color-danger-border: #2a1515;  /* destructive button border */
+  --color-pro:           #5c9e6e;  /* pro tier indicator */
+}
+
 body {
   background: #080808;
   color: #999;
@@ -9,15 +46,6 @@ body {
 }
 
 input, button, textarea, select { font-family: inherit; }
-
-/* Source panel — force placeholder to match span text, override Chrome dark-mode tinting */
-.sp-input::placeholder { color: #555 !important; opacity: 1 !important; }
-.sp-input { color: #888 !important; }
-
-/* Synthesis panel placeholders */
-.draft-title::placeholder { color: #555; opacity: 1; }
-.draft-body::placeholder  { color: #555; opacity: 1; }
-.prose-area::placeholder  { color: #555; opacity: 1; }
 
 button, nav, label { user-select: none; }
 
@@ -53,21 +81,6 @@ button, nav, label { user-select: none; }
 }
 .nav-link:hover { color: #999; }
 
-.cta-link {
-  display: inline-block;
-  background: #0f0f0f;
-  border: 1px solid #333;
-  border-radius: 4px;
-  padding: 8px 14px;
-  font-size: 12px;
-  color: #bbb;
-  text-decoration: none;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  transition: border-color 0.15s, color 0.15s;
-}
-.cta-link:hover { border-color: #555; color: #ddd; }
-
 .footer-link {
   font-size: 11px;
   color: #666;
@@ -77,16 +90,6 @@ button, nav, label { user-select: none; }
   transition: color 0.15s;
 }
 .footer-link:hover { color: #999; }
-
-.text-cta {
-  font-size: 12px;
-  color: #666;
-  letter-spacing: 0.08em;
-  text-decoration: none;
-  text-transform: uppercase;
-  transition: color 0.15s;
-}
-.text-cta:hover { color: #999; }
 
 .inline-link {
   color: #777;
@@ -102,14 +105,11 @@ button, nav, label { user-select: none; }
 .rpv-search__highlight { background: rgba(100,180,255,0.35) !important; }
 .rpv-search__highlight--current { background: rgba(100,180,255,0.65) !important; }
 
-/* Research tab strip — hide scrollbar, keep scrollability */
+/* Web tab strip — hide scrollbar, keep scrollability */
 .tab-strip::-webkit-scrollbar { display: none; }
 
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.25; }
-}
-.dot-loading {
-  animation: pulse-dot 1.2s ease-in-out infinite;
 }
 

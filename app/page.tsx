@@ -86,7 +86,7 @@ export default function Home() {
         {/* Pro */}
         <div style={SECTION}>
           <span style={LABEL}>Pro</span>
-          <p style={BODY}>Unlock unlimited workspaces. Requires an account and active subscription.</p>
+          <p style={BODY}>Unlock unlimited workspaces. $8.99 / month. Requires an account and active subscription.</p>
           {(['Unlimited workspaces', 'Unlimited Documents', '5 GB uploaded Documents', 'Unlimited Pages'] as const).map(f => (
             <p key={f} style={NOTE}>{f}</p>
           ))}

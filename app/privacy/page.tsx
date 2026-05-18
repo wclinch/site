@@ -15,7 +15,7 @@ export default function Privacy() {
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Summary</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Site is a macOS desktop beta. Uploaded documents are stored locally on your device. Site does not sell user data.
+            Site is a macOS desktop app. Uploaded documents are stored locally on your device. Site does not sell user data.
           </p>
         </div>
 
@@ -48,9 +48,9 @@ export default function Privacy() {
         </div>
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Beta</span>
+          <span style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Updates</span>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Beta behavior may change as the product improves.
+            Site is updated periodically. Behavior may change as the product improves.
           </p>
         </div>
 

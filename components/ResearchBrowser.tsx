@@ -88,7 +88,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
   const [activeTabId, setActiveTabId] = useState<string>('tab-init')
   const [urlInput, setUrlInput]       = useState('')
   const [urlFocused, setUrlFocused]   = useState(false)
-  const [saveStatus, setSaveStatus]   = useState<null | 'saved' | 'duplicate'>(null)
+  const [actionFeedback, setActionFeedback] = useState<null | 'view1' | 'view2' | 'saved' | 'duplicate'>(null)
   const [homeMode, setHomeMode]       = useState(true)
 
   const viewportRef    = useRef<HTMLDivElement>(null)
@@ -127,7 +127,15 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
         x: 0, y: 0, width: 0, height: 0,
         innerWidth: window.innerWidth, innerHeight: window.innerHeight,
       })
-      requestAnimationFrame(() => urlInputRef.current?.focus())
+      requestAnimationFrame(() => {
+        // Don't steal focus from another active input (workspace rename, modal field, etc.)
+        const el = document.activeElement as HTMLElement | null
+        if (el && el !== document.body && el !== urlInputRef.current) {
+          const tag = el.tagName
+          if (tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable) return
+        }
+        urlInputRef.current?.focus()
+      })
     } else {
       window.dispatchEvent(new Event('resize'))
     }
@@ -308,10 +316,13 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
       }
       const r = viewportRef.current?.getBoundingClientRect()
       if (!r) return
-      const x = Math.round(r.left) + 1
-      const y = Math.round(r.top)
-      const w = Math.max(0, Math.round(r.width)  - 2)
-      const h = Math.max(0, Math.round(r.height) - 1)
+      // floor on start + ceil on end so the native view fully covers the viewport
+      // even when the bounding rect lands on a subpixel boundary — otherwise
+      // round() can leave a hairline gap on whichever side rounded up.
+      const x = Math.floor(r.left)
+      const y = Math.floor(r.top)
+      const w = Math.max(0, Math.ceil(r.left + r.width)  - x)
+      const h = Math.max(0, Math.ceil(r.top  + r.height) - y)
       if (w <= 0 || h <= 0) {
         if (lastKey !== 'zero') {
           lastKey = 'zero'
@@ -374,10 +385,16 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
     navigateUrl(url)
   }
 
-  function flash(status: NonNullable<typeof saveStatus>) {
-    setSaveStatus(status)
+  function flash(status: NonNullable<typeof actionFeedback>) {
+    setActionFeedback(status)
     if (savedTimerRef.current) clearTimeout(savedTimerRef.current)
-    savedTimerRef.current = setTimeout(() => setSaveStatus(null), 2000)
+    savedTimerRef.current = setTimeout(() => setActionFeedback(null), 2000)
+  }
+
+  function handlePin(view: 1 | 2) {
+    if (!active?.url) return
+    pinUrlToView(view, active.url, active.title || active.url)
+    flash(view === 1 ? 'view1' : 'view2')
   }
 
   function openExternal(url: string) {
@@ -447,7 +464,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
             <TabBarBtn
               key={String(isFocused)}
               onClick={onFocusToggle}
-              title={isFocused ? 'Exit focus' : 'Focus Web'}
+              title={isFocused ? 'Exit Focus' : 'Focus Web'}
             >
               {isFocused ? <FocusCollapseIcon /> : <FocusExpandIcon />}
             </TabBarBtn>
@@ -475,35 +492,49 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
             onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); navigate(urlInput) } }}
             placeholder="Search or enter URL"
             style={{
-              flex: 1, height: '22px', background: '#111', border: '1px solid #222',
+              flex: 1, height: '22px', background: '#111', border: '1px solid #252525',
               borderRadius: '3px', color: '#bbb', fontSize: '11px', padding: '0 8px',
               outline: 'none', fontFamily: 'inherit', letterSpacing: '0.02em',
             }}
             onFocusCapture={e => { e.currentTarget.style.borderColor = '#444' }}
-            onBlurCapture={e  => { e.currentTarget.style.borderColor = '#222' }}
+            onBlurCapture={e  => { e.currentTarget.style.borderColor = '#252525' }}
           />
-          {active?.url && (
-            <>
-              <ViewPinBtn label="1" title="Open in View 1" onClick={() => pinUrlToView(1, active.url, active.title || active.url)} />
-              <ViewPinBtn label="2" title="Open in View 2" onClick={() => pinUrlToView(2, active.url, active.title || active.url)} />
-              <button
-                onClick={savePage}
-                title="Save to Pages"
-                style={{
-                  height: '22px', flexShrink: 0, display: 'flex', alignItems: 'center',
-                  background: 'none', border: '1px solid #252525', borderRadius: '3px',
-                  color: '#555', fontSize: '11px', padding: '0 7px', cursor: 'pointer',
-                  fontFamily: 'inherit', letterSpacing: '0.04em', outline: 'none',
-                  minWidth: '54px', justifyContent: 'center',
-                  transition: 'color 0.15s, border-color 0.15s',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.color = '#999' }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = '#252525'; e.currentTarget.style.color = '#555' }}
-              >
-                {saveStatus === 'saved' ? 'Saved' : saveStatus === 'duplicate' ? 'Saved' : 'Save'}
-              </button>
-            </>
-          )}
+          {(() => {
+            const hasUrl = !!active?.url
+            return (
+              <>
+                <ViewPinBtn
+                  label={actionFeedback === 'view1' ? 'Opened in View' : '1'}
+                  title={hasUrl ? 'Open in View' : 'Open a page first'}
+                  onClick={() => handlePin(1)}
+                  disabled={!hasUrl}
+                />
+                <ViewPinBtn
+                  label={actionFeedback === 'view2' ? 'Opened in View 2' : '2'}
+                  title={hasUrl ? 'Open in View 2' : 'Open a page first'}
+                  onClick={() => handlePin(2)}
+                  disabled={!hasUrl}
+                />
+                <button
+                  onClick={savePage}
+                  title={hasUrl ? 'Save to Pages' : 'Open a page first'}
+                  disabled={!hasUrl}
+                  style={{
+                    height: '22px', flexShrink: 0, display: 'flex', alignItems: 'center',
+                    background: 'none', border: `1px solid ${hasUrl ? '#252525' : '#1a1a1a'}`, borderRadius: '3px',
+                    color: hasUrl ? '#555' : '#2e2e2e', fontSize: '11px', padding: '0 7px',
+                    cursor: hasUrl ? 'pointer' : 'default',
+                    fontFamily: 'inherit', letterSpacing: '0.04em', outline: 'none',
+                    transition: 'color 0.15s, border-color 0.15s',
+                  }}
+                  onMouseEnter={e => { if (hasUrl) { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.color = '#999' } }}
+                  onMouseLeave={e => { if (hasUrl) { e.currentTarget.style.borderColor = '#252525'; e.currentTarget.style.color = '#555' } }}
+                >
+                  {actionFeedback === 'saved' ? 'Saved to Pages' : actionFeedback === 'duplicate' ? 'Already saved' : 'Save'}
+                </button>
+              </>
+            )
+          })()}
         </div>
 
         {/* Quick open strip — horizontal chips, only in home mode */}
@@ -577,16 +608,23 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
           {homeMode && (
             <div style={{
               position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-              justifyContent: 'center', flexDirection: 'column', gap: '6px',
+              justifyContent: 'center', flexDirection: 'column', gap: '5px',
               userSelect: 'none', pointerEvents: 'none',
             }}>
+              <span style={{ fontSize: '12px', color: '#2e2e2e', letterSpacing: '0.03em' }}>
+                Browse for this workspace.
+              </span>
+              <span style={{ fontSize: '11px', color: '#222', letterSpacing: '0.025em' }}>
+                Use 1, 2, or Save to keep what matters.
+              </span>
+              <div style={{ height: '10px' }} />
               <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
-                <span style={{ fontSize: '10px', color: '#222', fontFamily: 'monospace', letterSpacing: '0.02em' }}>domain.com</span>
+                <span style={{ fontSize: '10px', color: '#1e1e1e', fontFamily: 'monospace', letterSpacing: '0.02em' }}>domain.com</span>
                 <span style={{ fontSize: '10px', color: '#1a1a1a', letterSpacing: '0.02em' }}>opens directly</span>
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
-                <span style={{ fontSize: '10px', color: '#222', fontFamily: 'monospace', letterSpacing: '0.02em' }}>? query</span>
-                <span style={{ fontSize: '10px', color: '#1a1a1a', letterSpacing: '0.02em' }}>forces Google search</span>
+                <span style={{ fontSize: '10px', color: '#1e1e1e', fontFamily: 'monospace', letterSpacing: '0.02em' }}>? query</span>
+                <span style={{ fontSize: '10px', color: '#1a1a1a', letterSpacing: '0.02em' }}>searches Google</span>
               </div>
             </div>
           )}
@@ -728,21 +766,22 @@ function FocusCollapseIcon() {
 
 // ─── View pin button ─────────────────────────────────────────────────────────
 
-function ViewPinBtn({ label, title, onClick }: { label: string; title: string; onClick: () => void }) {
+function ViewPinBtn({ label, title, onClick, disabled }: { label: string; title: string; onClick: () => void; disabled?: boolean }) {
   const [hover, setHover] = useState(false)
   return (
     <button
       onClick={onClick}
       title={title}
-      onMouseEnter={() => setHover(true)}
+      disabled={disabled}
+      onMouseEnter={() => { if (!disabled) setHover(true) }}
       onMouseLeave={() => setHover(false)}
       style={{
         height: '22px', flexShrink: 0, display: 'flex', alignItems: 'center',
         background: 'none',
-        border: `1px solid ${hover ? '#333' : '#252525'}`,
+        border: `1px solid ${disabled ? '#1a1a1a' : hover ? '#333' : '#252525'}`,
         borderRadius: '3px',
-        color: hover ? '#999' : '#555',
-        fontSize: '11px', padding: '0 7px', cursor: 'pointer',
+        color: disabled ? '#2e2e2e' : hover ? '#999' : '#555',
+        fontSize: '11px', padding: '0 7px', cursor: disabled ? 'default' : 'pointer',
         fontFamily: 'inherit', letterSpacing: '0.04em', outline: 'none',
         transition: 'color 0.15s, border-color 0.15s',
       }}
@@ -766,7 +805,7 @@ function ShortcutChip({ label, onClick }: { label: string; onClick: () => void }
       style={{
         height: '22px', padding: '0 10px', flexShrink: 0,
         background: 'none',
-        border: `1px solid ${hov ? '#2e2e2e' : '#1a1a1a'}`,
+        border: `1px solid ${hov ? '#2a2a2a' : '#1a1a1a'}`,
         borderRadius: '3px',
         color: hov ? '#777' : '#444',
         fontSize: '11px', letterSpacing: '0.02em',
@@ -790,7 +829,7 @@ function FallbackBtn({ children, onClick }: { children: React.ReactNode; onClick
       style={{
         height: '26px', padding: '0 12px', flexShrink: 0,
         background: 'none',
-        border: `1px solid ${hov ? '#333' : '#222'}`,
+        border: `1px solid ${hov ? '#333' : '#252525'}`,
         borderRadius: '3px',
         color: hov ? '#ccc' : '#666',
         fontSize: '11px', letterSpacing: '0.03em',

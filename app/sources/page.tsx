@@ -23,10 +23,10 @@ export default function Sources() {
             <span style={{ color: '#999' }}>Documents</span> — Uploaded files: PDFs and images. They appear in the Documents panel on the left. Open them in View 1 or View 2 in the center.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Pages</span> — Web pages saved from the Web panel. They appear in the Pages section on the left. Pin them to View 1 or View 2, or open them in Web.
+            <span style={{ color: '#999' }}>Pages</span> — Web pages saved from the Web panel. They appear in the Pages section on the left. Open them in View 1 or View 2 using the 1 or 2 buttons.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>View 1 / View 2</span> — The two panes in the center column. Each holds one Document or Page independently. Click a Document to open it in View 1, or toggle the arrow to prefer View 2.
+            <span style={{ color: '#999' }}>View 1 / View 2</span> — The two panes in the center column. Each holds one Document or Page independently. Click a Document to open it, or click 1 or 2 to choose which View.
           </p>
           <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
             <span style={{ color: '#999' }}>Web</span> — Browser tabs on the right. Navigate URLs, search, and save pages to Pages using the Save button in the URL bar.

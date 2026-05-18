@@ -62,8 +62,6 @@ interface AppState {
   signOut:           () => void
   refreshEntitlement: () => Promise<void>
   openBilling:       () => Promise<void>
-  activatePro:       () => void   // legacy license key path
-  deactivatePro:     () => void
   // setters
   setSelectedId: (id: string | null) => void
   setSelectedId2: (id: string | null) => void
@@ -375,7 +373,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   function signOut() {
     clearStoredSession()
     setUser(null)
-    setIsPro(checkIsPro())   // re-read: falls back to legacy license if present
+    setIsPro(checkIsPro())
   }
 
   async function refreshEntitlementFn() {
@@ -388,17 +386,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!user?.customerId) return
     const url = await getPortalUrl(user.customerId).catch(() => null)
     if (url) window.open(url, '_blank', 'noopener,noreferrer')
-  }
-
-  // Legacy license key path (existing beta users)
-  function activatePro() {
-    storeEntitlementCache(true)
-    setIsPro(true)
-  }
-
-  function deactivatePro() {
-    storeEntitlementCache(false)
-    setIsPro(false)
   }
 
   function needUpgrade(msg: string) {
@@ -863,17 +850,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Documents (PDF/note/image) load into the center Source pane.
     if (src.fileType === 'url') {
       const url = src.url ?? src.raw
-      const dev = process.env.NODE_ENV === 'development'
-      if (dev) console.log('[Stack site click]', { id, label: src.label ?? src.raw })
-      if (dev) console.log('[Stack site click] resolved URL →', url)
       if (typeof window === 'undefined') return
       if (window.electronAPI?.research?.navigate) {
-        // Hand off to RightPanel so the single navigateUrl pipeline
-        // runs: it pre-positions the WebContentsView before sending
-        // the navigate IPC, which is what avoids the "loads only on
-        // Ctrl-R" race. Don't call research.navigate directly here —
-        // that would send loadURL first, defeating the bounds order.
-        if (dev) console.log('[Stack site click] dispatch proof:browser-navigate')
+        // Hand off to RightPanel so the single navigateUrl pipeline runs:
+        // pre-positions the WebContentsView before the navigate IPC, avoiding
+        // the "loads only on Ctrl-R" race from calling research.navigate directly.
         window.dispatchEvent(new CustomEvent('proof:browser-navigate', { detail: url }))
         return
       }
@@ -960,7 +941,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     view1Page, view2Page, splitView, setSplitView, pinPageToView, pinUrlToView, clearView, openDocInPane,
     user, isPro, limits,
     signIn: signInFn, signOut, refreshEntitlement: refreshEntitlementFn, openBilling,
-    activatePro, deactivatePro,
     setSelectedId, setSelectedId2, setSelectedIds, setAnchorId,
     setContextMenu,
     setProjects, updateProject, patchSource, moveSource, moveSourceToProject, moveProject,

@@ -2,6 +2,11 @@ const { app, BrowserWindow, Menu, dialog, shell, protocol, nativeImage, ipcMain,
 const path = require('path')
 const fs   = require('fs')
 
+// In dev: load .env.local so credentials are available without setting system env vars.
+// In prod: bake-secrets.mjs writes electron/secrets.cjs at build time (process.env is empty in packaged app).
+try { require('dotenv').config({ path: path.join(__dirname, '..', '.env.local') }) } catch {}
+try { Object.assign(process.env, require('./secrets.cjs')) } catch {}
+
 const isDev   = process.env.SITE_DEV === '1' || !app.isPackaged
 const OUT_DIR = path.join(__dirname, '..', 'out')
 
@@ -60,10 +65,13 @@ function makePanel() {
   return {
     tabViews:    new Map(),   // id → WebContentsView
     tabStates:   new Map(),   // id → { url, title, loading, canGoBack, canGoForward }
+    tabZoom:     new Map(),   // id → last-applied auto zoom factor (dedupe)
     activeTabId: null,
-    lastBounds:  null,        // most recent valid { x, y, width, height }
+    lastBounds:  null,        // most recent valid { x, y, width, height } in physical px
+    lastCssWidth: 0,          // most recent CSS width of the Web panel (drives auto zoom)
     pendingUrl:  null,        // URL deferred until bounds are known
     pendingTimer: null,
+    zoomTimer:   null,        // debounce for scheduleAutoZoom
   }
 }
 
@@ -88,43 +96,53 @@ let cachedScaleY = 1.0
 let pendingScrollRestore = false
 let scrollRestoreTimer   = null
 
-// ─── Debug logger (remove after scroll-jump is diagnosed) ────────────────────
-function dbg(event, ...rest) {
-  const t = new Date().toISOString().slice(11, 23)
-  console.log(`[DBG ${t}] [${event}]`, ...rest)
-}
-function dbgWinState(win, label) {
-  try {
-    const [cw, ch] = win.getContentSize()
-    const fs = win.isFullScreen()
-    const mn = win.isMinimized()
-    console.log(`[DBG]   win@${label}: contentSize=${cw}x${ch} fullscreen=${fs} minimized=${mn}`)
-    for (const pid of Object.keys(panels)) {
-      const panel = panels[pid]
-      const st = panel.activeTabId && panel.tabStates.get(panel.activeTabId)
-      const lb = panel.lastBounds
-      console.log(`[DBG]   panel-${pid}: tab=${panel.activeTabId?.slice(-8)} url=${st?.url?.slice(0,60)} lastBounds=${lb ? `${lb.x},${lb.y},${lb.width}x${lb.height}` : 'null'}`)
-    }
-    for (const paneId of Object.keys(viewPanes)) {
-      const pane = viewPanes[paneId]
-      const url = wcAlive(pane.view) ? pane.view.webContents.getURL() : '—'
-      const lb = pane.lastBounds
-      console.log(`[DBG]   pane-${paneId}: url=${url.slice(0,60)} lastBounds=${lb ? `${lb.x},${lb.y},${lb.width}x${lb.height}` : 'null'}`)
-    }
-  } catch {}
-}
-// Async: capture scrollY from a WebContentsView and log it.
-function dbgScrollAsync(label, view) {
-  if (!wcAlive(view)) return
-  view.webContents.executeJavaScript(
-    `(function(){try{if(window.scrollY)return window.scrollY;var a=document.querySelectorAll('*');for(var i=0;i<Math.min(a.length,300);i++)if(a[i].scrollTop>0)return a[i].scrollTop;return 0}catch(x){return-1}})()`)
-    .then(y => console.log(`[DBG]   scrollY@${label}:`, y)).catch(() => {})
-}
-// ─────────────────────────────────────────────────────────────────────────────
 
 // Returns true if view exists and its webContents is alive.
 function wcAlive(view) {
   return !!(view && view.webContents && !view.webContents.isDestroyed())
+}
+
+// ─── Auto-readable Web zoom ───────────────────────────────────────────────────
+// Per-tab automatic zoom for the right Web panel only — view panes stay at 1.0.
+// Picks a readable factor from CSS panel width; hard floor 0.85, prefer >= 0.9.
+// Debounced so it doesn't flicker mid-resize, deduped so we don't churn the
+// zoom on every set-bounds tick. setZoomFactor only — no CSS transform, no
+// reload, no UA spoofing.
+const AUTO_ZOOM_MIN          = 0.80
+const AUTO_ZOOM_MAX          = 1.00
+// Width anchors for the linear zoom ramp: at FLOOR_PX the zoom hits MIN, at
+// CEIL_PX it hits MAX. Typical Web panel widths (~700–1100 CSS px) land near
+// the floor, so app shells like Google Docs get room to breathe.
+const AUTO_ZOOM_FLOOR_PX     = 800
+const AUTO_ZOOM_CEIL_PX      = 1600
+const AUTO_ZOOM_DEBOUNCE_MS  = 80
+
+// Linear width → zoom ramp, quantized to 0.05 steps so tiny width drift doesn't
+// re-emit IPC. Below FLOOR_PX everything pins to MIN, above CEIL_PX to MAX.
+function computeAutoZoom(cssWidth) {
+  if (!cssWidth || cssWidth <= 0) return AUTO_ZOOM_MAX
+  const span = AUTO_ZOOM_CEIL_PX - AUTO_ZOOM_FLOOR_PX
+  const t    = Math.max(0, Math.min(1, (cssWidth - AUTO_ZOOM_FLOOR_PX) / span))
+  const z    = AUTO_ZOOM_MIN + t * (AUTO_ZOOM_MAX - AUTO_ZOOM_MIN)
+  return Math.round(z * 20) / 20
+}
+
+function applyAutoZoom(panel, view, id, cssWidth) {
+  if (!wcAlive(view) || !id) return
+  const factor = computeAutoZoom(cssWidth)
+  if (panel.tabZoom.get(id) === factor) return
+  panel.tabZoom.set(id, factor)
+  try { view.webContents.setZoomFactor(factor) } catch {}
+}
+
+function scheduleAutoZoom(panel) {
+  if (panel.zoomTimer) clearTimeout(panel.zoomTimer)
+  panel.zoomTimer = setTimeout(() => {
+    panel.zoomTimer = null
+    if (!panel.activeTabId) return
+    const view = panel.tabViews.get(panel.activeTabId)
+    applyAutoZoom(panel, view, panel.activeTabId, panel.lastCssWidth)
+  }, AUTO_ZOOM_DEBOUNCE_MS)
 }
 
 // Debounced scroll restore — called from set-bounds after applying new bounds.
@@ -136,7 +154,6 @@ function scheduleScrollRestore() {
   scrollRestoreTimer = setTimeout(() => {
     scrollRestoreTimer   = null
     pendingScrollRestore = false
-    dbg('scheduleScrollRestore: firing restoreAllScrolls')
     restoreAllScrolls()
   }, 200)
 }
@@ -180,20 +197,12 @@ function saveAllScrolls() {
 
 function restoreAllScrolls() {
   const tasks = []
-  console.log(`[DBG-restore] savedScrolls.size=${savedScrolls.size}`)
   for (const [key, { view, json }] of savedScrolls.entries()) {
-    try {
-      const parsed = JSON.parse(json)
-      console.log(`[DBG-restore] ${key}: windowScroll=[${parsed[0]},${parsed[1]}] elements=${parsed[2].length}`)
-      if (parsed[2].length > 0) {
-        console.log(`[DBG-restore] ${key}: first element scrollTop=${parsed[2][0][1]} path=[${parsed[2][0][0]}]`)
-      }
-    } catch {}
     if (!wcAlive(view)) continue
     tasks.push(view.webContents.executeJavaScript(makeRestoreScrollJs(json)).catch(() => {}))
   }
-  savedScrolls.clear()
-  return Promise.all(tasks)
+  // Clear after promises settle so views aren't GC-blocked during JS execution
+  return Promise.all(tasks).then(() => savedScrolls.clear())
 }
 
 // ─── Center view panes ────────────────────────────────────────────────────────
@@ -264,8 +273,6 @@ function showActiveView(win, pid) {
   if (!panel.activeTabId) return
   const view = panel.tabViews.get(panel.activeTabId)
   if (!wcAlive(view)) return
-  const st = panel.tabStates.get(panel.activeTabId)
-  dbg(`showActiveView[${pid}]: removeChildView+addChildView url=${st?.url?.slice(0,60)} lastBounds=${JSON.stringify(panel.lastBounds)}`)
   try { win.contentView.removeChildView(view) } catch {}
   win.contentView.addChildView(view)
   if (panel.lastBounds && !modalOpen) view.setBounds(panel.lastBounds)
@@ -424,9 +431,11 @@ function createTabView(win, pid, id) {
   })
 
   // Re-apply zoom after every navigation (cross-origin resets zoom to per-origin stored value).
+  // Clear dedupe entry so the auto-zoom re-applies even if the cached factor matches.
   wc.on('did-finish-load', () => {
     if (wcAlive(view) && id === panel.activeTabId) {
-      view.webContents.setZoomFactor(1.0)
+      panel.tabZoom.delete(id)
+      applyAutoZoom(panel, view, id, panel.lastCssWidth)
     }
   })
 
@@ -465,7 +474,7 @@ function switchToTab(win, pid, id) {
     }
   }
 
-  if (wcAlive(switchView)) switchView.webContents.setZoomFactor(1.0)
+  if (wcAlive(switchView)) applyAutoZoom(panel, switchView, id, panel.lastCssWidth)
 
   // Only send url-changed for real URLs. Sending '' triggers setHomeMode(false)
   // in the renderer which would flash white before homeMode corrects itself.
@@ -492,33 +501,23 @@ function setupResearchBrowser(win) {
   win.on('will-enter-full-screen', () => {
     willFSFired = true
     inFullscreenTransition = true
-    dbg('will-enter-full-screen'); dbgWinState(win, 'pre')
-    for (const pid of Object.keys(panels)) { const v = panels[pid].activeTabId && panels[pid].tabViews.get(panels[pid].activeTabId); dbgScrollAsync(`panel-${pid}-pre-fs`, v) }
-    for (const paneId of Object.keys(viewPanes)) { dbgScrollAsync(`pane-${paneId}-pre-fs`, viewPanes[paneId].view) }
     saveAllScrolls()
   })
   win.on('will-leave-full-screen', () => {
     inFullscreenTransition = true
-    dbg('will-leave-full-screen'); dbgWinState(win, 'pre')
-    for (const pid of Object.keys(panels)) { const v = panels[pid].activeTabId && panels[pid].tabViews.get(panels[pid].activeTabId); dbgScrollAsync(`panel-${pid}-pre-leave`, v) }
-    for (const paneId of Object.keys(viewPanes)) { dbgScrollAsync(`pane-${paneId}-pre-leave`, viewPanes[paneId].view) }
     saveAllScrolls()
   })
   win.on('enter-full-screen', () => {
     const wasUserTriggered = willFSFired
     willFSFired = false
     inFullscreenTransition = false
-    dbg(`enter-full-screen wasUserTriggered=${wasUserTriggered}`); dbgWinState(win, 'post')
     pendingScrollRestore = true
     win.webContents.send('research:recalc-bounds')
-    dbg('enter-full-screen: recalc-bounds sent, pendingScrollRestore=true')
   })
   win.on('leave-full-screen', () => {
     inFullscreenTransition = false
-    dbg('leave-full-screen'); dbgWinState(win, 'post')
     pendingScrollRestore = true
     win.webContents.send('research:recalc-bounds')
-    dbg('leave-full-screen: recalc-bounds sent, pendingScrollRestore=true')
   })
   function clearAndZeroAllViews() {
     for (const pid of Object.keys(panels)) {
@@ -540,36 +539,26 @@ function setupResearchBrowser(win) {
 
   win.webContents.on('devtools-opened', () => {
     devToolsOpen = true
-    dbg('devtools-opened: zeroing all views')
     clearAndZeroAllViews()
   })
   win.webContents.on('devtools-closed', () => {
     devToolsOpen = false
-    dbg('devtools-closed: zeroing + recalc in 150ms')
     clearAndZeroAllViews()
     setTimeout(() => { if (!win.isDestroyed()) win.webContents.send('research:recalc-bounds') }, 150)
   })
   win.on('resize', () => {
-    if (inFullscreenTransition || isMinimized || isRestoring) {
-      dbg('resize: BLOCKED', { inFullscreenTransition, isMinimized, isRestoring })
-      return
-    }
-    dbg('resize: recalc-bounds sent'); dbgWinState(win, 'resize')
+    if (inFullscreenTransition || isMinimized || isRestoring) return
     win.webContents.send('research:recalc-bounds')
   })
   win.on('minimize', () => {
-    dbg('minimize'); dbgWinState(win, 'minimize')
-    for (const pid of Object.keys(panels)) { const v = panels[pid].activeTabId && panels[pid].tabViews.get(panels[pid].activeTabId); dbgScrollAsync(`panel-${pid}-pre-minimize`, v) }
     isMinimized = true; isRestoring = false; saveAllScrolls()
   })
   win.on('restore',  () => {
-    dbg('restore'); dbgWinState(win, 'restore')
     isMinimized = false
     isRestoring = true
     setTimeout(() => {
       isRestoring = false
       pendingScrollRestore = true
-      dbg('restore: isRestoring cleared, sending recalc-bounds for scroll restore')
       win.webContents.send('research:recalc-bounds')
     }, 100)
   })
@@ -635,37 +624,24 @@ function setupResearchBrowser(win) {
     const y = Math.round(rect.y     * sy)
     const w = Math.round(rect.width * sx)
     const h = Math.round(rect.height * sy)
-    if (isMinimized || isRestoring) {
-      dbg(`research:set-bounds[${pid}]: BLOCKED isMinimized=${isMinimized} isRestoring=${isRestoring} rect=${rect.x},${rect.y},${rect.width}x${rect.height}`)
-      return
-    }
-    if (inFullscreenTransition && (w === 0 || h === 0)) {
-      dbg(`research:set-bounds[${pid}]: BLOCKED inFullscreenTransition+zero w=${w} h=${h}`)
-      return
-    }
+    if (isMinimized || isRestoring) return
+    if (inFullscreenTransition && (w === 0 || h === 0)) return
     if (w > 0 && h > 0) {
-      if (x <= cw / 10) {
-        dbg(`research:set-bounds[${pid}]: BLOCKED near-zero-x x=${x} cw=${cw}`)
-        return
-      }
-      panel.lastBounds = { x, y, width: w, height: h }
+      if (x <= cw / 10) return
+      panel.lastBounds   = { x, y, width: w, height: h }
+      panel.lastCssWidth = rect.width
       if (!modalOpen) {
-        const activeState = panel.activeTabId && panel.tabStates.get(panel.activeTabId)
         const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
         if (view) {
-          dbg(`research:set-bounds[${pid}]: setBounds ${x},${y},${w}x${h} url=${activeState?.url?.slice(0,50)}`)
           view.setBounds({ x, y, width: w, height: h })
-          if (wcAlive(view)) view.webContents.setZoomFactor(1.0)
+          scheduleAutoZoom(panel)
           if (!panel.pendingUrl) scheduleScrollRestore()
         }
         tryFirePending(win, pid)
       }
     } else {
       const view = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
-      if (view) {
-        dbg(`research:set-bounds[${pid}]: ZERO-BOUND (w=${w} h=${h}) url=${panel.tabStates.get(panel.activeTabId)?.url?.slice(0,50)}`)
-        view.setBounds({ x: 0, y: 0, width: 0, height: 0 })
-      }
+      if (view) view.setBounds({ x: 0, y: 0, width: 0, height: 0 })
     }
   })
 
@@ -751,6 +727,7 @@ function setupResearchBrowser(win) {
     try { if (wcAlive(view)) view.webContents.loadURL('about:blank').catch(() => {}) } catch {}
     panel.tabViews.delete(id)
     panel.tabStates.delete(id)
+    panel.tabZoom.delete(id)
 
     if (panel.tabViews.size === 0) {
       const newId = `tab-${pid}-${Date.now()}`
@@ -788,6 +765,8 @@ function setupResearchBrowser(win) {
     }
     panel.tabViews.clear()
     panel.tabStates.clear()
+    panel.tabZoom.clear()
+    if (panel.zoomTimer) { clearTimeout(panel.zoomTimer); panel.zoomTimer = null }
     panel.activeTabId = null
     panel.lastBounds  = savedBounds
 
@@ -859,18 +838,13 @@ function setupResearchBrowser(win) {
     const y = Math.round(rect.y     * sy)
     const w = Math.round(rect.width * sx)
     const h = Math.round(rect.height * sy)
-    if (inFullscreenTransition && (w === 0 || h === 0)) {
-      dbg(`view:set-bounds[${paneId}]: BLOCKED inFullscreenTransition+zero w=${w} h=${h}`)
-      return
-    }
+    if (inFullscreenTransition && (w === 0 || h === 0)) return
     if (w > 0 && h > 0) {
       pane.lastBounds = { x, y, width: w, height: h }
       if (!modalOpen) {
         const view = getOrCreateViewPane(win, paneId)
-        const currentUrl = view.webContents.getURL()
-        dbg(`view:set-bounds[${paneId}]: setBounds ${x},${y},${w}x${h} url=${currentUrl.slice(0,50)}`)
         // Keep view pane on top of z-order so it reliably receives mouse events
-        // (mirroring showActiveView for the research browser panel).
+        // (mirroring showActiveView for the web browser panel).
         try { win.contentView.removeChildView(view) } catch {}
         win.contentView.addChildView(view)
         view.setBounds({ x, y, width: w, height: h })
@@ -879,7 +853,6 @@ function setupResearchBrowser(win) {
         if (pane.pendingUrl) {
           const url = pane.pendingUrl
           pane.pendingUrl = null
-          dbg(`view:set-bounds[${paneId}]: loadURL (pending) ${url.slice(0,60)}`)
           view.webContents.setAudioMuted(false)
           view.webContents.loadURL(url).catch(err => console.log(`[view:${paneId}] loadURL error:`, err?.message))
         }
@@ -887,10 +860,7 @@ function setupResearchBrowser(win) {
     } else {
       pane.lastBounds = null
       const v = pane.view
-      if (wcAlive(v)) {
-        dbg(`view:set-bounds[${paneId}]: ZERO-BOUND url=${v.webContents.getURL().slice(0,50)}`)
-        try { v.setBounds({ x: 0, y: 0, width: 0, height: 0 }) } catch {}
-      }
+      if (wcAlive(v)) try { v.setBounds({ x: 0, y: 0, width: 0, height: 0 }) } catch {}
     }
   })
 
@@ -959,10 +929,13 @@ function setupResearchBrowser(win) {
     const panel = panels['A']
     panel.tabViews.clear()
     panel.tabStates.clear()
+    panel.tabZoom.clear()
     panel.activeTabId = null
     panel.lastBounds  = null
+    panel.lastCssWidth = 0
     panel.pendingUrl  = null
     if (panel.pendingTimer) { clearTimeout(panel.pendingTimer); panel.pendingTimer = null }
+    if (panel.zoomTimer)    { clearTimeout(panel.zoomTimer);    panel.zoomTimer    = null }
 
     for (const pid of Object.keys(viewPanes)) {
       const pane = viewPanes[pid]

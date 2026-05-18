@@ -1,4 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron')
+let _secrets = {}
+try { _secrets = require('./secrets.cjs') } catch {}
 
 // All research functions take `panelId` ('A' or 'B') as their first argument.
 // Event subscriptions also take `panelId` and filter internally so each
@@ -7,7 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── Account / Polar auth ────────────────────────────────────────────────────
   // POLAR_ACCESS_TOKEN is set in the main process env (never exposed to renderer).
   // POLAR_CHECKOUT_URL is a static Polar hosted-checkout link — set it as an env var.
-  POLAR_CHECKOUT_URL: process.env.POLAR_CHECKOUT_URL ?? '',
+  POLAR_CHECKOUT_URL: _secrets.POLAR_CHECKOUT_URL || process.env.POLAR_CHECKOUT_URL || '',
   auth: {
     getSession:         (email)      => ipcRenderer.invoke('auth:get-session', email),
     checkSubscriptions: (token)      => ipcRenderer.invoke('auth:check-subscriptions', token),

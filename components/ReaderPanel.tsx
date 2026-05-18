@@ -189,7 +189,7 @@ function ViewPane({
     <div
       style={{
         flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
-        border: `1px solid ${dragOver ? '#333' : '#222'}`, borderRadius: '4px',
+        border: `1px solid ${dragOver ? '#333' : '#1e1e1e'}`, borderRadius: '4px',
         overflow: 'hidden',
         background: dragOver ? 'rgba(255,255,255,0.01)' : 'transparent',
         transition: 'border-color 0.15s, background 0.15s',
@@ -269,7 +269,7 @@ function EmptySource({ uploadFiles }: { uploadFiles: (files: FileList | File[]) 
   return (
     <div
       style={{
-        flex: 1, background: fileDragOver ? '#0c0c0c' : '#080808',
+        flex: 1, background: fileDragOver ? '#0d0d0d' : '#080808',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
         padding: '32px', gap: '20px',
@@ -286,13 +286,21 @@ function EmptySource({ uploadFiles }: { uploadFiles: (files: FileList | File[]) 
         if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files)
       }}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
         <span style={{
           fontSize: '12px', color: fileDragOver ? '#888' : '#555',
           letterSpacing: '0.04em', textAlign: 'center', transition: 'color 0.15s',
         }}>
-          {fileDragOver ? 'Release to add' : 'Open a Document or Page from the left.'}
+          {fileDragOver ? 'Release to add' : 'Hold a Document or Page here.'}
         </span>
+        {!fileDragOver && (
+          <span style={{
+            fontSize: '11px', color: '#333',
+            letterSpacing: '0.03em', textAlign: 'center',
+          }}>
+            Open from the left, or send from Web.
+          </span>
+        )}
       </div>
 
       <input
@@ -487,7 +495,7 @@ function SplitBtn({ active, onClick }: { active: boolean; onClick: () => void })
   return (
     <button
       onClick={onClick}
-      title={active ? 'Exit Split' : 'Split'}
+      title={active ? 'Exit Split View' : 'Split View'}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{

@@ -1,10 +1,11 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useApp } from '@/context/AppContext'
+import { getCheckoutUrl } from '@/lib/auth'
 type View = 'sign_in' | 'loading' | 'no_account' | 'signed_in'
 
 export default function AccountModal({ onClose }: { onClose: () => void }) {
-  const { user, isPro, signIn, signOut, openBilling } = useApp()
+  const { user, isPro, signIn, signOut, openBilling, refreshEntitlement } = useApp()
 
   const [view,       setView]       = useState<View>(user ? 'signed_in' : 'sign_in')
   const [email,      setEmail]      = useState('')
@@ -13,7 +14,7 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
 
   // Refresh subscription status whenever the modal opens while signed in
   useEffect(() => {
-    if (user) refreshEntitlement().catch(() => {})
+    if (user) refreshEntitlement()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -170,8 +171,8 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
 
             <p style={{ fontSize: '13px', color: '#555', lineHeight: 1.65, margin: '0 0 28px' }}>
               {isPro
-                ? 'Unlimited workspaces, unlimited Documents, and 5 GB of uploaded Documents.'
-                : '1 workspace, 10 Documents, and 150 MB of uploaded Documents.'}
+                ? 'Unlimited workspaces, unlimited Documents, 5 GB uploaded Documents, and Unlimited Pages.'
+                : '1 workspace, 10 Documents, 150 MB uploaded Documents, and Unlimited Pages.'}
             </p>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
@@ -228,7 +229,7 @@ function AccountBtn({ children, onClick, disabled }: {
       onMouseLeave={() => setHov(false)}
       style={{
         background: 'transparent',
-        border: `1px solid ${hov && !disabled ? '#333' : '#222'}`,
+        border: `1px solid ${hov && !disabled ? '#333' : '#252525'}`,
         color: disabled ? '#444' : hov ? '#ddd' : '#888',
         padding: '8px 16px', fontSize: '11px', fontFamily: 'inherit',
         letterSpacing: '0.08em', textTransform: 'uppercase',

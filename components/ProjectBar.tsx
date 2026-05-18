@@ -129,7 +129,7 @@ export default function ProjectBar() {
             width: '26px', height: '26px', flexShrink: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             background: 'none', border: 'none',
-            color: '#363636', cursor: 'pointer', padding: 0, outline: 'none',
+            color: '#3a3a3a', cursor: 'pointer', padding: 0, outline: 'none',
             transition: 'color 0.15s',
             WebkitAppRegion: 'no-drag',
           } as React.CSSProperties}
@@ -142,7 +142,7 @@ export default function ProjectBar() {
         </button>
 
         {/* Divider */}
-        <div style={{ width: '1px', height: '12px', background: '#1c1c1c', flexShrink: 0, margin: '0 8px 0 6px' }} />
+        <div style={{ width: '1px', height: '12px', background: '#1a1a1a', flexShrink: 0, margin: '0 8px 0 6px' }} />
 
         {/* Tab strip */}
         <div
@@ -209,7 +209,8 @@ export default function ProjectBar() {
 
         {/* Tier label */}
         <span style={{
-          fontSize: '11px', color: '#3a3a3a',
+          fontSize: '11px',
+          color: isPro ? '#5c9e6e' : '#555',
           letterSpacing: '0.05em', userSelect: 'none',
           padding: '0 6px',
         }}>
@@ -223,25 +224,25 @@ export default function ProjectBar() {
 
         <Separator />
 
-        {/* Auth cluster — exactly one non-contradictory state */}
-        {!user ? (
-          // Signed out
+        {/* Auth cluster — isPro takes priority over user presence */}
+        {isPro ? (
+          // Pro
           <>
-            <RightBtn onClick={() => window.dispatchEvent(new Event('proof:show-account'))}>Sign in</RightBtn>
-            <Dot />
-            <RightBtn onClick={() => window.dispatchEvent(new Event('proof:upgrade-needed'))}>Upgrade</RightBtn>
-          </>
-        ) : !isPro ? (
-          // Signed in, Free
-          <>
-            <RightBtn onClick={() => window.dispatchEvent(new Event('proof:upgrade-needed'))}>Upgrade</RightBtn>
+            <RightBtn onClick={() => openBilling()}>Manage billing</RightBtn>
             <Dot />
             <RightBtn onClick={() => window.dispatchEvent(new Event('proof:show-account'))}>Account</RightBtn>
           </>
-        ) : (
-          // Signed in, Pro
+        ) : !user ? (
+          // Signed out, Free
           <>
-            <RightBtn onClick={() => openBilling()}>Manage billing</RightBtn>
+            <RightBtn onClick={() => window.dispatchEvent(new Event('proof:show-account'))}>Sign in</RightBtn>
+            <Dot />
+            <RightBtn accent onClick={() => window.dispatchEvent(new Event('proof:upgrade-needed'))}>Upgrade</RightBtn>
+          </>
+        ) : (
+          // Signed in, Free
+          <>
+            <RightBtn accent onClick={() => window.dispatchEvent(new Event('proof:upgrade-needed'))}>Upgrade</RightBtn>
             <Dot />
             <RightBtn onClick={() => window.dispatchEvent(new Event('proof:show-account'))}>Account</RightBtn>
           </>
@@ -279,7 +280,7 @@ function WorkspaceTab({ name, active, rmArmed, canRemove, onClick, onDoubleClick
         height: '28px',
         padding: canRemove ? '0 2px 0 10px' : '0 10px',
         flexShrink: 0, gap: '1px',
-        background: active ? '#111' : hovered ? '#0c0c0c' : 'transparent',
+        background: active ? '#111' : hovered ? '#0d0d0d' : 'transparent',
         border: `1px solid ${active ? '#1e1e1e' : 'transparent'}`,
         borderRadius: '4px',
         cursor: active ? 'default' : 'pointer',
@@ -323,7 +324,7 @@ function WorkspaceTab({ name, active, rmArmed, canRemove, onClick, onDoubleClick
 
 // ─── Right-cluster button ────────────────────────────────────────────────────
 
-function RightBtn({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+function RightBtn({ children, onClick, accent }: { children: React.ReactNode; onClick: () => void; accent?: boolean }) {
   const [hov, setHov] = useState(false)
   return (
     <button
@@ -332,11 +333,13 @@ function RightBtn({ children, onClick }: { children: React.ReactNode; onClick: (
       onMouseLeave={() => setHov(false)}
       style={{
         height: '28px', padding: '0 7px',
-        background: 'none', border: 'none', borderRadius: '3px',
-        color: hov ? '#888' : '#3e3e3e',
+        background: 'none',
+        border: accent ? `1px solid ${hov ? '#333' : '#252525'}` : 'none',
+        borderRadius: '3px',
+        color: hov ? (accent ? '#bbb' : '#888') : (accent ? '#777' : '#3a3a3a'),
         fontSize: '11px', letterSpacing: '0.04em',
         cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
-        transition: 'color 0.12s',
+        transition: 'color 0.12s, border-color 0.12s',
         whiteSpace: 'nowrap',
       }}
     >
@@ -348,7 +351,7 @@ function RightBtn({ children, onClick }: { children: React.ReactNode; onClick: (
 // ─── Separator / dot ─────────────────────────────────────────────────────────
 
 function Separator() {
-  return <div style={{ width: '1px', height: '12px', background: '#1c1c1c', margin: '0 4px', flexShrink: 0 }} />
+  return <div style={{ width: '1px', height: '12px', background: '#1a1a1a', margin: '0 4px', flexShrink: 0 }} />
 }
 
 function Dot() {

@@ -150,7 +150,7 @@ export default function StorageBadge() {
             onClick={e => e.stopPropagation()}
             style={{
               width: '360px', maxWidth: 'calc(100vw - 48px)',
-              background: '#0f0f0f', border: '1px solid #222', borderRadius: '4px',
+              background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: '4px',
               boxShadow: '0 12px 40px rgba(0,0,0,0.6)',
               fontFamily: 'inherit',
             }}
@@ -170,7 +170,7 @@ export default function StorageBadge() {
                   {[1, 2].map(s => (
                     <div key={s} style={{
                       width: '16px', height: '2px', borderRadius: '1px',
-                      background: (s === 1 && !armed) || (s === 2 && armed) ? '#c44' : '#222',
+                      background: (s === 1 && !armed) || (s === 2 && armed) ? '#c44' : '#1e1e1e',
                       transition: 'background 0.2s',
                     }} />
                   ))}
@@ -237,7 +237,7 @@ function ModalButton({
 }) {
   const [hover, setHover] = useState(false)
 
-  const idleBorder = destructive ? '#2a1515' : '#222'
+  const idleBorder = destructive ? '#2a1515' : '#252525'
   const hoverBorder = destructive ? '#3a1515' : '#333'
   const idleColor  = destructive ? '#c44' : '#555'
   const hoverColor = destructive ? '#e55' : '#999'

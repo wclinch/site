@@ -6,6 +6,7 @@ import SourcePanel       from '@/components/SourcePanel'
 import RightPanel        from '@/components/RightPanel'
 import SourceContextMenu from '@/components/SourceContextMenu'
 import AccountModal      from '@/components/AccountModal'
+import OnboardingOverlay, { ONBOARDING_KEY } from '@/components/OnboardingOverlay'
 import { useApp }        from '@/context/AppContext'
 import { getCheckoutUrl } from '@/lib/auth'
 import { useState, useEffect, useRef } from 'react'
@@ -16,44 +17,20 @@ const ReaderPanel = dynamic(() => import('@/components/ReaderPanel'), { ssr: fal
 const DEF_SOURCE       = '20%'
 const DEF_BROWSER_PX   = 560   // default browser panel width in pixels
 
-function StorageWarning() {
-  const [msg, setMsg] = useState<string | null>(null)
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<string>).detail
-      setMsg(detail)
-      setTimeout(() => setMsg(null), 4000)
-    }
-    window.addEventListener('proof-storage-warning', handler)
-    return () => window.removeEventListener('proof-storage-warning', handler)
-  }, [])
-  if (!msg) return null
-  return (
-    <div style={{
-      position: 'fixed', top: '56px', left: '50%', transform: 'translateX(-50%)',
-      background: '#0f0f0f', border: '1px solid #222', borderRadius: '4px',
-      padding: '9px 16px', fontSize: '12px', color: '#aaa', letterSpacing: '0.04em',
-      boxShadow: '0 6px 20px rgba(0,0,0,0.5)',
-      zIndex: 9999, pointerEvents: 'none',
-    }}>
-      {msg}
-    </div>
-  )
-}
 
 const PRO_FEATURES = [
   'Unlimited workspaces',
   'Unlimited Documents',
   '5 GB uploaded Documents',
-  'Unlimited Pages',
 ]
 
 function UpgradeModal({ onClose }: { onClose: () => void }) {
   const { user, isPro, signIn, refreshEntitlement } = useApp()
-  const [email,     setEmail]     = useState('')
-  const [busy,      setBusy]      = useState(false)
-  const [error,     setError]     = useState<string | null>(null)
-  const [checked,   setChecked]   = useState(false)
+  const [email,      setEmail]      = useState('')
+  const [busy,       setBusy]       = useState(false)
+  const [error,      setError]      = useState<string | null>(null)
+  const [checked,    setChecked]    = useState(false)
+  const [showSignIn, setShowSignIn] = useState(false)
   const isProRef = useRef(isPro)
   useEffect(() => { isProRef.current = isPro }, [isPro])
 
@@ -67,10 +44,10 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
       if (result.isPro) { onClose(); return }
     } else {
       setError(
-        result.error === 'no_account'      ? 'No account found for that email.' :
-        result.error === 'network_error'   ? 'Network unavailable. Try again when online.' :
-        result.error === 'not_configured'  ? 'Sign-in is not configured in this build.' :
-                                             'Sign in failed. Try again.'
+        result.error === 'no_account'     ? 'No account found. Subscribe first using the button above.' :
+        result.error === 'network_error'  ? 'Network unavailable. Try again when online.' :
+        result.error === 'not_configured' ? 'Sign-in is not configured in this build.' :
+                                            'Sign in failed. Try again.'
       )
     }
   }
@@ -110,9 +87,12 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
           Upgrade to Pro
         </div>
 
-        <h2 style={{ fontSize: '18px', fontWeight: 500, color: '#bbb', margin: '0 0 18px', letterSpacing: '-0.01em' }}>
-          Unlock unlimited workspaces.
-        </h2>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', margin: '0 0 18px' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: 500, color: '#bbb', margin: 0, letterSpacing: '-0.01em' }}>
+            Unlock unlimited workspaces.
+          </h2>
+          <span style={{ fontSize: '13px', color: '#444', letterSpacing: '0.01em' }}>$8.99 / mo</span>
+        </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '26px' }}>
           {PRO_FEATURES.map(f => (
@@ -125,81 +105,99 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
 
         <div style={{ height: '1px', background: '#111', marginBottom: '22px' }} />
 
-        {/* Not signed in — show sign-in form */}
-        {!user && (
-          <>
-            <p style={{ fontSize: '13px', color: '#555', lineHeight: 1.65, margin: '0 0 16px' }}>
-              Sign in to subscribe.
-            </p>
-            <div style={{
-              background: '#0d0d0d', border: `1px solid ${error ? '#3a1f1f' : '#1a1a1a'}`,
-              borderRadius: '4px', padding: '11px 14px', marginBottom: error ? '8px' : '14px',
-            }}>
-              <input
-                autoFocus type="email" value={email}
-                onChange={e => { setEmail(e.target.value); if (error) setError(null) }}
-                onKeyDown={e => { if (e.key === 'Enter') handleSignIn() }}
-                placeholder="you@example.com"
-                spellCheck={false} autoCapitalize="off" autoCorrect="off"
-                style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', color: '#ccc', fontFamily: 'inherit', letterSpacing: '0.02em' }}
-              />
-            </div>
-            {error && <div style={{ fontSize: '11px', color: '#a55', margin: '0 0 14px' }}>{error}</div>}
-            <button
-              onClick={handleSignIn} disabled={busy || !email.trim()}
-              style={{
-                background: 'transparent', border: '1px solid #2a2a2a',
-                color: busy || !email.trim() ? '#555' : '#bbb',
-                padding: '9px 18px', fontSize: '11px', fontFamily: 'inherit',
-                letterSpacing: '0.08em', textTransform: 'uppercase',
-                cursor: busy || !email.trim() ? 'not-allowed' : 'pointer',
-                borderRadius: '3px', transition: 'color 0.15s, border-color 0.15s',
-              }}
-              onMouseEnter={e => { if (!busy && email.trim()) { e.currentTarget.style.borderColor = '#444'; e.currentTarget.style.color = '#eee' } }}
-              onMouseLeave={e => { if (!busy && email.trim()) { e.currentTarget.style.borderColor = '#2a2a2a'; e.currentTarget.style.color = '#bbb' } }}
-            >
-              {busy ? 'Signing in…' : 'Sign in'}
-            </button>
-          </>
+        {/* Checkout button — always shown when not Pro */}
+        {!isPro && (
+          <button
+            onClick={() => window.open(checkoutUrl || 'https://polar.sh', '_blank', 'noopener,noreferrer')}
+            style={{
+              background: '#141414', border: '1px solid #2a2a2a',
+              color: '#bbb', padding: '10px 20px',
+              fontSize: '12px', fontFamily: 'inherit',
+              letterSpacing: '0.06em', textTransform: 'uppercase',
+              cursor: 'pointer', borderRadius: '3px',
+              transition: 'color 0.15s, border-color 0.15s',
+              display: 'block', width: '100%', textAlign: 'left',
+              marginBottom: '20px',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#444'; e.currentTarget.style.color = '#eee' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#2a2a2a'; e.currentTarget.style.color = '#bbb' }}
+          >
+            Upgrade to Pro →
+          </button>
         )}
 
-        {/* Signed in, not Pro — show checkout */}
-        {user && !isPro && (
+        {/* Already subscribed — sign in or check */}
+        {!isPro && !user && !showSignIn && (
+          <button
+            onClick={() => setShowSignIn(true)}
+            style={{
+              background: 'none', border: 'none', padding: 0,
+              fontSize: '12px', color: '#444', fontFamily: 'inherit',
+              cursor: 'pointer', transition: 'color 0.15s',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#888')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#444')}
+          >
+            Already subscribed? Sign in →
+          </button>
+        )}
+
+        {/* Sign-in form — shown after clicking "Already subscribed" or when signed in + not Pro */}
+        {!isPro && (showSignIn || user) && (
           <>
-            <button
-              onClick={() => window.open(checkoutUrl || 'https://polar.sh', '_blank', 'noopener,noreferrer')}
-              style={{
-                background: '#141414', border: '1px solid #2a2a2a',
-                color: '#bbb', padding: '10px 20px',
-                fontSize: '12px', fontFamily: 'inherit',
-                letterSpacing: '0.06em', textTransform: 'uppercase',
-                cursor: 'pointer', borderRadius: '3px',
-                transition: 'color 0.15s, border-color 0.15s',
-                display: 'block', marginBottom: '16px',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#444'; e.currentTarget.style.color = '#eee' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#2a2a2a'; e.currentTarget.style.color = '#bbb' }}
-            >
-              Subscribe to Pro →
-            </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <button
-                onClick={handleRefresh} disabled={busy}
-                style={{
-                  background: 'none', border: 'none', padding: 0,
-                  fontSize: '12px', color: '#555', fontFamily: 'inherit',
-                  cursor: busy ? 'default' : 'pointer', transition: 'color 0.15s',
-                }}
-                onMouseEnter={e => { if (!busy) e.currentTarget.style.color = '#999' }}
-                onMouseLeave={e => { e.currentTarget.style.color = '#555' }}
-              >
-                {busy ? 'Checking…' : 'Already subscribed? Check now'}
-              </button>
-            </div>
-            {checked && !isPro && (
-              <div style={{ fontSize: '11px', color: '#555', marginTop: '10px' }}>
-                No active subscription found.
-              </div>
+            {!user && (
+              <>
+                <div style={{
+                  background: '#0d0d0d', border: `1px solid ${error ? '#3a1f1f' : '#1a1a1a'}`,
+                  borderRadius: '4px', padding: '11px 14px', marginBottom: error ? '8px' : '12px',
+                }}>
+                  <input
+                    autoFocus type="email" value={email}
+                    onChange={e => { setEmail(e.target.value); if (error) setError(null) }}
+                    onKeyDown={e => { if (e.key === 'Enter') handleSignIn() }}
+                    placeholder="you@example.com"
+                    spellCheck={false} autoCapitalize="off" autoCorrect="off"
+                    style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', color: '#ccc', fontFamily: 'inherit', letterSpacing: '0.02em' }}
+                  />
+                </div>
+                {error && <div style={{ fontSize: '11px', color: '#a55', margin: '0 0 12px' }}>{error}</div>}
+                <button
+                  onClick={handleSignIn} disabled={busy || !email.trim()}
+                  style={{
+                    background: 'transparent', border: '1px solid #2a2a2a',
+                    color: busy || !email.trim() ? '#555' : '#bbb',
+                    padding: '9px 18px', fontSize: '11px', fontFamily: 'inherit',
+                    letterSpacing: '0.08em', textTransform: 'uppercase',
+                    cursor: busy || !email.trim() ? 'not-allowed' : 'pointer',
+                    borderRadius: '3px', transition: 'color 0.15s, border-color 0.15s',
+                  }}
+                  onMouseEnter={e => { if (!busy && email.trim()) { e.currentTarget.style.borderColor = '#444'; e.currentTarget.style.color = '#eee' } }}
+                  onMouseLeave={e => { if (!busy && email.trim()) { e.currentTarget.style.borderColor = '#2a2a2a'; e.currentTarget.style.color = '#bbb' } }}
+                >
+                  {busy ? 'Signing in…' : 'Sign in'}
+                </button>
+              </>
+            )}
+            {user && (
+              <>
+                <button
+                  onClick={handleRefresh} disabled={busy}
+                  style={{
+                    background: 'none', border: 'none', padding: 0,
+                    fontSize: '12px', color: '#444', fontFamily: 'inherit',
+                    cursor: busy ? 'default' : 'pointer', transition: 'color 0.15s',
+                  }}
+                  onMouseEnter={e => { if (!busy) e.currentTarget.style.color = '#888' }}
+                  onMouseLeave={e => { e.currentTarget.style.color = '#444' }}
+                >
+                  {busy ? 'Checking…' : 'Already subscribed? Check now'}
+                </button>
+                {checked && !isPro && (
+                  <div style={{ fontSize: '11px', color: '#555', marginTop: '10px' }}>
+                    No active subscription found.
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
@@ -223,32 +221,32 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
 function AppShell() {
   const { mounted } = useApp()
   const [researchFocused, setResearchFocused] = useState(false)
-  const [showUpgrade, setShowUpgrade] = useState(false)
-  const [showAccount, setShowAccount] = useState(false)
-  const [browserWidth, setBrowserWidth] = useState(DEF_BROWSER_PX)
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [showUpgrade,    setShowUpgrade]    = useState(false)
+  const [showAccount,    setShowAccount]    = useState(false)
   // soloPane lifted out of ReaderPanel so it survives the unmount that happens
   // when researchFocused toggles. Otherwise solo View 2 would snap back to View 1
   // after exiting research fullscreen.
   const [soloPane, setSoloPane] = useState<1 | 2>(1)
-  const isDraggingRef = useRef(false)
 
-  function handleDividerMouseDown(e: React.MouseEvent) {
-    e.preventDefault()
-    isDraggingRef.current = true
+  // Show onboarding once on first launch. Dev reset: localStorage.removeItem(ONBOARDING_KEY)
+  useEffect(() => {
+    if (!mounted) return
+    try {
+      if (localStorage.getItem(ONBOARDING_KEY) !== 'done') {
+        ;(window as any).electronAPI?.setModal?.(true)
+        setShowOnboarding(true)
+      }
+    } catch {}
+  }, [mounted])
 
-    function onMove(ev: MouseEvent) {
-      if (!isDraggingRef.current) return
-      const newWidth = Math.max(280, Math.min(window.innerWidth - 320, window.innerWidth - ev.clientX - 5))
-      setBrowserWidth(newWidth)
+  function handleOnboardingClose() {
+    try { localStorage.setItem(ONBOARDING_KEY, 'done') } catch {}
+    setShowOnboarding(false)
+    if (!showUpgrade && !showAccount) {
+      ;(window as any).electronAPI?.setModal?.(false)
     }
-    function onUp() {
-      isDraggingRef.current = false
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-      window.dispatchEvent(new Event('resize'))
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
+    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')))
   }
 
   useEffect(() => {
@@ -271,10 +269,10 @@ function AppShell() {
 
   // Hide native WebContentsViews on close — keep in sync when modals dismiss.
   useEffect(() => {
-    if (!showUpgrade && !showAccount) {
+    if (!showUpgrade && !showAccount && !showOnboarding) {
       ;(window as any).electronAPI?.setModal?.(false)
     }
-  }, [showUpgrade, showAccount])
+  }, [showUpgrade, showAccount, showOnboarding])
 
   if (!mounted) {
     return (
@@ -291,26 +289,16 @@ function AppShell() {
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden', paddingRight: '5px' }}>
           <SourcePanel width={DEF_SOURCE} />
           {!researchFocused && <ReaderPanel soloPane={soloPane} setSoloPane={setSoloPane} />}
-          {!researchFocused && (
-            <div
-              onMouseDown={handleDividerMouseDown}
-              style={{
-                width: '5px', flexShrink: 0, cursor: 'col-resize',
-                background: 'transparent',
-                WebkitAppRegion: 'no-drag',
-              } as React.CSSProperties}
-            />
-          )}
           <div style={researchFocused
             ? { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
-            : { width: browserWidth, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
+            : { width: DEF_BROWSER_PX, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
           }>
             <RightPanel isFocused={researchFocused} onFocusToggle={() => setResearchFocused(f => !f)} />
           </div>
         </div>
         <SourceContextMenu />
       </div>
-      <StorageWarning />
+      {showOnboarding && <OnboardingOverlay onClose={handleOnboardingClose} />}
       {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
       {showAccount && <AccountModal onClose={() => setShowAccount(false)} />}
     </>

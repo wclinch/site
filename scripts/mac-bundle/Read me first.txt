@@ -1,4 +1,4 @@
-Site v1.0.0-beta.1 — macOS
+Site v1.0.0 — macOS
 
 Install
   Drag Site.app into the Applications folder.
@@ -29,12 +29,18 @@ First launch
   After the first launch, macOS remembers Site on this Mac. You
   will not see the dialog again.
 
-Activation
-  A license key was issued at purchase. Paste it into the gate on
-  first launch. One-time beta access. No subscription.
+Pro
+  Site is free to use. Pro ($8.99/month) unlocks unlimited
+  workspaces, unlimited Documents, and 5 GB of uploaded Documents.
+
+  To upgrade: click Upgrade in the top-right corner of the app,
+  complete checkout in your browser, then return to Site and
+  click "Already subscribed? Sign in" to activate Pro.
 
 Storage
-  250 MB for uploaded documents. Saved Pages do not count toward storage.
+  Free: 150 MB for uploaded Documents.
+  Pro:  5 GB for uploaded Documents.
+  Saved Pages do not count toward storage.
 
 Support
   Official_Site_Support@protonmail.com

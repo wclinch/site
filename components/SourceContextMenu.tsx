@@ -47,7 +47,7 @@ export default function SourceContextMenu() {
       onClick={e => e.stopPropagation()}
       style={{
         position: 'fixed', left: contextMenu.x, top: contextMenu.y,
-        background: '#0f0f0f', border: '1px solid #222',
+        background: '#0f0f0f', border: '1px solid #1e1e1e',
         zIndex: 200, minWidth: '140px',
         overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
       }}
@@ -67,7 +67,7 @@ export default function SourceContextMenu() {
       )}
       <button
         onClick={handleRemove}
-        style={{ ...menuBtn, color: '#c55' }}
+        style={{ ...menuBtn, color: '#c44' }}
         onMouseEnter={e => (e.currentTarget.style.background = '#1e1e1e')}
         onMouseLeave={e => (e.currentTarget.style.background = 'none')}
       >

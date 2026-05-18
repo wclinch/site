@@ -106,7 +106,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
         } />
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 0 8px', display: 'flex', flexDirection: 'column' }}>
           {fileSources.length === 0 ? (
-            <EmptyRow text="Documents you add stay with this workspace." />
+            <EmptyRow text="Files you add stay with this workspace." />
           ) : (
             fileSources.map(src => (
               <StackRow
@@ -191,7 +191,7 @@ function EmptyRow({ text }: { text: string }) {
   return (
     <div style={{
       padding: '10px 14px',
-      fontSize: '11px', color: '#444',
+      fontSize: '11px', color: '#555',
       letterSpacing: '0.02em', lineHeight: 1.5,
       userSelect: 'none',
     }}>
@@ -281,7 +281,7 @@ function StackRow({
         <>
           <PinBtn
             label="1"
-            title="Open in View 1"
+            title="Open in View"
             active={paneButtons.pref === 1}
             onClick={paneButtons.onSet1}
           />
@@ -297,7 +297,7 @@ function StackRow({
       {/* View pin buttons — Pages only */}
       {pinButtons && !renaming && (
         <>
-          <PinBtn label="1" title="Open in View 1" active={!!pinButtons.active1} onClick={e => { e.stopPropagation(); pinButtons.onPin1() }} />
+          <PinBtn label="1" title="Open in View" active={!!pinButtons.active1} onClick={e => { e.stopPropagation(); pinButtons.onPin1() }} />
           <PinBtn label="2" title="Open in View 2" active={!!pinButtons.active2} onClick={e => { e.stopPropagation(); pinButtons.onPin2() }} />
         </>
       )}
