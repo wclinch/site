@@ -170,7 +170,7 @@ export default function StorageBadge() {
                   {[1, 2].map(s => (
                     <div key={s} style={{
                       width: '16px', height: '2px', borderRadius: '1px',
-                      background: (s === 1 && !armed) || (s === 2 && armed) ? '#c44' : '#1e1e1e',
+                      background: s === 1 ? (armed ? '#1e1e1e' : '#3a3a3a') : (armed ? '#c44' : '#1e1e1e'),
                       transition: 'background 0.2s',
                     }} />
                   ))}

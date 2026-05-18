@@ -79,7 +79,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
   onFocusToggle?: () => void
 }) {
   const panelId = 'A'
-  const { addUrl, sources, pinUrlToView } = useApp()
+  const { addUrl, sources, pinUrlToView, activeId } = useApp()
 
   const tabsKey = 'proof-v3-research-tabs'
 
@@ -538,21 +538,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
         </div>
 
         {/* Quick open strip — horizontal chips, only in home mode */}
-        {homeMode && (
-          <div style={{
-            height: '36px', flexShrink: 0,
-            display: 'flex', alignItems: 'center', gap: '4px',
-            padding: '0 8px',
-            background: '#060606', borderBottom: '1px solid #1a1a1a',
-            overflowX: 'auto', overflowY: 'hidden',
-            scrollbarWidth: 'none',
-            WebkitAppRegion: 'no-drag',
-          } as React.CSSProperties}>
-            {HOME_SHORTCUTS.map(([key, label]) => (
-              <ShortcutChip key={key} label={label} onClick={() => navigate(key)} />
-            ))}
-          </div>
-        )}
+        {homeMode && <QuickOpenStrip urlInput={urlInput} navigate={navigate} workspaceId={activeId} />}
 
         {/* Shortcut hint — only when typing a known shortcut */}
         {homeMode && urlFocused && getShortcutHint(urlInput) && (
@@ -793,27 +779,195 @@ function ViewPinBtn({ label, title, onClick, disabled }: { label: string; title:
 
 // ─── Quick open ───────────────────────────────────────────────────────────────
 
-const HOME_SHORTCUTS = Object.entries(SHORTCUT_LABELS).filter(([key]) => key !== 'google docs')
+const HOME_SHORTCUTS: [string, string][] = [
+  ['chatgpt',      'ChatGPT'],
+  ['google',       'Google'],
+  ['youtube',      'YouTube'],
+  ['gmail',        'Gmail'],
+  ['docs',         'Docs'],
+  ['drive',        'Drive'],
+  ['sheets',       'Sheets'],
+  ['slides',       'Slides'],
+  ['maps',         'Maps'],
+  ['calendar',     'Calendar'],
+  ['meet',         'Meet'],
+  ['wikipedia',    'Wikipedia'],
+  ['reddit',       'Reddit'],
+  ['hn',           'HN'],
+  ['scholar',      'Scholar'],
+  ['canvas',       'Canvas'],
+  ['mdn',          'MDN'],
+  ['stackoverflow','Stack Overflow'],
+  ['github',       'GitHub'],
+  ['notion',       'Notion'],
+  ['figma',        'Figma'],
+  ['linear',       'Linear'],
+  ['vercel',       'Vercel'],
+  ['canva',        'Canva'],
+  ['framer',       'Framer'],
+  ['webflow',      'Webflow'],
+  ['airtable',     'Airtable'],
+  ['claude',       'Claude'],
+  ['perplexity',   'Perplexity'],
+  ['gemini',       'Gemini'],
+  ['grok',         'Grok'],
+  ['mistral',      'Mistral'],
+  ['x',            'X'],
+  ['linkedin',     'LinkedIn'],
+  ['instagram',    'Instagram'],
+  ['discord',      'Discord'],
+  ['slack',        'Slack'],
+  ['zoom',         'Zoom'],
+  ['loom',         'Loom'],
+  ['medium',       'Medium'],
+  ['substack',     'Substack'],
+  ['bbc',          'BBC'],
+  ['reuters',      'Reuters'],
+  ['amazon',       'Amazon'],
+  ['spotify',      'Spotify'],
+  ['unsplash',     'Unsplash'],
+  ['dribbble',     'Dribbble'],
+  ['stripe',       'Stripe'],
+  ['npm',          'npm'],
+  ['dropbox',      'Dropbox'],
+]
 
-function ShortcutChip({ label, onClick }: { label: string; onClick: () => void }) {
-  const [hov, setHov] = useState(false)
+function pinsKey(workspaceId: string) { return `proof-quickopen-pins:${workspaceId}` }
+
+function loadPins(workspaceId: string): string[] {
+  try { return JSON.parse(localStorage.getItem(pinsKey(workspaceId)) || '[]') } catch { return [] }
+}
+
+function savePins(workspaceId: string, pins: string[]) {
+  try { localStorage.setItem(pinsKey(workspaceId), JSON.stringify(pins)) } catch {}
+}
+
+function QuickOpenStrip({ urlInput, navigate, workspaceId }: {
+  urlInput: string
+  navigate: (s: string) => void
+  workspaceId: string
+}) {
+  const [pinnedKeys, setPinnedKeys] = useState<string[]>(() =>
+    typeof window !== 'undefined' ? loadPins(workspaceId) : []
+  )
+
+  // Reload pins when workspace switches
+  useEffect(() => {
+    setPinnedKeys(loadPins(workspaceId))
+  }, [workspaceId])
+  const [shuffled] = useState<[string, string][]>(() =>
+    [...HOME_SHORTCUTS].sort(() => Math.random() - 0.5)
+  )
+
+  function togglePin(key: string) {
+    setPinnedKeys(prev => {
+      const next = prev.includes(key) ? prev.filter(k => k !== key) : [key, ...prev]
+      savePins(workspaceId, next)
+      return next
+    })
+  }
+
+  const q = urlInput.trim().toLowerCase()
+  const isUrl = /^https?:\/\//i.test(q) || /^[?g]\s+/.test(q) || /^[a-zA-Z0-9]([a-zA-Z0-9-]*\.)+[a-zA-Z]{2,}/.test(q)
+  const filtered = (!q || isUrl)
+    ? shuffled
+    : shuffled.filter(([key, label]) => key.includes(q) || label.toLowerCase().includes(q))
+
+  if (filtered.length === 0) return null
+
+  const isFiltering = !(!q || isUrl)
+  const pinned   = filtered.filter(([key]) => pinnedKeys.includes(key))
+  const unpinned = filtered.filter(([key]) => !pinnedKeys.includes(key))
+
   return (
-    <button
-      onClick={onClick}
+    <>
+      <div style={{
+        height: '36px', flexShrink: 0,
+        display: 'flex', alignItems: 'center', gap: '4px',
+        padding: '0 8px',
+        background: '#060606', borderBottom: '1px solid #1a1a1a',
+        overflowX: 'auto', overflowY: 'hidden',
+        scrollbarWidth: 'none',
+        WebkitAppRegion: 'no-drag',
+      } as React.CSSProperties}>
+        {pinned.map(([key, label]) => (
+          <ShortcutChip
+            key={key} label={label} pinned
+            onClick={() => navigate(key)}
+            onPin={() => togglePin(key)}
+          />
+        ))}
+        {!isFiltering && pinned.length > 0 && unpinned.length > 0 && (
+          <div style={{ width: '1px', height: '14px', background: '#1e1e1e', flexShrink: 0, margin: '0 4px' }} />
+        )}
+        {unpinned.map(([key, label]) => (
+          <ShortcutChip
+            key={key} label={label} pinned={false}
+            onClick={() => navigate(key)}
+            onPin={() => togglePin(key)}
+          />
+        ))}
+      </div>
+
+    </>
+  )
+}
+
+function ShortcutChip({ label, pinned, onClick, onPin }: {
+  label: string
+  pinned: boolean
+  onClick: () => void
+  onPin: () => void
+}) {
+  const [hov, setHov] = useState(false)
+  const [pinHov, setPinHov] = useState(false)
+
+  return (
+    <div
       onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
+      onMouseLeave={() => { setHov(false); setPinHov(false) }}
       style={{
-        height: '22px', padding: '0 10px', flexShrink: 0,
-        background: 'none',
-        border: `1px solid ${hov ? '#2a2a2a' : '#1a1a1a'}`,
+        display: 'flex', alignItems: 'center', flexShrink: 0,
+        height: '22px',
+        border: `1px solid ${hov ? '#2a2a2a' : pinned ? '#222' : '#1a1a1a'}`,
         borderRadius: '3px',
-        color: hov ? '#777' : '#444',
-        fontSize: '11px', letterSpacing: '0.02em',
-        cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
-        whiteSpace: 'nowrap',
-        transition: 'color 0.1s, border-color 0.1s',
+        transition: 'border-color 0.1s',
       }}
-    >{label}</button>
+    >
+      <button
+        onClick={onClick}
+        style={{
+          height: '100%', padding: '0 8px 0 10px',
+          background: 'none', border: 'none', outline: 'none',
+          color: hov ? '#888' : pinned ? '#555' : '#444',
+          fontSize: '11px', letterSpacing: '0.02em',
+          cursor: 'pointer', fontFamily: 'inherit',
+          whiteSpace: 'nowrap',
+          transition: 'color 0.1s',
+        }}
+      >{label}</button>
+
+      {/* Pin icon — always in layout to prevent width shift, opacity controls visibility */}
+      <button
+        onClick={e => { e.stopPropagation(); onPin() }}
+        onMouseEnter={() => setPinHov(true)}
+        onMouseLeave={() => setPinHov(false)}
+        title={pinned ? 'Unpin' : 'Pin to left'}
+        style={{
+          height: '100%', padding: '0 6px 0 2px',
+          background: 'none', border: 'none', outline: 'none',
+          cursor: 'pointer', display: 'flex', alignItems: 'center',
+          color: pinHov ? (pinned ? '#c44' : '#888') : pinned ? '#555' : '#333',
+          opacity: (hov || pinned) ? 1 : 0,
+          pointerEvents: (hov || pinned) ? 'auto' : 'none',
+          transition: 'color 0.1s, opacity 0.1s',
+        }}
+      >
+        <svg width="8" height="8" viewBox="0 0 10 10" fill="currentColor">
+          <path d="M3 1h4v1l-1 3h1a1 1 0 010 2H6v3H4V7H3a1 1 0 010-2h1L3 2V1z" />
+        </svg>
+      </button>
+    </div>
   )
 }
 

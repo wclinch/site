@@ -1,29 +1,43 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useApp } from '@/context/AppContext'
-import { getCheckoutUrl } from '@/lib/auth'
+import { getCheckoutUrl, getStoredCredentials } from '@/lib/auth'
 type View = 'sign_in' | 'loading' | 'error' | 'signed_in'
 
 export default function AccountModal({ onClose }: { onClose: () => void }) {
   const { user, isPro, signIn, signOut, openBilling, refreshEntitlement } = useApp()
 
-  const [view,       setView]       = useState<View>(user ? 'signed_in' : 'sign_in')
-  const [email,      setEmail]      = useState('')
-  const [key,        setKey]        = useState('')
-  const [errorMsg,   setErrorMsg]   = useState<string | null>(null)
+  const [view,     setView]     = useState<View>(user ? 'signed_in' : 'sign_in')
+  const [email,    setEmail]    = useState('')
+  const [key,      setKey]      = useState('')
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [armed,    setArmed]    = useState(false)
 
-  // Refresh subscription status whenever the modal opens while signed in
+  // On open: if already signed in, refresh. If signed out but credentials saved, auto re-auth.
   useEffect(() => {
-    if (user) refreshEntitlement()
+    if (user) {
+      refreshEntitlement()
+      return
+    }
+    const creds = getStoredCredentials()
+    if (creds) {
+      setView('loading')
+      signIn(creds.email, creds.licenseKey).then(result => {
+        if (result.ok) setView('signed_in')
+        else { setEmail(creds.email); setKey(creds.licenseKey); setView('sign_in') }
+      })
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Close on Escape
+  // Close on Escape; disarm first if armed
   useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') { if (armed) setArmed(false); else onClose() }
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [onClose, armed])
 
   async function handleSignIn() {
     const trimmedEmail = email.trim()
@@ -45,12 +59,6 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
     }
   }
 
-  function handleUpgrade() {
-    const url = getCheckoutUrl(user?.email)
-    if (url) window.open(url, '_blank', 'noopener,noreferrer')
-    else window.open('https://polar.sh', '_blank', 'noopener,noreferrer')
-  }
-
   function handleSignOut() {
     signOut()
     onClose()
@@ -58,7 +66,7 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      onClick={onClose}
+      onClick={() => { if (armed) setArmed(false); else onClose() }}
       style={{
         position: 'fixed', inset: 0, zIndex: 2000,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -82,6 +90,19 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
           fontFamily: 'inherit',
         }}
       >
+
+        {/* ── Step indicators (signed-in sign-out flow) ── */}
+        {view === 'signed_in' && (
+          <div style={{ position: 'absolute', top: '20px', right: '22px', display: 'flex', gap: '5px' }}>
+            {[0, 1].map(s => (
+              <div key={s} style={{
+                width: '16px', height: '2px', borderRadius: '1px',
+                background: s === 0 ? (armed ? '#1e1e1e' : '#3a3a3a') : (armed ? '#c44' : '#1e1e1e'),
+                transition: 'background 0.2s',
+              }} />
+            ))}
+          </div>
+        )}
 
         {/* ── Sign in form ── */}
         {(view === 'sign_in' || view === 'error') && (
@@ -168,27 +189,26 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
 
             <div style={{ height: '1px', background: '#111', marginBottom: '22px' }} />
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              {!isPro && (
-                <AccountBtn onClick={() => { onClose(); ;(window as any).electronAPI?.setModal?.(true); setTimeout(() => window.dispatchEvent(new Event('proof:upgrade-needed')), 50) }}>
+            {/* Sign-out row — arms on first click, confirms on second */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {!isPro && !armed && (
+                <AccountBtn onClick={() => { onClose(); setTimeout(() => window.dispatchEvent(new Event('proof:upgrade-needed')), 50) }}>
                   Upgrade to Pro
                 </AccountBtn>
               )}
-              <button
-                onClick={handleSignOut}
-                style={{
-                  background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                  fontSize: '12px', color: '#444', letterSpacing: '0.02em',
-                  fontFamily: 'inherit', transition: 'color 0.15s',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.color = '#777')}
-                onMouseLeave={e => (e.currentTarget.style.color = '#444')}
-              >
-                Sign out
-              </button>
+
+              {armed ? (
+                <>
+                  <AccountBtn onClick={() => setArmed(false)}>Cancel</AccountBtn>
+                  <DestructiveBtn onClick={handleSignOut}>Confirm sign out</DestructiveBtn>
+                </>
+              ) : (
+                <DestructiveBtn onClick={() => setArmed(true)}>Sign out</DestructiveBtn>
+              )}
             </div>
           </>
         )}
+
         <button
           onClick={onClose}
           style={{
@@ -238,12 +258,34 @@ function AccountBtn({ children, onClick, disabled }: {
         background: 'transparent',
         border: `1px solid ${hov && !disabled ? '#333' : '#252525'}`,
         color: disabled ? '#444' : hov ? '#ddd' : '#888',
-        padding: '8px 16px', fontSize: '11px', fontFamily: 'inherit',
+        padding: '7px 14px', fontSize: '11px', fontFamily: 'inherit',
         letterSpacing: '0.08em', textTransform: 'uppercase',
         cursor: disabled ? 'not-allowed' : 'pointer',
         borderRadius: '3px', outline: 'none',
         transition: 'color 0.15s, border-color 0.15s',
         opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+function DestructiveBtn({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        background: 'transparent',
+        border: `1px solid ${hov ? '#3a1515' : '#2a1515'}`,
+        color: hov ? '#e55' : '#c44',
+        padding: '7px 14px', fontSize: '11px', fontFamily: 'inherit',
+        letterSpacing: '0.08em', textTransform: 'uppercase',
+        cursor: 'pointer', borderRadius: '3px', outline: 'none',
+        transition: 'color 0.15s, border-color 0.15s',
       }}
     >
       {children}

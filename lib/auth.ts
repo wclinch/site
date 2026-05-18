@@ -2,8 +2,9 @@
 // All Polar API calls go through Electron IPC — the main process holds the org token.
 // In web/dev context without Electron, auth is unavailable but the app still works.
 
-const AUTH_KEY = 'proof-v3-auth-session'
-const ENT_KEY  = 'proof-v3-entitlement'
+const AUTH_KEY  = 'proof-v3-auth-session'
+const ENT_KEY   = 'proof-v3-entitlement'
+const CREDS_KEY = 'proof-v3-credentials'
 
 export interface AuthUser {
   email:      string
@@ -31,11 +32,24 @@ export function getStoredUser(): AuthUser | null {
 
 export function storeUser(user: AuthUser) {
   try { localStorage.setItem(AUTH_KEY, JSON.stringify(user)) } catch {}
+  try { localStorage.setItem(CREDS_KEY, JSON.stringify({ email: user.email, licenseKey: user.licenseKey })) } catch {}
+}
+
+export function getStoredCredentials(): { email: string; licenseKey: string } | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(CREDS_KEY)
+    if (!raw) return null
+    const c = JSON.parse(raw)
+    if (!c.email || !c.licenseKey) return null
+    return c
+  } catch { return null }
 }
 
 export function clearStoredSession() {
   try { localStorage.removeItem(AUTH_KEY) } catch {}
   try { localStorage.removeItem(ENT_KEY) } catch {}
+  // credentials (email + key) are kept so re-auth is silent
 }
 
 export function storeEntitlementCache(isPro: boolean) {

@@ -158,6 +158,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
                   onPin2: () => pinPageToView(2, src),
                   active1: view1Page?.srcId === src.id,
                   active2: view2Page?.srcId === src.id,
+                  onWeb: src.raw ? () => window.dispatchEvent(new CustomEvent('proof:browser-navigate', { detail: src.raw })) : undefined,
                 }}
               />
             ))
@@ -217,7 +218,7 @@ function StackRow({
   onClick: () => void
   onContextMenu: (e: React.MouseEvent) => void
   paneButtons?: { pref: 1 | 2; onSet1: (e: React.MouseEvent) => void; onSet2: (e: React.MouseEvent) => void }
-  pinButtons?: { onPin1: () => void; onPin2: () => void; active1?: boolean; active2?: boolean }
+  pinButtons?: { onPin1: () => void; onPin2: () => void; active1?: boolean; active2?: boolean; onWeb?: () => void }
 }) {
   const [hov, setHov] = useState(false)
   const label = src.label || src.raw
@@ -297,8 +298,22 @@ function StackRow({
       {/* View pin buttons — Pages only */}
       {pinButtons && !renaming && (
         <>
-          <PinBtn label="1" title="Open in View" active={!!pinButtons.active1} onClick={e => { e.stopPropagation(); pinButtons.onPin1() }} />
+          <PinBtn label="1" title="Open in View 1" active={!!pinButtons.active1} onClick={e => { e.stopPropagation(); pinButtons.onPin1() }} />
           <PinBtn label="2" title="Open in View 2" active={!!pinButtons.active2} onClick={e => { e.stopPropagation(); pinButtons.onPin2() }} />
+          {pinButtons.onWeb && (
+            <PinBtn
+              label={
+                <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+                  <circle cx="6" cy="6" r="4.5" />
+                  <path d="M6 1.5C4.5 3 3.5 4.5 3.5 6s1 3 2.5 4.5M6 1.5C7.5 3 8.5 4.5 8.5 6S7.5 9 6 10.5" />
+                  <line x1="1.5" y1="6" x2="10.5" y2="6" />
+                </svg>
+              }
+              title="Open in Web"
+              active={false}
+              onClick={e => { e.stopPropagation(); pinButtons.onWeb!() }}
+            />
+          )}
         </>
       )}
 
@@ -309,7 +324,7 @@ function StackRow({
 }
 
 function PinBtn({ label, title, active, onClick }: {
-  label: string; title: string; active: boolean; onClick: (e: React.MouseEvent) => void
+  label: React.ReactNode; title: string; active: boolean; onClick: (e: React.MouseEvent) => void
 }) {
   const [hov, setHov] = useState(false)
   return (
