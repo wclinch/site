@@ -2,15 +2,15 @@
 import { useState, useEffect } from 'react'
 import { useApp } from '@/context/AppContext'
 import { getCheckoutUrl } from '@/lib/auth'
-type View = 'sign_in' | 'loading' | 'no_account' | 'signed_in'
+type View = 'sign_in' | 'loading' | 'error' | 'signed_in'
 
 export default function AccountModal({ onClose }: { onClose: () => void }) {
   const { user, isPro, signIn, signOut, openBilling, refreshEntitlement } = useApp()
 
   const [view,       setView]       = useState<View>(user ? 'signed_in' : 'sign_in')
   const [email,      setEmail]      = useState('')
-  const [errorEmail, setErrorEmail] = useState<string | null>(null)
-  const [billingBusy, setBillingBusy] = useState(false)
+  const [key,        setKey]        = useState('')
+  const [errorMsg,   setErrorMsg]   = useState<string | null>(null)
 
   // Refresh subscription status whenever the modal opens while signed in
   useEffect(() => {
@@ -26,29 +26,23 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
   }, [onClose])
 
   async function handleSignIn() {
-    const trimmed = email.trim()
-    if (!trimmed) return
+    const trimmedEmail = email.trim()
+    const trimmedKey   = key.trim()
+    if (!trimmedEmail || !trimmedKey) return
     setView('loading')
-    setErrorEmail(null)
-    const result = await signIn(trimmed)
+    setErrorMsg(null)
+    const result = await signIn(trimmedEmail, trimmedKey)
     if (result.ok) {
       setView('signed_in')
-    } else if (result.error === 'no_account') {
-      setErrorEmail(trimmed)
-      setView('no_account')
-    } else if (result.error === 'not_configured') {
-      setView('no_account')
-      setErrorEmail('__not_configured')
     } else {
-      setView('no_account')
-      setErrorEmail('__network')
+      const msg =
+        result.error === 'invalid_key'    ? 'License key not found or subscription inactive.' :
+        result.error === 'email_mismatch' ? 'Email does not match the license key.' :
+        result.error === 'not_configured' ? 'Sign-in is not configured in this build.' :
+                                            'Network unavailable. Try again when online.'
+      setErrorMsg(msg)
+      setView('error')
     }
-  }
-
-  async function handleManageBilling() {
-    setBillingBusy(true)
-    await openBilling().catch(() => {})
-    setBillingBusy(false)
   }
 
   function handleUpgrade() {
@@ -90,7 +84,7 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
       >
 
         {/* ── Sign in form ── */}
-        {(view === 'sign_in' || view === 'no_account') && (
+        {(view === 'sign_in' || view === 'error') && (
           <>
             <div style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '18px' }}>
               Account
@@ -99,48 +93,38 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
               Sign in
             </h2>
             <p style={{ fontSize: '13px', color: '#666', lineHeight: 1.65, margin: '0 0 24px' }}>
-              Sign in with your account email.
+              Enter your account email and license key.
             </p>
 
-            {view === 'no_account' && errorEmail && errorEmail !== '__not_configured' && errorEmail !== '__network' && (
+            {view === 'error' && errorMsg && (
               <div style={{ fontSize: '11px', color: '#a55', margin: '0 0 16px', letterSpacing: '0.02em' }}>
-                No account found for {errorEmail}. Check your email or upgrade to create one.
-              </div>
-            )}
-            {view === 'no_account' && errorEmail === '__network' && (
-              <div style={{ fontSize: '11px', color: '#a55', margin: '0 0 16px', letterSpacing: '0.02em' }}>
-                Network unavailable. Try again when online.
-              </div>
-            )}
-            {view === 'no_account' && errorEmail === '__not_configured' && (
-              <div style={{ fontSize: '11px', color: '#555', margin: '0 0 16px', letterSpacing: '0.02em' }}>
-                Account sign-in is not configured in this build.
+                {errorMsg}
               </div>
             )}
 
-            <div style={{
-              background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: '4px',
-              padding: '11px 14px', display: 'flex', alignItems: 'center', marginBottom: '18px',
-            }}>
-              <input
-                autoFocus
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') handleSignIn() }}
-                placeholder="you@example.com"
-                spellCheck={false}
-                autoCapitalize="off"
-                autoCorrect="off"
-                style={{
-                  flex: 1, background: 'transparent', border: 'none', outline: 'none',
-                  fontSize: '12px', color: '#ccc', fontFamily: 'inherit', letterSpacing: '0.02em',
-                }}
-              />
-            </div>
+            <InputField
+              autoFocus
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSignIn() }}
+              placeholder="you@example.com"
+              style={{ marginBottom: '10px' }}
+            />
+            <InputField
+              type="text"
+              value={key}
+              onChange={e => setKey(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSignIn() }}
+              placeholder="XXXX-XXXX-XXXX-XXXX"
+              spellCheck={false}
+              autoCapitalize="off"
+              autoCorrect="off"
+              style={{ marginBottom: '18px', fontFamily: 'monospace', letterSpacing: '0.06em' }}
+            />
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <AccountBtn onClick={handleSignIn} disabled={!email.trim()}>
+              <AccountBtn onClick={handleSignIn} disabled={!email.trim() || !key.trim()}>
                 Sign in
               </AccountBtn>
             </div>
@@ -157,30 +141,35 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
         {/* ── Signed in ── */}
         {view === 'signed_in' && user && (
           <>
-            <div style={{
-              fontSize: '11px', color: isPro ? '#5c9e6e' : '#555',
-              letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '18px',
-              transition: 'color 0.2s',
-            }}>
-              {isPro ? 'Pro' : 'Free'}
-            </div>
-
-            <h2 style={{ fontSize: '18px', fontWeight: 500, color: '#bbb', margin: '0 0 8px', letterSpacing: '-0.01em' }}>
+            <h2 style={{ fontSize: '17px', fontWeight: 500, color: '#bbb', margin: '0 0 6px', letterSpacing: '-0.01em' }}>
               {user.email}
             </h2>
 
-            <p style={{ fontSize: '13px', color: '#555', lineHeight: 1.65, margin: '0 0 28px' }}>
-              {isPro
-                ? 'Unlimited workspaces, unlimited Documents, 5 GB uploaded Documents, and Unlimited Pages.'
-                : '1 workspace, 10 Documents, 150 MB uploaded Documents, and Unlimited Pages.'}
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '28px' }}>
+              <span style={{ fontSize: '11px', color: isPro ? '#5c9e6e' : '#555', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                {isPro ? 'Pro' : 'Free'}
+              </span>
+              {isPro && (
+                <>
+                  <span style={{ fontSize: '11px', color: '#2a2a2a' }}>·</span>
+                  <span style={{ fontSize: '11px', color: '#444', letterSpacing: '0.02em' }}>$8.99 / mo</span>
+                  <span style={{ fontSize: '11px', color: '#2a2a2a' }}>·</span>
+                  <button
+                    onClick={() => openBilling()}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: '11px', color: '#444', fontFamily: 'inherit', letterSpacing: '0.02em', transition: 'color 0.15s' }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#888')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#444')}
+                  >
+                    Manage subscription →
+                  </button>
+                </>
+              )}
+            </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-              {isPro ? (
-                <AccountBtn onClick={handleManageBilling} disabled={billingBusy}>
-                  {billingBusy ? 'Opening…' : 'Manage billing'}
-                </AccountBtn>
-              ) : (
+            <div style={{ height: '1px', background: '#111', marginBottom: '22px' }} />
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              {!isPro && (
                 <AccountBtn onClick={() => { onClose(); ;(window as any).electronAPI?.setModal?.(true); setTimeout(() => window.dispatchEvent(new Event('proof:upgrade-needed')), 50) }}>
                   Upgrade to Pro
                 </AccountBtn>
@@ -211,6 +200,24 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
           onMouseLeave={e => (e.currentTarget.style.color = '#444')}
         >← Back</button>
       </div>
+    </div>
+  )
+}
+
+function InputField({ style, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { style?: React.CSSProperties }) {
+  return (
+    <div style={{
+      background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: '4px',
+      padding: '11px 14px', display: 'flex', alignItems: 'center', ...style,
+    }}>
+      <input
+        {...props}
+        style={{
+          flex: 1, background: 'transparent', border: 'none', outline: 'none',
+          fontSize: '12px', color: '#ccc', fontFamily: 'inherit', letterSpacing: '0.02em',
+          width: '100%',
+        }}
+      />
     </div>
   )
 }

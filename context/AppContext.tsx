@@ -13,7 +13,7 @@ import { wouldExceedLimit, STORAGE_LIMIT_BYTES } from '@/lib/storage-limit'
 import { checkIsPro, FREE_LIMITS, PRO_LIMITS } from '@/lib/entitlement'
 import type { Limits } from '@/lib/entitlement'
 import {
-  getStoredUser, storeEntitlementCache, clearStoredSession,
+  getStoredUser, clearStoredSession,
   signIn as authSignIn, refreshEntitlement as authRefresh, getPortalUrl,
 } from '@/lib/auth'
 import type { AuthUser, SignInResult } from '@/lib/auth'
@@ -58,7 +58,7 @@ interface AppState {
   user:              AuthUser | null
   isPro:             boolean
   limits:            Limits
-  signIn:            (email: string) => Promise<SignInResult>
+  signIn:            (email: string, key: string) => Promise<SignInResult>
   signOut:           () => void
   refreshEntitlement: () => Promise<void>
   openBilling:       () => Promise<void>
@@ -273,7 +273,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const storedUser = getStoredUser()
     if (storedUser) {
       setUser(storedUser)
-      authRefresh(storedUser.token).then(pro => {
+      authRefresh(storedUser.email, storedUser.licenseKey).then(pro => {
         if (pro !== null) setIsPro(pro)
       }).catch(() => {})
     }
@@ -361,8 +361,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ─── Auth + entitlement ──────────────────────────────────────────────────────
 
-  async function signInFn(email: string): Promise<SignInResult> {
-    const result = await authSignIn(email)
+  async function signInFn(email: string, key: string): Promise<SignInResult> {
+    const result = await authSignIn(email, key)
     if (result.ok) {
       setUser(result.user)
       setIsPro(result.isPro)
@@ -378,14 +378,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   async function refreshEntitlementFn() {
     if (!user) return
-    const pro = await authRefresh(user.token).catch(() => null)
+    const pro = await authRefresh(user.email, user.licenseKey).catch(() => null)
     if (pro !== null) setIsPro(pro)
   }
 
   async function openBilling() {
-    if (!user?.customerId) return
-    const url = await getPortalUrl(user.customerId).catch(() => null)
+    const customerId = user?.customerId
+    const url = customerId
+      ? await getPortalUrl(customerId).catch(() => null)
+      : null
     if (url) window.open(url, '_blank', 'noopener,noreferrer')
+    else window.open('https://polar.sh/site-official/portal', '_blank', 'noopener,noreferrer')
   }
 
   function needUpgrade(msg: string) {

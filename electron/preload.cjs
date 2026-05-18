@@ -11,9 +11,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // POLAR_CHECKOUT_URL is a static Polar hosted-checkout link — set it as an env var.
   POLAR_CHECKOUT_URL: _secrets.POLAR_CHECKOUT_URL || process.env.POLAR_CHECKOUT_URL || '',
   auth: {
-    getSession:         (email)      => ipcRenderer.invoke('auth:get-session', email),
-    checkSubscriptions: (token)      => ipcRenderer.invoke('auth:check-subscriptions', token),
-    getPortalUrl:       (customerId) => ipcRenderer.invoke('auth:get-portal-url', customerId),
+    validateKey:  (email, key)   => ipcRenderer.invoke('auth:validate-key', { email, key }),
+    getPortalUrl: (customerId)   => ipcRenderer.invoke('auth:get-portal-url', customerId),
   },
   // ── Modal state ─────────────────────────────────────────────────────────────
   // sendSync blocks the renderer until main has actually zeroed native views,

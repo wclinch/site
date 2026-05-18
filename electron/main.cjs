@@ -962,74 +962,42 @@ function polarHeaders(token) {
 function setupAuth() {
   const ORG_TOKEN = process.env.POLAR_ACCESS_TOKEN ?? ''
 
-  // Sign in: find customer by email → create session → check subscriptions
-  ipcMain.handle('auth:get-session', async (_e, email) => {
+  // Validate by email + subscription check. The license key field is shown in
+  // the UI so only subscribers (who receive a key from Polar) know to enter one,
+  // but we verify the subscription server-side since the token lacks license_keys scope.
+  ipcMain.handle('auth:validate-key', async (_e, { email, key }) => {
     if (!ORG_TOKEN) return { error: 'not_configured' }
+    if (!key || !key.trim()) return { error: 'invalid_key' }
     try {
-      // 1. Find customer by email in this org
+      // 1. Find customer by email
       const cusRes = await fetch(
-        `${POLAR_API}/v1/customers?email=${encodeURIComponent(email)}&organization_id=${POLAR_ORG_ID}&limit=1`,
+        `${POLAR_API}/v1/customers/?email=${encodeURIComponent(email.trim())}&organization_id=${POLAR_ORG_ID}&limit=1`,
         { headers: polarHeaders(ORG_TOKEN) }
       )
-      if (!cusRes.ok) return { error: 'polar_error', status: cusRes.status }
+      if (!cusRes.ok) return { error: 'network_error' }
       const cusData = await cusRes.json()
       const customer = cusData?.items?.[0]
-      if (!customer) return { error: 'no_account' }
+      if (!customer) return { error: 'invalid_key' }
 
-      // 2. Create a customer session (short-lived token + portal URL)
-      const sesRes = await fetch(`${POLAR_API}/v1/customer-sessions/`, {
-        method: 'POST',
-        headers: polarHeaders(ORG_TOKEN),
-        body: JSON.stringify({ customer_id: customer.id }),
-      })
-      if (!sesRes.ok) return { error: 'polar_error', status: sesRes.status }
-      const session = await sesRes.json()
-
-      // 3. Check subscription status with the customer session token
+      // 2. Check for an active subscription on this org
       const subRes = await fetch(
-        `${POLAR_API}/v1/customer-portal/subscriptions?active=true&limit=10`,
-        { headers: polarHeaders(session.token) }
+        `${POLAR_API}/v1/subscriptions/?organization_id=${POLAR_ORG_ID}&customer_id=${customer.id}&active=true&limit=10`,
+        { headers: polarHeaders(ORG_TOKEN) }
       )
-      let isPro = false
-      if (subRes.ok) {
-        const subData = await subRes.json()
-        isPro = (subData?.items ?? []).some(s =>
-          s.status === 'active' || s.status === 'trialing'
-        )
-      }
+      if (!subRes.ok) return { error: 'network_error' }
+      const subData = await subRes.json()
+      const isPro = (subData?.items ?? []).some(s =>
+        s.status === 'active' || s.status === 'trialing'
+      )
+      if (!isPro) return { error: 'invalid_key' }
 
-      return {
-        ok: true,
-        token:      session.token,
-        expiresAt:  session.expires_at,
-        customerId: customer.id,
-        email:      customer.email,
-        isPro,
-      }
+      return { ok: true, email: customer.email, customerId: customer.id }
     } catch (err) {
       return { error: 'network_error', message: err?.message }
     }
   })
 
-  // Recheck subscription status with an existing customer session token
-  ipcMain.handle('auth:check-subscriptions', async (_e, customerToken) => {
-    try {
-      const res = await fetch(
-        `${POLAR_API}/v1/customer-portal/subscriptions?active=true&limit=10`,
-        { headers: polarHeaders(customerToken) }
-      )
-      if (!res.ok) return { error: 'polar_error', status: res.status }
-      const data = await res.json()
-      const isPro = (data?.items ?? []).some(s =>
-        s.status === 'active' || s.status === 'trialing'
-      )
-      return { ok: true, isPro }
-    } catch {
-      return { error: 'network_error' }
-    }
-  })
-
-  // Get a fresh customer portal URL (do not cache — Polar docs say generate fresh each time)
+  // Generate a pre-authenticated customer portal URL
   ipcMain.handle('auth:get-portal-url', async (_e, customerId) => {
     if (!ORG_TOKEN) return { error: 'not_configured' }
     try {
@@ -1041,8 +1009,8 @@ function setupAuth() {
       if (!res.ok) return { error: 'polar_error', status: res.status }
       const data = await res.json()
       return { ok: true, portalUrl: data.customer_portal_url }
-    } catch {
-      return { error: 'network_error' }
+    } catch (err) {
+      return { error: 'network_error', message: err?.message }
     }
   })
 }

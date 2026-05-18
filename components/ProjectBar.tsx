@@ -6,7 +6,7 @@ import StorageBadge from './StorageBadge'
 export default function ProjectBar() {
   const {
     projects, activeId,
-    user, isPro, openBilling,
+    user, isPro,
     switchWorkspace, newWorkspace, removeWorkspace,
     updateProject,
   } = useApp()
@@ -144,7 +144,7 @@ export default function ProjectBar() {
         {/* Divider */}
         <div style={{ width: '1px', height: '12px', background: '#1a1a1a', flexShrink: 0, margin: '0 8px 0 6px' }} />
 
-        {/* Tab strip */}
+        {/* Tab strip — outer div stays draggable; individual tabs are no-drag */}
         <div
           ref={tabStripRef}
           style={{
@@ -152,7 +152,6 @@ export default function ProjectBar() {
             display: 'flex', alignItems: 'center',
             overflowX: 'auto', overflowY: 'hidden', gap: '1px',
             scrollbarWidth: 'none',
-            WebkitAppRegion: 'no-drag',
           } as React.CSSProperties}
         >
           {projects.map(p => {
@@ -228,8 +227,6 @@ export default function ProjectBar() {
         {isPro ? (
           // Pro
           <>
-            <RightBtn onClick={() => openBilling()}>Manage billing</RightBtn>
-            <Dot />
             <RightBtn onClick={() => window.dispatchEvent(new Event('proof:show-account'))}>Account</RightBtn>
           </>
         ) : !user ? (
