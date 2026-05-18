@@ -27,6 +27,7 @@ const PRO_FEATURES = [
 function UpgradeModal({ onClose }: { onClose: () => void }) {
   const { user, isPro, signIn, refreshEntitlement } = useApp()
   const [email,      setEmail]      = useState('')
+  const [key,        setKey]        = useState('')
   const [busy,       setBusy]       = useState(false)
   const [error,      setError]      = useState<string | null>(null)
   const [checked,    setChecked]    = useState(false)
@@ -35,16 +36,18 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
   useEffect(() => { isProRef.current = isPro }, [isPro])
 
   async function handleSignIn() {
-    const trimmed = email.trim()
-    if (!trimmed || busy) return
+    const trimmedEmail = email.trim()
+    const trimmedKey   = key.trim()
+    if (!trimmedEmail || !trimmedKey || busy) return
     setBusy(true); setError(null)
-    const result = await signIn(trimmed)
+    const result = await signIn(trimmedEmail, trimmedKey)
     setBusy(false)
     if (result.ok) {
       if (result.isPro) { onClose(); return }
     } else {
       setError(
-        result.error === 'no_account'     ? 'No account found. Subscribe first using the button above.' :
+        result.error === 'invalid_key'    ? 'License key not found or subscription inactive.' :
+        result.error === 'email_mismatch' ? 'Email does not match the license key.' :
         result.error === 'network_error'  ? 'Network unavailable. Try again when online.' :
         result.error === 'not_configured' ? 'Sign-in is not configured in this build.' :
                                             'Sign in failed. Try again.'
@@ -149,7 +152,7 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
               <>
                 <div style={{
                   background: '#0d0d0d', border: `1px solid ${error ? '#3a1f1f' : '#1a1a1a'}`,
-                  borderRadius: '4px', padding: '11px 14px', marginBottom: error ? '8px' : '12px',
+                  borderRadius: '4px', padding: '11px 14px', marginBottom: '8px',
                 }}>
                   <input
                     autoFocus type="email" value={email}
@@ -160,19 +163,32 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
                     style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', color: '#ccc', fontFamily: 'inherit', letterSpacing: '0.02em' }}
                   />
                 </div>
+                <div style={{
+                  background: '#0d0d0d', border: `1px solid ${error ? '#3a1f1f' : '#1a1a1a'}`,
+                  borderRadius: '4px', padding: '11px 14px', marginBottom: error ? '8px' : '12px',
+                }}>
+                  <input
+                    type="text" value={key}
+                    onChange={e => { setKey(e.target.value); if (error) setError(null) }}
+                    onKeyDown={e => { if (e.key === 'Enter') handleSignIn() }}
+                    placeholder="XXXX-XXXX-XXXX-XXXX"
+                    spellCheck={false} autoCapitalize="off" autoCorrect="off"
+                    style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', color: '#ccc', fontFamily: 'monospace', letterSpacing: '0.06em' }}
+                  />
+                </div>
                 {error && <div style={{ fontSize: '11px', color: '#a55', margin: '0 0 12px' }}>{error}</div>}
                 <button
-                  onClick={handleSignIn} disabled={busy || !email.trim()}
+                  onClick={handleSignIn} disabled={busy || !email.trim() || !key.trim()}
                   style={{
                     background: 'transparent', border: '1px solid #2a2a2a',
-                    color: busy || !email.trim() ? '#555' : '#bbb',
+                    color: busy || !email.trim() || !key.trim() ? '#555' : '#bbb',
                     padding: '9px 18px', fontSize: '11px', fontFamily: 'inherit',
                     letterSpacing: '0.08em', textTransform: 'uppercase',
-                    cursor: busy || !email.trim() ? 'not-allowed' : 'pointer',
+                    cursor: busy || !email.trim() || !key.trim() ? 'not-allowed' : 'pointer',
                     borderRadius: '3px', transition: 'color 0.15s, border-color 0.15s',
                   }}
-                  onMouseEnter={e => { if (!busy && email.trim()) { e.currentTarget.style.borderColor = '#444'; e.currentTarget.style.color = '#eee' } }}
-                  onMouseLeave={e => { if (!busy && email.trim()) { e.currentTarget.style.borderColor = '#2a2a2a'; e.currentTarget.style.color = '#bbb' } }}
+                  onMouseEnter={e => { if (!busy && email.trim() && key.trim()) { e.currentTarget.style.borderColor = '#444'; e.currentTarget.style.color = '#eee' } }}
+                  onMouseLeave={e => { if (!busy && email.trim() && key.trim()) { e.currentTarget.style.borderColor = '#2a2a2a'; e.currentTarget.style.color = '#bbb' } }}
                 >
                   {busy ? 'Signing in…' : 'Sign in'}
                 </button>
