@@ -1,6 +1,7 @@
 import type { Project, QueuedSource, ViewPage } from '@/lib/types'
 import type { Limits } from '@/lib/entitlement'
 import type { AuthUser, SignInResult } from '@/lib/auth'
+import type { WorkspaceSnapshot } from './workspaceHistoryTypes'
 
 export interface ContextMenu { srcId: string; x: number; y: number }
 
@@ -71,4 +72,12 @@ export interface AppState {
   clearStack: () => void
   reorderStack: (fromIndex: number, toIndex: number) => void
   openInPane: (id: string) => void
+  // Workspace history
+  historyEnabled: boolean
+  setHistoryEnabled: (v: boolean) => void
+  workspaceHistory: WorkspaceSnapshot[]
+  saveHistorySnapshot: (manual?: boolean) => void
+  restoreHistorySnapshot: (snapshot: WorkspaceSnapshot) => void
+  restoreHistorySnapshotAsCopy: (snapshot: WorkspaceSnapshot) => void
+  clearWorkspaceHistory: () => void
 }

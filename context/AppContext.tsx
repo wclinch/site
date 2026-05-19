@@ -18,6 +18,9 @@ import {
 } from '@/lib/auth'
 import type { AuthUser, SignInResult } from '@/lib/auth'
 import type { AppState, ContextMenu } from './appTypes'
+import type { WorkspaceSnapshot } from './workspaceHistoryTypes'
+import { appendWorkspaceSnapshot, clearWorkspaceHistoryStorage, loadWorkspaceHistory } from './workspaceHistoryStorage'
+import { shouldSaveSnapshot, buildSnapshot } from './workspaceHistoryHelpers'
 
 // ─── Module-level constants ──────────────────────────────────────────────────
 
@@ -73,6 +76,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isPro, setIsPro] = useState(false)
   const [user,  setUser]  = useState<AuthUser | null>(null)
 
+  // Workspace history
+  const [historyEnabled, setHistoryEnabledState] = useState(() => {
+    try { return localStorage.getItem('proof-save-workspace-history') !== 'false' } catch { return true }
+  })
+  const [workspaceHistory, setWorkspaceHistory] = useState<WorkspaceSnapshot[]>([])
+
   // ─── Refs ───────────────────────────────────────────────────────────────
 
   const projectsRef    = useRef<Project[]>([])
@@ -82,8 +91,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const view1PageRef   = useRef<ViewPage | null>(null)
   const view2PageRef   = useRef<ViewPage | null>(null)
   const splitViewRef   = useRef(false)
-  const isProRef       = useRef(false)
-  const autoSaveTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isProRef          = useRef(false)
+  const historyEnabledRef = useRef(historyEnabled)
+  const autoSaveTimer     = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Sync refs on every render so async callbacks always see the latest values.
   useEffect(() => { activeIdRef.current = activeId },    [activeId])
@@ -92,7 +102,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => { view1PageRef.current = view1Page },  [view1Page])
   useEffect(() => { view2PageRef.current = view2Page },  [view2Page])
   useEffect(() => { splitViewRef.current = splitView },  [splitView])
-  useEffect(() => { isProRef.current = isPro },          [isPro])
+  useEffect(() => { isProRef.current = isPro },                    [isPro])
+  useEffect(() => { historyEnabledRef.current = historyEnabled }, [historyEnabled])
 
   // ─── Derived ────────────────────────────────────────────────────────────
 
@@ -278,6 +289,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         researchTabs,
       })
       saveProjects(snap)
+
+      // Also save a history snapshot if enabled and state has changed.
+      if (historyEnabledRef.current && curId) {
+        const proj = projectsRef.current.find(p => p.id === curId)
+        const v1   = view1PageRef.current
+        const v2   = view2PageRef.current
+        const sp   = splitViewRef.current
+        if (proj && shouldSaveSnapshot(curId, v1, v2, sp, researchTabs, false)) {
+          appendWorkspaceSnapshot(curId, buildSnapshot(curId, proj.name, v1, v2, sp, researchTabs))
+        }
+      }
     }
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
@@ -296,6 +318,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (selectedId2) localStorage.setItem(SELECTED_KEY_2, selectedId2)
     else             localStorage.removeItem(SELECTED_KEY_2)
   }, [selectedId2])
+
+  // Reload history list when the active workspace changes.
+  useEffect(() => {
+    if (!activeId) { setWorkspaceHistory([]); return }
+    setWorkspaceHistory(loadWorkspaceHistory(activeId))
+  }, [activeId])
+
+  // Auto-snapshot: check every minute, throttle enforced inside shouldSaveSnapshot.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!historyEnabledRef.current) return
+      const wid  = activeIdRef.current
+      const proj = projectsRef.current.find(p => p.id === wid)
+      if (!wid || !proj) return
+      const tabs = readResearchTabs()
+      if (!shouldSaveSnapshot(wid, view1PageRef.current, view2PageRef.current, splitViewRef.current, tabs, false)) return
+      const snap = buildSnapshot(wid, proj.name, view1PageRef.current, view2PageRef.current, splitViewRef.current, tabs)
+      appendWorkspaceSnapshot(wid, snap)
+      setWorkspaceHistory(loadWorkspaceHistory(wid))
+    }, 60_000)
+    return () => clearInterval(id)
+  }, [])
 
   // Auto-save workspace state whenever key selection or view state changes.
   useEffect(() => {
@@ -360,6 +404,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setProjects(ps => ps.map(p => p.id === curId
       ? { ...p, sel1: curSel1, sel2: curSel2, view1Page, view2Page, splitView, researchTabs }
       : p))
+
+    // Auto-snapshot the workspace we're leaving.
+    if (historyEnabledRef.current && curId) {
+      const proj = projectsRef.current.find(p => p.id === curId)
+      if (proj && shouldSaveSnapshot(curId, view1Page, view2Page, splitView, researchTabs, false)) {
+        appendWorkspaceSnapshot(curId, buildSnapshot(curId, proj.name, view1Page, view2Page, splitView, researchTabs))
+      }
+    }
 
     const newProj = projects.find(p => p.id === id)
     setActiveId(id)
@@ -845,6 +897,83 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // ─── Workspace history ──────────────────────────────────────────────────
+
+  function setHistoryEnabled(v: boolean) {
+    try {
+      if (v) localStorage.removeItem('proof-save-workspace-history')
+      else   localStorage.setItem('proof-save-workspace-history', 'false')
+    } catch {}
+    setHistoryEnabledState(v)
+  }
+
+  function saveHistorySnapshot(manual = false) {
+    if (!historyEnabled) return
+    const wid  = activeIdRef.current
+    const proj = projectsRef.current.find(p => p.id === wid)
+    if (!wid || !proj) return
+    const tabs = readResearchTabs()
+    if (!shouldSaveSnapshot(wid, view1PageRef.current, view2PageRef.current, splitViewRef.current, tabs, manual)) return
+    const snap = buildSnapshot(wid, proj.name, view1PageRef.current, view2PageRef.current, splitViewRef.current, tabs)
+    appendWorkspaceSnapshot(wid, snap)
+    setWorkspaceHistory(loadWorkspaceHistory(wid))
+  }
+
+  function restoreHistorySnapshot(snapshot: WorkspaceSnapshot) {
+    // Free behavior: apply snapshot to current workspace — replaces Views, Split View, Web tabs.
+    // Documents and saved Pages are not touched.
+    setView1Page(snapshot.view1Page)
+    setView2Page(snapshot.view2Page)
+    setSplitView(snapshot.splitView)
+    if (!snapshot.view1Page) (window as any).electronAPI?.view?.clear?.('1')
+    if (!snapshot.view2Page) (window as any).electronAPI?.view?.clear?.('2')
+    loadResearchTabs(snapshot.researchTabs)
+  }
+
+  function restoreHistorySnapshotAsCopy(snapshot: WorkspaceSnapshot) {
+    // Pro behavior: create a new workspace from the snapshot, switch to it.
+    // Current workspace is not modified.
+    const p = newProject(projectsRef.current.length + 1)
+    p.name        = `${snapshot.workspaceName} restored`
+    p.sources     = []
+    p.view1Page   = snapshot.view1Page
+    p.view2Page   = snapshot.view2Page
+    p.splitView   = snapshot.splitView
+    p.researchTabs = snapshot.researchTabs
+
+    // Save current workspace before switching.
+    const curId = activeIdRef.current
+    const tabs  = readResearchTabs()
+    setProjects(ps => {
+      const saved = ps.map(proj => proj.id === curId
+        ? { ...proj, sel1: selectedIdRef.current, sel2: selectedId2Ref.current,
+            view1Page: view1PageRef.current, view2Page: view2PageRef.current,
+            splitView: splitViewRef.current, researchTabs: tabs }
+        : proj
+      )
+      return [...saved, p]
+    })
+
+    setActiveId(p.id)
+    setSelectedId(null)
+    setSelectedId2(null)
+    setSelectedIds(new Set())
+    setAnchorId(null)
+    setView1Page(snapshot.view1Page)
+    setView2Page(snapshot.view2Page)
+    setSplitView(snapshot.splitView)
+    if (!snapshot.view1Page) (window as any).electronAPI?.view?.clear?.('1')
+    if (!snapshot.view2Page) (window as any).electronAPI?.view?.clear?.('2')
+    loadResearchTabs(snapshot.researchTabs)
+  }
+
+  function clearWorkspaceHistory() {
+    const wid = activeIdRef.current
+    if (!wid) return
+    clearWorkspaceHistoryStorage(wid)
+    setWorkspaceHistory([])
+  }
+
   // ─── Auth / entitlement ─────────────────────────────────────────────────
 
   async function signInFn(email: string, key: string): Promise<SignInResult> {
@@ -902,6 +1031,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     createNote, addUrl,
     addToStack, removeFromStack, clearStack, reorderStack, openInPane,
     switchWorkspace, newWorkspace, saveWorkspace, removeWorkspace,
+    historyEnabled, setHistoryEnabled, workspaceHistory,
+    saveHistorySnapshot, restoreHistorySnapshot, restoreHistorySnapshotAsCopy, clearWorkspaceHistory,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

@@ -223,6 +223,9 @@ export default function ProjectBar() {
         WebkitAppRegion: 'no-drag',
       } as React.CSSProperties}>
 
+        {/* Workspace history trigger */}
+        <HistoryBtn onClick={() => window.dispatchEvent(new Event('proof:workspace-history'))} />
+
         {/* Workspace search trigger */}
         <SearchBtn onClick={() => window.dispatchEvent(new Event('proof:workspace-search'))} />
 
@@ -372,6 +375,33 @@ function RightBtn({ children, onClick, accent }: { children: React.ReactNode; on
       }}
     >
       {children}
+    </button>
+  )
+}
+
+// ─── History button ──────────────────────────────────────────────────────────
+
+function HistoryBtn({ onClick }: { onClick: () => void }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      title="Workspace History"
+      style={{
+        width: '22px', height: '22px', flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'none', border: 'none', borderRadius: '3px',
+        color: hov ? '#777' : '#333',
+        cursor: 'pointer', padding: 0, outline: 'none',
+        transition: 'color 0.12s',
+      }}
+    >
+      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="6" cy="6" r="4.5"/>
+        <polyline points="6,3.5 6,6 7.5,7.5"/>
+      </svg>
     </button>
   )
 }

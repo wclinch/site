@@ -8,6 +8,7 @@ import WebTabBar from './web/WebTabBar'
 import WebToolbar from './web/WebToolbar'
 import QuickOpenStrip from './web/QuickOpenStrip'
 import WorkspaceSearchPanel from './web/WorkspaceSearchPanel'
+import WorkspaceHistoryPanel from './workspace-history/WorkspaceHistoryPanel'
 
 const MAX_TABS = 20
 
@@ -58,6 +59,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
   const [showSearch, setShowSearch] = useState(() => {
     try { return localStorage.getItem('proof-workspace-search') === 'true' } catch { return false }
   })
+  const [showHistory, setShowHistory] = useState(false)
 
   const viewportRef    = useRef<HTMLDivElement>(null)
   const urlInputRef    = useRef<HTMLInputElement>(null)
@@ -322,6 +324,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
 
   useEffect(() => {
     function onToggle() {
+      setShowHistory(false)
       setShowSearch(v => {
         if (!homeModeRef.current && !showFallbackRef.current) {
           suppressBoundsRef.current = true
@@ -339,6 +342,28 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
     }
     window.addEventListener('proof:workspace-search', onToggle)
     return () => window.removeEventListener('proof:workspace-search', onToggle)
+  }, [])
+
+  useEffect(() => {
+    function onToggle() {
+      setShowSearch(false)
+      setShowHistory(v => {
+        if (!homeModeRef.current && !showFallbackRef.current) {
+          suppressBoundsRef.current = true
+          window.electronAPI?.research?.setBounds(panelId, {
+            x: 0, y: 0, width: 0, height: 0,
+            innerWidth: window.innerWidth, innerHeight: window.innerHeight,
+          })
+          setTimeout(() => {
+            suppressBoundsRef.current = false
+            window.dispatchEvent(new Event('resize'))
+          }, 280)
+        }
+        return !v
+      })
+    }
+    window.addEventListener('proof:workspace-history', onToggle)
+    return () => window.removeEventListener('proof:workspace-history', onToggle)
   }, [])
 
   useEffect(() => {
@@ -425,22 +450,30 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
         border: '1px solid #1e1e1e', borderRadius: '4px', overflow: 'hidden',
       }}>
 
-        {/* Workspace search panel */}
+        {/* Workspace panels (search / history) */}
         <div style={{
-          flexGrow: showSearch ? 1 : 0,
+          flexGrow: (showSearch || showHistory) ? 1 : 0,
           flexShrink: 1, flexBasis: 0,
           minHeight: 0, overflow: 'hidden',
           transition: 'flex-grow 0.22s ease',
           display: 'flex', flexDirection: 'column',
         }}>
-          <WorkspaceSearchPanel
-            visible={showSearch}
-            tabs={tabs}
-            panelId={panelId}
-            onClose={() => setShowSearch(false)}
-            onNavigate={navigateUrl}
-            onSwitchTab={id => window.electronAPI?.research?.switchTab(panelId, id)}
-          />
+          {showSearch && (
+            <WorkspaceSearchPanel
+              visible={showSearch}
+              tabs={tabs}
+              panelId={panelId}
+              onClose={() => setShowSearch(false)}
+              onNavigate={navigateUrl}
+              onSwitchTab={id => window.electronAPI?.research?.switchTab(panelId, id)}
+            />
+          )}
+          {showHistory && (
+            <WorkspaceHistoryPanel
+              visible={showHistory}
+              onClose={() => setShowHistory(false)}
+            />
+          )}
         </div>
 
         <WebTabBar
@@ -473,7 +506,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
           onSave={savePage}
         />
 
-        {homeMode && showQuickOpen && !showSearch && (
+        {homeMode && showQuickOpen && !showSearch && !showHistory && (
           <QuickOpenStrip urlInput={urlInput} navigate={navigate} workspaceId={activeId ?? ''} />
         )}
 

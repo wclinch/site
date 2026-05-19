@@ -5,7 +5,7 @@ import { getCheckoutUrl, getStoredCredentials } from '@/lib/auth'
 type View = 'sign_in' | 'loading' | 'error' | 'signed_in'
 
 export default function AccountModal({ onClose }: { onClose: () => void }) {
-  const { user, isPro, signIn, signOut, openBilling, refreshEntitlement } = useApp()
+  const { user, isPro, signIn, signOut, openBilling, refreshEntitlement, historyEnabled, setHistoryEnabled } = useApp()
 
   const [view,          setView]          = useState<View>(user ? 'signed_in' : 'sign_in')
   const [email,         setEmail]         = useState('')
@@ -264,6 +264,17 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
                   window.dispatchEvent(new Event('proof:settings-changed'))
                 }}
               />
+              <div style={{ marginTop: '12px' }}>
+                <SettingToggle
+                  label="Save Workspace History"
+                  helper="Keep recent workspace states for restore."
+                  value={historyEnabled}
+                  onChange={val => {
+                    try { localStorage.setItem('proof-save-workspace-history', val ? 'true' : 'false') } catch {}
+                    setHistoryEnabled(val)
+                  }}
+                />
+              </div>
             </div>
 
             {/* Actions */}
