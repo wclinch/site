@@ -212,6 +212,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (v2) setView2Page(v2)
       if (restoredProj) setSplitView(restoreSplit(restoredProj))
 
+      // Restore workspace history for the active workspace on startup.
+      setWorkspaceHistory(loadWorkspaceHistory(restoredId))
+
       // Re-extract PDF content for any source that's `done` but missing
       // its parsed body in IDB (e.g. interrupted extraction in a prior
       // session). Notes / images / URLs are skipped.
@@ -296,7 +299,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const v1   = view1PageRef.current
         const v2   = view2PageRef.current
         const sp   = splitViewRef.current
-        if (proj && shouldSaveSnapshot(curId, v1, v2, sp, researchTabs, false)) {
+        // force=true: skip throttle — only skip if state is identical to last snapshot.
+        if (proj && shouldSaveSnapshot(curId, v1, v2, sp, researchTabs, true)) {
           appendWorkspaceSnapshot(curId, buildSnapshot(curId, proj.name, v1, v2, sp, researchTabs))
         }
       }
@@ -349,6 +353,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, selectedId2, view1Page, view2Page, splitView, activeId, mounted])
+
+  // Write a history snapshot to localStorage immediately (no timer) whenever
+  // the three restorable fields change. No debounce means no cleanup-on-unmount
+  // cancellation — data is in localStorage before any reload can happen.
+  // The 5-min throttle inside shouldSaveSnapshot limits how often entries accumulate.
+  useEffect(() => {
+    if (!mounted || !activeId || !historyEnabledRef.current) return
+    const tabs = readResearchTabs()
+    if (!shouldSaveSnapshot(activeId, view1Page, view2Page, splitView, tabs, false)) return
+    const proj = projectsRef.current.find(p => p.id === activeId)
+    if (!proj) return
+    const snap = buildSnapshot(activeId, proj.name, view1Page, view2Page, splitView, tabs)
+    appendWorkspaceSnapshot(activeId, snap)
+    setWorkspaceHistory(loadWorkspaceHistory(activeId))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view1Page, view2Page, splitView, mounted, activeId])
 
   // ─── Workspace helpers ──────────────────────────────────────────────────
 
@@ -408,7 +428,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Auto-snapshot the workspace we're leaving.
     if (historyEnabledRef.current && curId) {
       const proj = projectsRef.current.find(p => p.id === curId)
-      if (proj && shouldSaveSnapshot(curId, view1Page, view2Page, splitView, researchTabs, false)) {
+      if (proj && shouldSaveSnapshot(curId, view1Page, view2Page, splitView, researchTabs, true)) {
         appendWorkspaceSnapshot(curId, buildSnapshot(curId, proj.name, view1Page, view2Page, splitView, researchTabs))
       }
     }

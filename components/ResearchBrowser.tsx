@@ -59,7 +59,9 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
   const [showSearch, setShowSearch] = useState(() => {
     try { return localStorage.getItem('proof-workspace-search') === 'true' } catch { return false }
   })
-  const [showHistory, setShowHistory] = useState(false)
+  const [showHistory, setShowHistory] = useState(() => {
+    try { return localStorage.getItem('proof-workspace-history') === 'true' } catch { return false }
+  })
 
   const viewportRef    = useRef<HTMLDivElement>(null)
   const urlInputRef    = useRef<HTMLInputElement>(null)
@@ -321,6 +323,10 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
   useEffect(() => {
     try { localStorage.setItem('proof-workspace-search', showSearch ? 'true' : 'false') } catch {}
   }, [showSearch])
+
+  useEffect(() => {
+    try { localStorage.setItem('proof-workspace-history', showHistory ? 'true' : 'false') } catch {}
+  }, [showHistory])
 
   useEffect(() => {
     function onToggle() {

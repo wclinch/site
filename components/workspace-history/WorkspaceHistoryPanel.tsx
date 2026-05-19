@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useApp } from '@/context/AppContext'
 import type { WorkspaceSnapshot } from '@/context/workspaceHistoryTypes'
-import { describeSnapshot, formatSnapshotTime } from '@/context/workspaceHistoryHelpers'
+import { describeSnapshot, formatSnapshotTime, isMeaningfulSnapshot } from '@/context/workspaceHistoryHelpers'
 
 export default function WorkspaceHistoryPanel({ visible, onClose }: {
   visible: boolean
@@ -77,29 +77,34 @@ export default function WorkspaceHistoryPanel({ visible, onClose }: {
 
       {/* Snapshot list */}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollbarWidth: 'none' } as React.CSSProperties}>
-
-        {workspaceHistory.length === 0 && (
-          <div style={{ padding: '28px 16px', textAlign: 'center', fontSize: '11px', color: '#555', letterSpacing: '0.04em' }}>
-            No history yet. States save automatically.
-          </div>
-        )}
-
-        {workspaceHistory.map(snap => (
-          <SnapshotRow
-            key={snap.id}
-            snap={snap}
-            isPro={isPro}
-            onRestore={() => handleRestore(snap)}
-            onRestoreAsCopy={() => handleRestoreAsCopy(snap)}
-            tick={tick}
-          />
-        ))}
-
-        {workspaceHistory.length > 0 && (
-          <div style={{ padding: '10px 10px 14px', display: 'flex', justifyContent: 'flex-end' }}>
-            <ClearBtn onClick={handleClear} />
-          </div>
-        )}
+        {(() => {
+          const meaningful = workspaceHistory.filter(isMeaningfulSnapshot)
+          if (meaningful.length === 0) return (
+            <div style={{ padding: '28px 16px', textAlign: 'center' }}>
+              <div style={{ fontSize: '11px', color: '#555', letterSpacing: '0.04em' }}>No history yet.</div>
+              <div style={{ fontSize: '10px', color: '#333', letterSpacing: '0.03em', marginTop: '6px', lineHeight: 1.6 }}>
+                History appears after you open Views or Web tabs.
+              </div>
+            </div>
+          )
+          return (
+            <>
+              {meaningful.map(snap => (
+                <SnapshotRow
+                  key={snap.id}
+                  snap={snap}
+                  isPro={isPro}
+                  onRestore={() => handleRestore(snap)}
+                  onRestoreAsCopy={() => handleRestoreAsCopy(snap)}
+                  tick={tick}
+                />
+              ))}
+              <div style={{ padding: '10px 10px 14px', display: 'flex', justifyContent: 'flex-end' }}>
+                <ClearBtn onClick={handleClear} />
+              </div>
+            </>
+          )
+        })()}
       </div>
     </div>
   )
@@ -113,19 +118,14 @@ function SnapshotRow({ snap, isPro, onRestore, onRestoreAsCopy, tick }: {
   tick: number
 }) {
   void tick  // causes re-render for live timestamp updates
-  const [hov, setHov] = useState(false)
   const desc = describeSnapshot(snap)
   const time = formatSnapshotTime(snap.timestamp)
 
   return (
     <div
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
       style={{
         padding: '7px 10px',
         display: 'flex', alignItems: 'center', gap: '8px',
-        background: hov ? '#0d0d0d' : 'none',
-        transition: 'background 0.1s',
       }}
     >
       {/* Text */}
@@ -142,16 +142,12 @@ function SnapshotRow({ snap, isPro, onRestore, onRestoreAsCopy, tick }: {
         )}
       </div>
 
-      {/* Actions — only visible on hover */}
-      <div style={{
-        display: 'flex', gap: '4px', flexShrink: 0,
-        opacity: hov ? 1 : 0, transition: 'opacity 0.1s',
-        pointerEvents: hov ? 'auto' : 'none',
-      }}>
-        <RowBtn onClick={onRestore}>Restore</RowBtn>
-        {isPro && (
-          <RowBtn onClick={onRestoreAsCopy}>Copy</RowBtn>
-        )}
+      {/* Actions — tier-aware: Free = Restore, Pro = Restore as Copy */}
+      <div style={{ flexShrink: 0 }}>
+        {isPro
+          ? <RowBtn onClick={onRestoreAsCopy}>Restore as Copy</RowBtn>
+          : <RowBtn onClick={onRestore}>Restore</RowBtn>
+        }
       </div>
     </div>
   )
