@@ -117,7 +117,7 @@ export default function WorkspaceSearchPanel({ visible, tabs, panelId, onClose, 
           value={query}
           onChange={e => setQuery(e.target.value)}
           onKeyDown={e => { if (e.key === 'Escape') onClose() }}
-          placeholder="Search this workspace…"
+          placeholder="Search this session…"
           spellCheck={false}
           style={{
             flex: 1, background: 'none', border: 'none', outline: 'none',
@@ -141,7 +141,7 @@ export default function WorkspaceSearchPanel({ visible, tabs, panelId, onClose, 
 
         {emptyWorkspace && (
           <div style={{ padding: '28px 16px', textAlign: 'center', fontSize: '11px', color: '#555', letterSpacing: '0.04em' }}>
-            Nothing in this workspace yet.
+            Nothing in this session yet.
           </div>
         )}
 

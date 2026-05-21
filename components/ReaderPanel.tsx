@@ -68,9 +68,9 @@ export default function ReaderPanel({
   return (
     <div style={{ flexGrow: hidden ? 0 : 1, flexShrink: 1, flexBasis: 0, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'flex-grow 0.22s ease' }}>
       <div style={{
-        flex: 1, minHeight: 0, padding: '5px',
+        flex: 1, minHeight: 0, padding: '7px',
         display: 'flex', flexDirection: 'column',
-        gap: splitView ? '4px' : 0,
+        gap: splitView ? '8px' : 0,
         transition: 'gap 0.2s ease',
       }}>
         <div style={{
@@ -276,10 +276,11 @@ function EmptySource({ viewId, uploadFiles }: { viewId: 1 | 2; uploadFiles: (fil
   return (
     <div
       style={{
-        flex: 1, background: fileDragOver ? '#0f0f0f' : '#0a0a0a',
+        flex: 1,
+        background: fileDragOver ? '#0f0f0f' : 'linear-gradient(180deg, #0e0e0e 0%, #060606 100%)',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
-        padding: '32px', gap: '20px',
+        padding: '32px', gap: '14px',
         transition: 'background 0.15s',
       }}
       onDragOver={e => {
@@ -293,19 +294,30 @@ function EmptySource({ viewId, uploadFiles }: { viewId: 1 | 2; uploadFiles: (fil
         if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files)
       }}
     >
+      {!fileDragOver && (
+        <svg width="16" height="20" viewBox="0 0 16 20" fill="none" stroke="currentColor" strokeWidth="1"
+          strokeLinecap="round" strokeLinejoin="round" style={{ color: '#222', flexShrink: 0 }}>
+          <rect x="1" y="1" width="14" height="18" rx="2" />
+          <line x1="4" y1="7" x2="12" y2="7" />
+          <line x1="4" y1="10.5" x2="12" y2="10.5" />
+          <line x1="4" y1="14" x2="9" y2="14" />
+        </svg>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
         <span style={{
-          fontSize: '12px', color: fileDragOver ? '#999' : '#666',
-          letterSpacing: '0.04em', textAlign: 'center', transition: 'color 0.15s',
+          fontSize: '12px', color: fileDragOver ? '#999' : '#555',
+          letterSpacing: '0.03em', textAlign: 'center', transition: 'color 0.15s',
         }}>
-          {fileDragOver ? 'Release to add' : viewId === 2 ? 'Hold another Document or Page here.' : 'Hold a Document or Page here.'}
+          {fileDragOver ? 'Drop to open.' : viewId === 2 ? 'Add a second source.' : 'Open a document or page.'}
         </span>
         {!fileDragOver && (
           <span style={{
-            fontSize: '11px', color: '#444',
-            letterSpacing: '0.03em', textAlign: 'center',
+            fontSize: '11px', color: '#383838',
+            letterSpacing: '0.02em', textAlign: 'center', lineHeight: 1.5,
           }}>
-            {viewId === 2 ? 'Send from Web with 2.' : 'Open from Library, or send from Web.'}
+            {viewId === 2
+              ? 'Click · 2 · in the sidebar, or drag one here.'
+              : 'Select from the sidebar, or drag a file here.'}
           </span>
         )}
       </div>
@@ -332,11 +344,11 @@ function PaneHeader({ label, onClose, onToggleSplit, splitActive, isFocused, onF
 }) {
   return (
     <div style={{
-      height: '28px', flexShrink: 0,
+      height: '32px', flexShrink: 0,
       display: 'flex', alignItems: 'center',
-      padding: '0 8px 0 14px',
+      padding: '0 6px 0 16px',
       borderBottom: '1px solid #1e1e1e',
-      gap: '4px',
+      gap: '2px',
       WebkitAppRegion: 'no-drag',
     } as React.CSSProperties}>
       <span style={{ flex: 1, fontSize: '10px', color: '#666', letterSpacing: '0.04em', userSelect: 'none' }}>
@@ -498,48 +510,63 @@ function PdfViewer({ source }: { source: QueuedSource }) {
   )
 }
 
-// ─── Split button ─────────────────────────────────────────────────────────────
+// ─── Pane icon button (shared base) ──────────────────────────────────────────
 
-function SplitBtn({ active, onClick }: { active: boolean; onClick: () => void }) {
+function PaneIconBtn({ title, active, faint, onClick, children }: {
+  title: string
+  active?: boolean
+  faint?: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
   const [hov, setHov] = useState(false)
   return (
     <button
       onClick={onClick}
-      title={active ? 'Exit Split View' : 'Split View'}
+      title={title}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        background: 'none', border: 'none', cursor: 'pointer',
-        padding: '4px', lineHeight: 0, flexShrink: 0,
-        color: active ? '#666' : hov ? '#666' : '#3a3a3a',
+        width: '26px', height: '22px',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        borderRadius: '2px', transition: 'color 0.12s',
+        background: 'none', border: 'none', cursor: 'pointer',
+        padding: 0, lineHeight: 0, flexShrink: 0,
+        color: active ? '#777' : hov ? '#666' : faint ? '#303030' : '#3a3a3a',
+        borderRadius: '3px',
+        transition: 'color 0.12s',
       }}
     >
-      <svg width="11" height="9" viewBox="0 0 11 9" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="0.65" y="0.65" width="4.1" height="7.7" rx="0.7" />
-        <rect x="6.25" y="0.65" width="4.1" height="7.7" rx="0.7" />
-      </svg>
+      {children}
     </button>
   )
 }
 
-function FocusBtn({ active, onClick }: { active: boolean; onClick: () => void }) {
-  const [hov, setHov] = useState(false)
+// ─── Split button ─────────────────────────────────────────────────────────────
+
+function SplitBtn({ active, onClick }: { active: boolean; onClick: () => void }) {
   return (
-    <button
-      onClick={onClick}
-      title={active ? 'Exit expanded View' : 'Expand View'}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        background: 'none', border: 'none', cursor: 'pointer',
-        padding: '4px', lineHeight: 0, flexShrink: 0,
-        color: active ? '#666' : hov ? '#666' : '#3a3a3a',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        borderRadius: '2px', transition: 'color 0.12s',
-      }}
-    >
+    <PaneIconBtn title={active ? 'Exit Split View' : 'Split View'} active={active} onClick={onClick}>
+      {active ? (
+        // Single panel → click collapses split
+        <svg width="12" height="9" viewBox="0 0 12 9" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="0.8" y="0.8" width="10.4" height="7.4" rx="0.9" />
+        </svg>
+      ) : (
+        // Two stacked panels → click enables split
+        <svg width="12" height="9" viewBox="0 0 12 9" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="0.8" y="0.8" width="10.4" height="3" rx="0.9" />
+          <rect x="0.8" y="5.2" width="10.4" height="3" rx="0.9" />
+        </svg>
+      )}
+    </PaneIconBtn>
+  )
+}
+
+// ─── Focus/expand button ──────────────────────────────────────────────────────
+
+function FocusBtn({ active, onClick }: { active: boolean; onClick: () => void }) {
+  return (
+    <PaneIconBtn title={active ? 'Restore Size' : 'Expand View'} active={active} onClick={onClick}>
       {active ? (
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="1,3 3,3 3,1" /><polyline points="9,3 7,3 7,1" />
@@ -551,7 +578,7 @@ function FocusBtn({ active, onClick }: { active: boolean; onClick: () => void })
           <polyline points="3,9 1,9 1,7" /><polyline points="7,9 9,9 9,7" />
         </svg>
       )}
-    </button>
+    </PaneIconBtn>
   )
 }
 
@@ -560,20 +587,10 @@ function FocusBtn({ active, onClick }: { active: boolean; onClick: () => void })
 function IconBtn({ onClick, title, children }: {
   onClick: () => void; title: string; children: React.ReactNode
 }) {
-  const [hov, setHov] = useState(false)
   return (
-    <button onClick={onClick} title={title}
-      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{
-        background: 'none', border: 'none', cursor: 'pointer',
-        padding: '4px', lineHeight: 0,
-        color: hov ? '#aaa' : '#666',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        borderRadius: '2px', flexShrink: 0,
-      }}
-    >
+    <PaneIconBtn title={title} onClick={onClick}>
       {children}
-    </button>
+    </PaneIconBtn>
   )
 }
 

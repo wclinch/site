@@ -6,9 +6,9 @@ export const ONBOARDING_KEY = 'proof-onboarding-v1'
 
 const STEPS = [
   {
-    title: 'Everything stays with this workspace.',
+    title: 'Everything stays with this session.',
     body:  'Documents, saved Pages, Views, and Web tabs come back when you return.',
-    hint:  '↖ Workspace tabs · top bar',
+    hint:  '↖ Session tabs · top bar',
   },
   {
     title: 'Browse, then hold what matters.',

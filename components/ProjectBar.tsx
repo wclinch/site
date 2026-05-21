@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useApp } from '@/context/AppContext'
 import StorageBadge from './StorageBadge'
 
@@ -7,7 +7,7 @@ export default function ProjectBar() {
   const {
     projects, activeId,
     user, isPro,
-    switchWorkspace, newWorkspace, removeWorkspace,
+    switchWorkspace, newWorkspace, pinWorkspace, removeWorkspace,
     updateProject, setProjects,
   } = useApp()
 
@@ -103,7 +103,7 @@ export default function ProjectBar() {
   return (
     <div style={{
       display: 'flex', alignItems: 'center',
-      height: '40px', flexShrink: 0,
+      height: '44px', flexShrink: 0,
       borderBottom: '1px solid #161616',
       WebkitAppRegion: 'drag',
       overflow: 'hidden',
@@ -146,58 +146,72 @@ export default function ProjectBar() {
             scrollbarWidth: 'none',
           } as React.CSSProperties}
         >
-          {projects.map(p => {
-            const isActive  = p.id === activeId
-            const isEditing = p.id === editingProjId
-            const rmArmed   = pendingRmId === p.id
+          {(() => {
+            const pinned   = projects.filter(p => p.pinned)
+            const unpinned = projects.filter(p => !p.pinned)
+            const ordered  = [...pinned, ...unpinned]
+            const showDivider = pinned.length > 0 && unpinned.length > 0
 
-            if (isEditing) {
+            return ordered.map((p, idx) => {
+              const isActive  = p.id === activeId
+              const isEditing = p.id === editingProjId
+              const rmArmed   = pendingRmId === p.id
+              const isDividerSlot = showDivider && idx === pinned.length
+
+              if (isEditing) {
+                return (
+                  <input
+                    key={p.id}
+                    autoFocus
+                    value={nameInput}
+                    onFocus={e => e.currentTarget.select()}
+                    onChange={e => setNameInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter')  { commitRename(p.id) }
+                      if (e.key === 'Escape') { cancelEditRef.current = true; setEditingProjId(null) }
+                    }}
+                    onBlur={() => { if (!cancelEditRef.current) commitRename(p.id) }}
+                    placeholder="Session name"
+                    style={{
+                      height: '26px', padding: '0 10px', flexShrink: 0,
+                      background: '#111', border: '1px solid #2a2a2a',
+                      borderRadius: '4px', color: '#ccc',
+                      fontSize: '11px', letterSpacing: '0.03em',
+                      fontFamily: 'inherit', outline: 'none', minWidth: '140px',
+                    }}
+                  />
+                )
+              }
+
               return (
-                <input
-                  key={p.id}
-                  autoFocus
-                  value={nameInput}
-                  onFocus={e => e.currentTarget.select()}
-                  onChange={e => setNameInput(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter')  { commitRename(p.id) }
-                    if (e.key === 'Escape') { cancelEditRef.current = true; setEditingProjId(null) }
-                  }}
-                  onBlur={() => { if (!cancelEditRef.current) commitRename(p.id) }}
-                  placeholder="Workspace name"
-                  style={{
-                    height: '26px', padding: '0 10px', flexShrink: 0,
-                    background: '#111', border: '1px solid #2a2a2a',
-                    borderRadius: '4px', color: '#ccc',
-                    fontSize: '11px', letterSpacing: '0.03em',
-                    fontFamily: 'inherit', outline: 'none', minWidth: '140px',
-                  }}
-                />
+                <React.Fragment key={p.id}>
+                  {isDividerSlot && (
+                    <div style={{ width: '1px', height: '16px', background: '#252525', flexShrink: 0, margin: '0 2px' }} />
+                  )}
+                  <WorkspaceTab
+                    name={p.name || 'Untitled'}
+                    active={isActive}
+                    pinned={!!p.pinned}
+                    rmArmed={rmArmed}
+                    canRemove={projects.length > 1}
+                    dragOver={dragOverId === p.id && draggedId !== p.id}
+                    onClick={() => { if (!isActive) switchWorkspace(p.id) }}
+                    onDoubleClick={() => startEditing(p.id, p.name || '')}
+                    onRemoveClick={e => handleRemoveClick(e, p.id)}
+                    onPin={e => { e.stopPropagation(); pinWorkspace(p.id) }}
+                    onDragStart={() => setDraggedId(p.id)}
+                    onDragOver={() => setDragOverId(p.id)}
+                    onDrop={() => { if (draggedId) reorderProjects(draggedId, p.id) }}
+                    onDragEnd={() => { setDraggedId(null); setDragOverId(null) }}
+                  />
+                </React.Fragment>
               )
-            }
-
-            return (
-              <WorkspaceTab
-                key={p.id}
-                name={p.name || 'Untitled'}
-                active={isActive}
-                rmArmed={rmArmed}
-                canRemove={projects.length > 1}
-                dragOver={dragOverId === p.id && draggedId !== p.id}
-                onClick={() => { if (!isActive) switchWorkspace(p.id) }}
-                onDoubleClick={() => startEditing(p.id, p.name || '')}
-                onRemoveClick={e => handleRemoveClick(e, p.id)}
-                onDragStart={() => setDraggedId(p.id)}
-                onDragOver={() => setDragOverId(p.id)}
-                onDrop={() => { if (draggedId) reorderProjects(draggedId, p.id) }}
-                onDragEnd={() => { setDraggedId(null); setDragOverId(null) }}
-              />
-            )
-          })}
+            })
+          })()}
           {/* New workspace — at end of tab strip */}
           <button
             onClick={() => newWorkspace()}
-            title="New workspace"
+            title="New session"
             style={{
               width: '24px', height: '24px', flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -219,7 +233,7 @@ export default function ProjectBar() {
       {/* ── Right: tier · storage · actions ── */}
       <div style={{
         display: 'flex', alignItems: 'center',
-        padding: '0 18px 0 12px', gap: '2px', flexShrink: 0,
+        padding: '0 18px 0 12px', gap: '4px', flexShrink: 0,
         WebkitAppRegion: 'no-drag',
       } as React.CSSProperties}>
 
@@ -271,24 +285,30 @@ export default function ProjectBar() {
 
 // ─── Workspace tab ────────────────────────────────────────────────────────────
 
-function WorkspaceTab({ name, active, rmArmed, canRemove, dragOver, onClick, onDoubleClick, onRemoveClick, onDragStart, onDragOver, onDrop, onDragEnd }: {
+function WorkspaceTab({ name, active, pinned, rmArmed, canRemove, dragOver, onClick, onDoubleClick, onRemoveClick, onPin, onDragStart, onDragOver, onDrop, onDragEnd }: {
   name: string
   active: boolean
+  pinned: boolean
   rmArmed: boolean
   canRemove: boolean
   dragOver: boolean
   onClick: () => void
   onDoubleClick: () => void
   onRemoveClick: (e: React.MouseEvent) => void
+  onPin: (e: React.MouseEvent) => void
   onDragStart: () => void
   onDragOver: () => void
   onDrop: () => void
   onDragEnd: () => void
 }) {
-  const [hovered, setHovered]   = useState(false)
-  const [xHovered, setXHovered] = useState(false)
+  const [hovered,    setHovered]    = useState(false)
+  const [xHovered,   setXHovered]   = useState(false)
+  const [pinHovered, setPinHovered] = useState(false)
 
-  const xColor = rmArmed ? (xHovered ? '#e55' : '#b44') : xHovered ? '#666' : hovered ? '#3a3a3a' : '#1e1e1e'
+  const xColor   = rmArmed ? (xHovered ? '#e55' : '#b44') : xHovered ? '#666' : '#2e2e2e'
+  const pinColor = pinned
+    ? (pinHovered ? '#fff' : '#ccc')
+    : (pinHovered ? '#777' : '#2e2e2e')
 
   return (
     <div
@@ -304,8 +324,8 @@ function WorkspaceTab({ name, active, rmArmed, canRemove, dragOver, onClick, onD
       onDragEnd={onDragEnd}
       style={{
         display: 'flex', alignItems: 'center',
-        height: '28px',
-        padding: canRemove ? '0 2px 0 10px' : '0 10px',
+        height: '30px',
+        padding: '0 2px 0 10px',
         flexShrink: 0, gap: '1px',
         background: active ? '#141414' : hovered ? '#0f0f0f' : 'transparent',
         border: `1px solid ${dragOver ? '#444' : active ? '#2a2a2a' : 'transparent'}`,
@@ -314,8 +334,7 @@ function WorkspaceTab({ name, active, rmArmed, canRemove, dragOver, onClick, onD
         userSelect: 'none',
         transition: 'background 0.1s, border-color 0.1s',
         WebkitAppRegion: 'no-drag',
-        maxWidth: '180px',
-        opacity: 1,
+        maxWidth: '200px',
       } as React.CSSProperties}
     >
       <span style={{
@@ -346,6 +365,27 @@ function WorkspaceTab({ name, active, rmArmed, canRemove, dragOver, onClick, onD
           }}
         >×</button>
       )}
+
+      {/* Pin */}
+      <button
+        onClick={onPin}
+        onDoubleClick={e => e.stopPropagation()}
+        title={pinned ? 'Unpin session' : 'Pin to left'}
+        onMouseEnter={() => setPinHovered(true)}
+        onMouseLeave={() => setPinHovered(false)}
+        style={{
+          width: '18px', height: '18px', flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'none', border: 'none', borderRadius: '3px',
+          color: pinColor,
+          cursor: 'pointer', padding: 0, outline: 'none',
+          transition: 'color 0.1s',
+        }}
+      >
+        <svg width="8" height="8" viewBox="0 0 10 10" fill="currentColor">
+          <path d="M3 1h4v1l-1 3h1a1 1 0 010 2H6v3H4V7H3a1 1 0 010-2h1L3 2V1z" />
+        </svg>
+      </button>
     </div>
   )
 }
@@ -385,7 +425,7 @@ function SearchBtn({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
-      title="Search workspace"
+      title="Search session"
       style={{
         width: '22px', height: '22px', flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',

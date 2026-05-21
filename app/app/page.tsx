@@ -346,7 +346,7 @@ function AppShell() {
     <>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#080808', WebkitAppRegion: 'drag' } as React.CSSProperties}>
         <ProjectBar />
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden', paddingRight: '5px' }}>
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: '0 7px 7px 0' }}>
           <SourcePanel width={DEF_SOURCE} hidden={viewFocused} />
           <ReaderPanel
             soloPane={soloPane} setSoloPane={setSoloPane}

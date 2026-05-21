@@ -12,9 +12,6 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
   const [key,           setKey]           = useState('')
   const [errorMsg,      setErrorMsg]      = useState<string | null>(null)
   const [armed,         setArmed]         = useState(false)
-  const [showQuickOpen, setShowQuickOpen] = useState(() => {
-    try { return localStorage.getItem('proof-show-quick-open') !== 'false' } catch { return true }
-  })
 
   useEffect(() => {
     if (user) {
@@ -251,19 +248,6 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
               <div style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '12px' }}>
                 Settings
               </div>
-              <SettingToggle
-                label="Show Quick Open"
-                helper="Show shortcuts below the Web bar."
-                value={showQuickOpen}
-                onChange={val => {
-                  try {
-                    if (val) localStorage.removeItem('proof-show-quick-open')
-                    else localStorage.setItem('proof-show-quick-open', 'false')
-                  } catch {}
-                  setShowQuickOpen(val)
-                  window.dispatchEvent(new Event('proof:settings-changed'))
-                }}
-              />
             </div>
 
             {/* Actions */}

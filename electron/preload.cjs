@@ -80,6 +80,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('research:fail-load', fn)
       return () => ipcRenderer.removeListener('research:fail-load', fn)
     },
-    loadWorkspace: (tabs) => ipcRenderer.send('research:load-workspace', tabs),
+    loadWorkspace: (payload) => ipcRenderer.send('research:load-workspace', payload),
   },
 })

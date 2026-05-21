@@ -6,8 +6,8 @@ import type { TabState, TabStatus } from './web/webTypes'
 import { isAuthUrl, isAuthBlockedTitle } from './web/webTypes'
 import WebTabBar from './web/WebTabBar'
 import WebToolbar from './web/WebToolbar'
-import QuickOpenStrip from './web/QuickOpenStrip'
 import WorkspaceSearchPanel from './web/WorkspaceSearchPanel'
+import WebHomePage, { type WebHomePageHandle } from './web/WebHomePage'
 
 const MAX_TABS = 20
 
@@ -52,9 +52,6 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
   const [urlFocused, setUrlFocused]   = useState(false)
   const [actionFeedback, setActionFeedback] = useState<null | 'view1' | 'view2' | 'saved' | 'duplicate'>(null)
   const [homeMode, setHomeMode]       = useState(true)
-  const [showQuickOpen, setShowQuickOpen] = useState(() => {
-    try { return localStorage.getItem('proof-show-quick-open') !== 'false' } catch { return true }
-  })
   const [showSearch, setShowSearch] = useState(() => {
     try { return localStorage.getItem('proof-workspace-search') === 'true' } catch { return false }
   })
@@ -62,6 +59,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
 
   const viewportRef    = useRef<HTMLDivElement>(null)
   const urlInputRef    = useRef<HTMLInputElement>(null)
+  const homePageRef    = useRef<WebHomePageHandle>(null)
   const savedTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
   const homeModeRef    = useRef(true)
   const activeTabIdRef = useRef<string>('tab-init')
@@ -102,7 +100,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
           const tag = el.tagName
           if (tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable) return
         }
-        urlInputRef.current?.focus()
+        homePageRef.current?.focus()
       })
     } else {
       window.dispatchEvent(new Event('resize'))
@@ -121,18 +119,22 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
         setActiveTabId(aid)
         activeTabIdRef.current = aid
         const active = initialTabs.find(t => t.id === aid)
-        if (active?.url) setUrlInput(active.url)
-        if (!active?.url) {
+        if (active?.url) {
+          setUrlInput(active.url)
+          setHomeMode(false)
+          homeModeRef.current = false
+        } else {
           try {
             const saved = JSON.parse(localStorage.getItem(tabsKey) || '[]') as Array<{ id: string; url: string }>
-            const match = saved.find(t => t.id === aid) || saved[0]
+            // Try active tab first, then any tab with a URL
+            const match = saved.find(t => t.id === aid) ?? saved.find(t => t.url)
             if (match?.url) { setUrlInput(match.url); navigateUrl(match.url) }
           } catch {}
         }
       }
     }).catch(() => {
       api.getState(panelId).then(s => {
-        if (s.url) setUrlInput(s.url)
+        if (s.url) { setUrlInput(s.url); setHomeMode(false); homeModeRef.current = false }
       }).catch(() => {})
     })
 
@@ -205,12 +207,15 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
       if (newTabs.length === 0) {
         setUrlInput('')
         setHomeMode(true)
+        homeModeRef.current = true
         try { localStorage.removeItem(tabsKey) } catch {}
       } else {
         const active = newTabs.find(t => t.id === newActiveId)
         if (active?.url) setUrlInput(active.url)
         else setUrlInput('')
-        setHomeMode(!active?.url)
+        const nextHomeMode = !active?.url
+        setHomeMode(nextHomeMode)
+        homeModeRef.current = nextHomeMode
         try {
           const toSave = newTabs.filter(t => t.url).map(t => ({
             id: t.id, url: t.url, title: t.title || '', active: t.id === newActiveId,
@@ -311,7 +316,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
 
   useEffect(() => {
     function onSettingsChanged() {
-      try { setShowQuickOpen(localStorage.getItem('proof-show-quick-open') !== 'false') } catch {}
+      // reserved for future settings
     }
     window.addEventListener('proof:settings-changed', onSettingsChanged)
     return () => window.removeEventListener('proof:settings-changed', onSettingsChanged)
@@ -476,9 +481,6 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
           onSave={savePage}
         />
 
-        {homeMode && showQuickOpen && !showSearch && (
-          <QuickOpenStrip urlInput={urlInput} navigate={navigate} workspaceId={activeId ?? ''} />
-        )}
 
         {homeMode && urlFocused && getShortcutHint(urlInput) && (
           <div style={{
@@ -496,7 +498,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
         {/* Native browser viewport */}
         <div
           ref={viewportRef}
-          style={{ flex: 1, minHeight: 0, background: '#060606', position: 'relative', overflow: 'hidden', WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          style={{ flex: 1, minHeight: 0, background: 'linear-gradient(180deg, #0d0d0d 0%, #020202 100%)', position: 'relative', overflow: 'hidden', WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           {showFallback && (() => {
             const st = tabStatuses[activeTabId]
@@ -505,7 +507,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
             return (
               <div style={{
                 position: 'absolute', inset: 0, zIndex: 10,
-                background: '#060606',
+                background: 'linear-gradient(180deg, #0d0d0d 0%, #020202 100%)',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                 gap: '8px', padding: '32px', userSelect: 'none',
               }}>
@@ -529,29 +531,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
               </div>
             )
           })()}
-          {homeMode && (
-            <div style={{
-              position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-              justifyContent: 'center', flexDirection: 'column', gap: '5px',
-              userSelect: 'none', pointerEvents: 'none',
-            }}>
-              <span style={{ fontSize: '12px', color: '#3a3a3a', letterSpacing: '0.03em' }}>
-                Browse for this workspace.
-              </span>
-              <span style={{ fontSize: '11px', color: '#2e2e2e', letterSpacing: '0.025em' }}>
-                Use 1, 2, or Save to keep what matters.
-              </span>
-              <div style={{ height: '10px' }} />
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
-                <span style={{ fontSize: '10px', color: '#2a2a2a', fontFamily: 'monospace', letterSpacing: '0.02em' }}>domain.com</span>
-                <span style={{ fontSize: '10px', color: '#222', letterSpacing: '0.02em' }}>opens directly</span>
-              </div>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline' }}>
-                <span style={{ fontSize: '10px', color: '#2a2a2a', fontFamily: 'monospace', letterSpacing: '0.02em' }}>? query</span>
-                <span style={{ fontSize: '10px', color: '#222', letterSpacing: '0.02em' }}>searches Google</span>
-              </div>
-            </div>
-          )}
+          {homeMode && <WebHomePage ref={homePageRef} navigate={navigate} />}
           {!isElectron && !homeMode && (
             <div style={{
               position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',

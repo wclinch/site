@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { HOME_SHORTCUTS } from './quickOpenDefaults'
-import { loadPins, savePins, getOrCreateShuffle, shuffleArray } from './quickOpenHelpers'
+import { loadPins, savePins, shuffleArray } from './quickOpenHelpers'
 
 const stripStyle = {
   height: '36px', flexShrink: 0,
@@ -61,7 +61,7 @@ function ShortcutChip({ label, pinned, onClick, onPin }: {
           height: '100%', padding: '0 6px 0 2px',
           background: 'none', border: 'none', outline: 'none',
           cursor: 'pointer', display: 'flex', alignItems: 'center',
-          color: pinHov ? (pinned ? '#c44' : '#888') : pinned ? '#555' : '#333',
+          color: pinHov ? (pinned ? '#c44' : '#888') : pinned ? '#5c9e6e' : '#333',
           opacity: (hov || pinned) ? 1 : 0,
           pointerEvents: (hov || pinned) ? 'auto' : 'none',
           transition: 'color 0.1s, opacity 0.1s',
@@ -83,13 +83,11 @@ export default function QuickOpenStrip({ urlInput, navigate, workspaceId }: {
   const [pinnedKeys, setPinnedKeys] = useState<string[]>(() =>
     typeof window !== 'undefined' ? loadPins(workspaceId) : []
   )
-  const [shuffled, setShuffled] = useState<[string, string][]>(() =>
-    typeof window !== 'undefined' ? getOrCreateShuffle(workspaceId) : shuffleArray(HOME_SHORTCUTS)
-  )
+  const [shuffled, setShuffled] = useState<[string, string][]>(() => shuffleArray(HOME_SHORTCUTS))
 
   useEffect(() => {
     setPinnedKeys(loadPins(workspaceId))
-    setShuffled(getOrCreateShuffle(workspaceId))
+    setShuffled(shuffleArray(HOME_SHORTCUTS))
   }, [workspaceId])
 
   function togglePin(key: string) {

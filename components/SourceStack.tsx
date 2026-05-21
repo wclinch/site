@@ -15,10 +15,8 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
 
   const [renameId,    setRenameId]    = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
-  // Pane preferences: absence = View 1 (default), present = View 2
-  const [panePrefs, setPanePrefs] = useState<Record<string, 2>>({})
+  const [panePrefs,   setPanePrefs]   = useState<Record<string, 2>>({})
 
-  // Effective pref: actual open-in-view-2 state takes precedence over stored preference.
   function getEffectivePref(srcId: string): 1 | 2 {
     if (selectedId2 === srcId) return 2
     return panePrefs[srcId] ?? 1
@@ -59,25 +57,20 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
   const fileSources = stackSources.filter(s => s.fileType !== 'url')
   const siteSources = stackSources.filter(s => s.fileType === 'url')
 
-  const rowProps = {
-    renameId, renameValue,
-    onRenameChange: setRenameValue,
-    onRenameCommit: commitRename,
-    onRenameCancel: cancelRename,
-    onContextMenu: (srcId: string, e: React.MouseEvent) => {
-      e.preventDefault(); e.stopPropagation()
-      setContextMenu({ srcId, x: e.clientX, y: e.clientY })
-    },
-    onClick: (srcId: string) => openInPane(srcId),
-    selectedId,
+  const sharedRename = { renameId, renameValue, onRenameChange: setRenameValue, onRenameCommit: commitRename, onRenameCancel: cancelRename }
+
+  function handleContextMenu(srcId: string, e: React.MouseEvent) {
+    e.preventDefault(); e.stopPropagation()
+    setContextMenu({ srcId, x: e.clientX, y: e.clientY })
   }
 
   return (
     <>
-      {/* ── Sources box ── */}
+      {/* ── Documents ── */}
       <div style={{
         flex: '0 1 42%', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden',
         border: '1px solid #1e1e1e', borderRadius: '4px',
+        background: 'linear-gradient(180deg, #0d0d0d 0%, transparent 100%)',
       }}>
         <SectionHeader title="Documents" action={
           <>
@@ -104,26 +97,24 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
             />
           </>
         } />
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 0 8px', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '2px 0 6px', display: 'flex', flexDirection: 'column' }}>
           {fileSources.length === 0 ? (
-            <EmptyRow text="Documents you add stay with this workspace." />
+            <EmptyRow text="Add documents to this session." />
           ) : (
             fileSources.map(src => (
               <StackRow
                 key={src.id}
                 src={src}
                 isActive={src.id === selectedId}
+                {...sharedRename}
                 renaming={renameId === src.id}
-                renameValue={renameValue}
-                onRenameChange={rowProps.onRenameChange}
-                onRenameCommit={rowProps.onRenameCommit}
-                onRenameCancel={rowProps.onRenameCancel}
-                onClick={() => openWithPref(src.id)}
-                onContextMenu={e => rowProps.onContextMenu(src.id, e)}
+                onClick={() => {}}
+                onContextMenu={e => handleContextMenu(src.id, e)}
                 paneButtons={{
-                  pref: getEffectivePref(src.id),
-                  onSet1: e => setPref(src.id, 1, e),
-                  onSet2: e => setPref(src.id, 2, e),
+                  active1: selectedId === src.id,
+                  active2: selectedId2 === src.id,
+                  onSet1: e => { setPref(src.id, 1, e); openDocInPane(1, src.id) },
+                  onSet2: e => { setPref(src.id, 2, e); openDocInPane(2, src.id) },
                 }}
               />
             ))
@@ -131,28 +122,25 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
         </div>
       </div>
 
-      {/* ── Sites box ── */}
+      {/* ── Pages ── */}
       <div style={{
         flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden',
         border: '1px solid #1e1e1e', borderRadius: '4px',
       }}>
         <SectionHeader title="Pages" />
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 0 8px', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '2px 0 6px', display: 'flex', flexDirection: 'column' }}>
           {siteSources.length === 0 ? (
-            <EmptyRow text="Pages you save stay with this workspace." />
+            <EmptyRow text="Save pages from the Web browser." />
           ) : (
             siteSources.map(src => (
               <StackRow
                 key={src.id}
                 src={src}
                 isActive={src.id === selectedId}
+                {...sharedRename}
                 renaming={renameId === src.id}
-                renameValue={renameValue}
-                onRenameChange={rowProps.onRenameChange}
-                onRenameCommit={rowProps.onRenameCommit}
-                onRenameCancel={rowProps.onRenameCancel}
                 onClick={() => src.raw && window.dispatchEvent(new CustomEvent('proof:browser-navigate', { detail: src.raw }))}
-                onContextMenu={e => rowProps.onContextMenu(src.id, e)}
+                onContextMenu={e => handleContextMenu(src.id, e)}
                 pinButtons={{
                   onPin1: () => pinPageToView(1, src),
                   onPin2: () => pinPageToView(2, src),
@@ -169,18 +157,41 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
   )
 }
 
+// ─── Metadata helper ──────────────────────────────────────────────────────────
+
+function fmtBytes(b: number): string {
+  if (b < 1024 * 1024)       return `${Math.round(b / 1024)} KB`
+  if (b < 1024 * 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(1)} MB`
+  return `${(b / (1024 * 1024 * 1024)).toFixed(2)} GB`
+}
+
+function getMetaLine(src: QueuedSource): string {
+  if (src.fileType === 'url') {
+    try { return new URL(src.raw).hostname.replace(/^www\./, '') } catch { return src.raw }
+  }
+  if (src.fileType === 'note') return 'Note'
+  const size = src.fileSize ? ` · ${fmtBytes(src.fileSize)}` : ''
+  if (src.fileType === 'image') return `Image${size}`
+  const type = src.fileType === 'pdf' ? 'PDF' : 'Document'
+  if (src.status === 'queued')     return `${type} · Queued${size}`
+  if (src.status === 'extracting') return `${type} · Reading…${size}`
+  if (src.status === 'error')      return `${type} · Error`
+  return `${type}${size}`
+}
+
 // ─── Shared primitives ────────────────────────────────────────────────────────
 
 function SectionHeader({ title, action }: { title: string; action?: React.ReactNode }) {
   return (
     <div style={{
-      height: '28px', flexShrink: 0,
+      height: '32px', flexShrink: 0,
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '0 10px 0 14px',
+      padding: '0 10px 0 16px',
+      background: '#060606',
       borderBottom: '1px solid #1e1e1e',
       userSelect: 'none',
     }}>
-      <span style={{ fontSize: '10px', color: '#777', letterSpacing: '0.05em' }}>
+      <span style={{ fontSize: '10px', color: '#555', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
         {title}
       </span>
       {action}
@@ -188,14 +199,18 @@ function SectionHeader({ title, action }: { title: string; action?: React.ReactN
   )
 }
 
-function EmptyRow({ text }: { text: string }) {
+function EmptyRow({ text, icon }: { text: string; icon?: React.ReactNode }) {
   return (
     <div style={{
-      padding: '10px 14px',
-      fontSize: '11px', color: '#555',
-      letterSpacing: '0.02em', lineHeight: 1.5,
+      flex: 1,
+      background: 'linear-gradient(180deg, #0d0d0d 0%, transparent 80%)',
+      padding: '12px 14px',
+      fontSize: '11px', color: '#3c3c3c',
+      letterSpacing: '0.02em', lineHeight: 1.55,
       userSelect: 'none',
+      display: 'flex', alignItems: 'flex-start', gap: '7px',
     }}>
+      {icon && <span style={{ marginTop: '1px', flexShrink: 0, color: '#2a2a2a', lineHeight: 0 }}>{icon}</span>}
       {text}
     </div>
   )
@@ -217,11 +232,12 @@ function StackRow({
   onRenameCancel: () => void
   onClick: () => void
   onContextMenu: (e: React.MouseEvent) => void
-  paneButtons?: { pref: 1 | 2; onSet1: (e: React.MouseEvent) => void; onSet2: (e: React.MouseEvent) => void }
+  paneButtons?: { active1: boolean; active2: boolean; onSet1: (e: React.MouseEvent) => void; onSet2: (e: React.MouseEvent) => void }
   pinButtons?: { onPin1: () => void; onPin2: () => void; active1?: boolean; active2?: boolean; onWeb?: () => void }
 }) {
   const [hov, setHov] = useState(false)
   const label = src.label || src.raw
+  const meta  = getMetaLine(src)
 
   return (
     <div
@@ -235,95 +251,108 @@ function StackRow({
         e.dataTransfer.effectAllowed = 'move'
       }}
       style={{
-        display: 'flex', alignItems: 'center', gap: '6px',
-        padding: '8px 10px 8px 14px',
+        display: 'flex', alignItems: 'center',
+        padding: '9px 10px 9px 16px',
         cursor: renaming ? 'text' : 'pointer', userSelect: 'none',
-        background: isActive ? '#141414' : hov ? '#0f0f0f' : 'transparent',
-        borderLeft: isActive ? '2px solid #2a2a2a' : '2px solid transparent',
+        background: isActive ? '#141414' : hov ? '#0d0d0d' : 'transparent',
+        borderLeft: `2px solid ${isActive ? '#383838' : 'transparent'}`,
         transition: 'background 0.1s, border-color 0.1s',
       }}
     >
-      {renaming ? (
-        <input
-          autoFocus
-          value={renameValue}
-          onChange={e => onRenameChange(e.target.value)}
-          onFocus={e => e.target.select()}
-          onClick={e => e.stopPropagation()}
-          onBlur={onRenameCommit}
-          onKeyDown={e => {
-            e.stopPropagation()
-            if (e.key === 'Enter')  onRenameCommit()
-            if (e.key === 'Escape') onRenameCancel()
-          }}
-          style={{
-            flex: 1, minWidth: 0,
-            background: 'transparent', border: 'none', outline: 'none',
-            fontSize: '12px', color: '#c2c2c2', fontFamily: 'inherit',
-            padding: 0, letterSpacing: '0.01em',
-          }}
-        />
-      ) : (
-        <span
-          title={label}
-          style={{
-            flex: 1, minWidth: 0,
-            fontSize: '12px', letterSpacing: '0.01em',
-            color: '#c2c2c2',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}
-        >
-          {label}
-        </span>
-      )}
-
-      {/* Pane selector — Documents: 1 / 2 buttons */}
-      {paneButtons && !renaming && (
-        <>
-          <PinBtn
-            label="1"
-            title="Open in View"
-            active={paneButtons.pref === 1}
-            onClick={paneButtons.onSet1}
-          />
-          <PinBtn
-            label="2"
-            title="Open in View 2"
-            active={paneButtons.pref === 2}
-            onClick={paneButtons.onSet2}
-          />
-        </>
-      )}
-
-      {/* View pin buttons — Pages only */}
-      {pinButtons && !renaming && (
-        <>
-          <PinBtn label="1" title="Open in View" active={!!pinButtons.active1} onClick={e => { e.stopPropagation(); pinButtons.onPin1() }} />
-          <PinBtn label="2" title="Open in View 2" active={!!pinButtons.active2} onClick={e => { e.stopPropagation(); pinButtons.onPin2() }} />
-          {pinButtons.onWeb && (
-            <PinBtn
-              label={
-                <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
-                  <circle cx="6" cy="6" r="4.5" />
-                  <path d="M6 1.5C4.5 3 3.5 4.5 3.5 6s1 3 2.5 4.5M6 1.5C7.5 3 8.5 4.5 8.5 6S7.5 9 6 10.5" />
-                  <line x1="1.5" y1="6" x2="10.5" y2="6" />
-                </svg>
-              }
-              title="Open in Web"
-              active={false}
-              onClick={e => { e.stopPropagation(); pinButtons.onWeb!() }}
+      {/* Two-line text block — rename input replaces label line */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {/* Fixed-height row so swapping div↔input never shifts the meta line */}
+        <div style={{ height: '16px', display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+          {renaming ? (
+            <input
+              autoFocus
+              spellCheck={false}
+              value={renameValue}
+              onChange={e => onRenameChange(e.target.value)}
+              onFocus={e => e.target.select()}
+              onClick={e => e.stopPropagation()}
+              onBlur={onRenameCommit}
+              onKeyDown={e => {
+                e.stopPropagation()
+                if (e.key === 'Enter')  onRenameCommit()
+                if (e.key === 'Escape') onRenameCancel()
+              }}
+              style={{
+                flex: 1, minWidth: 0, width: '100%',
+                height: '16px', boxSizing: 'border-box',
+                background: 'transparent', border: 'none', outline: 'none',
+                margin: 0, padding: 0,
+                fontSize: '12px', lineHeight: '16px', color: '#c2c2c2',
+                fontFamily: 'inherit', letterSpacing: '0.01em',
+                WebkitAppearance: 'none',
+              } as React.CSSProperties}
             />
+          ) : (
+            <div style={{
+              fontSize: '12px', lineHeight: '16px', letterSpacing: '0.01em',
+              color: isActive ? '#d4d4d4' : hov ? '#bbb' : '#999',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              width: '100%', height: '16px', boxSizing: 'border-box',
+              transition: 'color 0.1s',
+            }}>
+              {label}
+            </div>
           )}
-        </>
-      )}
-
-      {/* File type badge — Documents only */}
-      {src.fileType !== 'url' && <TypeBadge kind={src.fileType === 'image' ? 'IMG' : 'PDF'} />}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
+          <div style={{
+            minWidth: 0,
+            fontSize: '10px', color: src.status === 'error' ? '#7a3a3a' : '#3e3e3e',
+            letterSpacing: '0.02em',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {meta}
+          </div>
+          {/* Controls — inline with meta line, fade in on hover, hidden while renaming */}
+          {!renaming && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '1px', flexShrink: 0,
+              opacity: hov ? 1 : 0,
+              pointerEvents: hov ? 'auto' : 'none',
+              transition: 'opacity 0.12s',
+            }}>
+              {paneButtons && (
+                <>
+                  <HoverBtn label="1" title="Open in View 1" active={paneButtons.active1} onClick={paneButtons.onSet1} />
+                  <HoverBtn label="2" title="Open in View 2" active={paneButtons.active2} onClick={paneButtons.onSet2} />
+                </>
+              )}
+              {pinButtons && (
+                <>
+                  <HoverBtn label="1" title="Pin to View 1" active={!!pinButtons.active1} onClick={e => { e.stopPropagation(); pinButtons.onPin1() }} />
+                  <HoverBtn label="2" title="Pin to View 2" active={!!pinButtons.active2} onClick={e => { e.stopPropagation(); pinButtons.onPin2() }} />
+                  {pinButtons.onWeb && (
+                    <HoverBtn
+                      label={
+                        <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+                          <circle cx="6" cy="6" r="4.5" />
+                          <path d="M6 1.5C4.5 3 3.5 4.5 3.5 6s1 3 2.5 4.5M6 1.5C7.5 3 8.5 4.5 8.5 6S7.5 9 6 10.5" />
+                          <line x1="1.5" y1="6" x2="10.5" y2="6" />
+                        </svg>
+                      }
+                      title="Open in Web"
+                      active={false}
+                      onClick={e => { e.stopPropagation(); pinButtons.onWeb!() }}
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
 
-function PinBtn({ label, title, active, onClick }: {
+// ─── Hover control button ─────────────────────────────────────────────────────
+
+function HoverBtn({ label, title, active, onClick }: {
   label: React.ReactNode; title: string; active: boolean; onClick: (e: React.MouseEvent) => void
 }) {
   const [hov, setHov] = useState(false)
@@ -334,30 +363,18 @@ function PinBtn({ label, title, active, onClick }: {
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        flexShrink: 0, width: '16px', height: '16px',
+        flexShrink: 0, width: '20px', height: '20px',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'none', border: 'none', padding: 0, outline: 'none',
-        color: active ? '#aaa' : hov ? '#777' : '#333',
-        fontSize: '9px', letterSpacing: '0.02em',
-        cursor: 'pointer', transition: 'color 0.12s', fontFamily: 'inherit',
+        background: active ? '#1e1e1e' : hov ? '#181818' : 'none',
+        border: `1px solid ${active ? '#333' : hov ? '#2a2a2a' : 'transparent'}`,
+        borderRadius: '3px', padding: 0, outline: 'none',
+        color: active ? '#bbb' : hov ? '#888' : '#555',
+        fontSize: '10px', letterSpacing: '0.02em',
+        cursor: 'pointer', transition: 'color 0.1s, background 0.1s, border-color 0.1s',
+        fontFamily: 'inherit',
       }}
     >
       {label}
     </button>
-  )
-}
-
-function TypeBadge({ kind }: { kind: 'IMG' | 'PDF' }) {
-  return (
-    <span style={{
-      flexShrink: 0,
-      fontSize: '8px', letterSpacing: '0.08em',
-      color: '#444',
-      border: '1px solid #1e1e1e', borderRadius: '2px',
-      padding: '1px 4px',
-      fontVariantNumeric: 'tabular-nums',
-    }}>
-      {kind}
-    </span>
   )
 }

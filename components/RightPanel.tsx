@@ -8,7 +8,7 @@ export default function RightPanel({ isFocused, onFocusToggle }: {
   return (
     <div style={{
       flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
-      overflow: 'hidden', padding: '5px',
+      overflow: 'hidden', padding: '7px',
       WebkitAppRegion: 'no-drag',
     } as React.CSSProperties}>
       <ResearchBrowser isFocused={isFocused} onFocusToggle={onFocusToggle} />

@@ -63,12 +63,13 @@ const MIME = {
 
 function makePanel() {
   return {
-    tabViews:    new Map(),   // id → WebContentsView
-    tabStates:   new Map(),   // id → { url, title, loading, canGoBack, canGoForward }
-    activeTabId: null,
-    lastBounds:  null,        // most recent valid { x, y, width, height } in physical px
-    pendingUrl:  null,        // URL deferred until bounds are known
-    pendingTimer: null,
+    tabViews:          new Map(),   // id → WebContentsView
+    tabStates:         new Map(),   // id → { url, title, loading, canGoBack, canGoForward }
+    activeTabId:       null,
+    lastBounds:        null,        // most recent valid { x, y, width, height } in physical px
+    pendingUrl:        null,        // URL deferred until bounds are known
+    pendingTimer:      null,
+    currentWorkspaceId: null,       // workspace that currently owns this panel's views
   }
 }
 
@@ -432,6 +433,11 @@ function switchToTab(win, pid, id) {
 // ─── IPC setup ────────────────────────────────────────────────────────────────
 
 function setupResearchBrowser(win) {
+  // Per-workspace view cache: workspaceId → { tabViews, tabStates, activeTabId }
+  // Views are kept alive (not destroyed) when switching workspaces so sessions
+  // resume exactly where the user left them — no reload, scroll preserved.
+  const workspaceViewCache = new Map()
+
   // Create one initial tab for the single Research panel.
   const initId = `tab-A-${Date.now()}`
   createTabView(win, 'A', initId)
@@ -685,24 +691,73 @@ function setupResearchBrowser(win) {
   })
 
   // ── load-workspace ─────────────────────────────────────────────────────────
-  ipcMain.on('research:load-workspace', (_e, tabs) => {
-    const panel      = panels['A']
-    const savedBounds = panel.lastBounds
+  // Accepts { workspaceId, tabs } (new) or plain tabs array (legacy fallback).
+  // On workspace switch: park current views in workspaceViewCache (hidden, alive),
+  // restore cached views for the target workspace or create fresh ones on first visit.
+  ipcMain.on('research:load-workspace', (_e, payload) => {
+    const workspaceId   = payload?.workspaceId || null
+    const tabs          = Array.isArray(payload) ? payload : (payload?.tabs ?? [])
+    const panel         = panels['A']
+    const savedBounds   = panel.lastBounds
+    const curWsId       = panel.currentWorkspaceId
 
     if (panel.pendingTimer) { clearTimeout(panel.pendingTimer); panel.pendingTimer = null }
     panel.pendingUrl = null
 
-    for (const [, view] of panel.tabViews) {
-      try { if (wcAlive(view)) view.webContents.setAudioMuted(true) } catch {}
-      try { if (wcAlive(view)) view.webContents.stop() } catch {}
-      try { win.contentView.removeChildView(view) } catch {}
-      try { if (wcAlive(view)) view.webContents.loadURL('about:blank').catch(() => {}) } catch {}
+    if (curWsId !== null && curWsId !== workspaceId) {
+      // ── Park current workspace: hide views, keep them alive in cache ──────
+      for (const [, view] of panel.tabViews) {
+        try { if (wcAlive(view)) view.webContents.setAudioMuted(true) } catch {}
+        try { win.contentView.removeChildView(view) } catch {}
+      }
+      workspaceViewCache.set(curWsId, {
+        tabViews:    panel.tabViews,
+        tabStates:   panel.tabStates,
+        activeTabId: panel.activeTabId,
+      })
+      panel.tabViews  = new Map()
+      panel.tabStates = new Map()
+      panel.activeTabId = null
+    } else if (curWsId === null) {
+      // ── First load: clean up the placeholder tab created at startup ───────
+      for (const [, view] of panel.tabViews) {
+        try { if (wcAlive(view)) view.webContents.stop() } catch {}
+        try { win.contentView.removeChildView(view) } catch {}
+        try { if (wcAlive(view)) view.webContents.loadURL('about:blank').catch(() => {}) } catch {}
+      }
+      panel.tabViews.clear()
+      panel.tabStates.clear()
+      panel.activeTabId = null
+    } else if (panel.tabViews.size > 0) {
+      // ── Same workspace, views still alive (renderer reloaded) ─────────────
+      // Re-announce current state so the renderer can restore homeMode / URL
+      // without recreating or reloading any WebContentsView.
+      emitTabsChanged(win, 'A')
+      if (savedBounds && windowReady) showActiveView(win, 'A')
+      return
     }
-    panel.tabViews.clear()
-    panel.tabStates.clear()
-    panel.activeTabId = null
-    panel.lastBounds  = savedBounds
 
+    panel.currentWorkspaceId = workspaceId
+    panel.lastBounds = savedBounds
+
+    // ── Restore from cache if this workspace was visited before ───────────
+    if (workspaceId && workspaceViewCache.has(workspaceId)) {
+      const cached = workspaceViewCache.get(workspaceId)
+      workspaceViewCache.delete(workspaceId)
+      panel.tabViews    = cached.tabViews
+      panel.tabStates   = cached.tabStates
+      panel.activeTabId = cached.activeTabId
+      // Unmute active view (was muted when parked)
+      const activeView = panel.activeTabId && panel.tabViews.get(panel.activeTabId)
+      if (wcAlive(activeView)) {
+        try { activeView.webContents.setAudioMuted(false) } catch {}
+      }
+      emitTabsChanged(win, 'A')
+      if (savedBounds && windowReady) showActiveView(win, 'A')
+      return
+    }
+
+    // ── First visit: create views and load URLs ───────────────────────────
     const workspaceTabs = Array.isArray(tabs) ? tabs.filter(t => t && t.url) : []
     const base = Date.now()
 

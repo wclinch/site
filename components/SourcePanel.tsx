@@ -4,7 +4,7 @@ import SourceStack from './SourceStack'
 export default function SourcePanel({ width, hidden }: { width: number | string; hidden?: boolean }) {
   return (
     <div style={{ width: hidden ? 0 : width, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', WebkitAppRegion: 'no-drag', transition: 'width 0.22s ease' } as React.CSSProperties}>
-      <div style={{ flex: 1, minHeight: 0, padding: '5px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <div style={{ flex: 1, minHeight: 0, padding: '7px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
         <SourceStack />
       </div>
     </div>

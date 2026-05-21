@@ -24,6 +24,7 @@ export interface QueuedSource {
   label?: string
   color?: string
   fileType?: 'pdf' | 'image' | 'note' | 'url'
+  fileSize?: number
   content?: DocContent
   noteContent?: string
   url?: string
@@ -45,6 +46,7 @@ export interface Project {
   id: string
   name: string
   sources: QueuedSource[]
+  pinned?: boolean
   // Per-workspace state — saved on switch/explicit save
   sel1?: string | null
   sel2?: string | null
