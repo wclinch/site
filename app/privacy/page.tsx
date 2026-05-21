@@ -1,6 +1,10 @@
 import Nav from '@/components/Nav'
 import BackButton from '@/components/BackButton'
 
+const P: React.CSSProperties = { fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }
+const Label: React.CSSProperties = { fontSize: '11px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase' as const }
+const Section: React.CSSProperties = { padding: '20px 0', borderBottom: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column' as const, gap: '8px' }
+
 export default function Privacy() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -12,51 +16,71 @@ export default function Privacy() {
           Privacy
         </span>
 
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Summary</span>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Site is a macOS desktop app. Uploaded documents are stored locally on your device. Site does not sell user data.
+        <div style={Section}>
+          <span style={Label}>Overview</span>
+          <p style={P}>
+            Site stores what is needed to provide the product. Documents are kept on your device. Session data is stored locally. We do not sell user data, and we do not share personal information with third parties except as described below.
           </p>
         </div>
 
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Storage</span>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Documents (PDFs and images) are stored in IndexedDB on your device and count toward your storage limit. Pages store metadata only — title, URL, hostname, and timestamp — and do not count toward storage. Pages do not store website passwords.
+        <div style={Section}>
+          <span style={Label}>Account information</span>
+          <p style={P}>
+            If you create an account, we store your email address to associate your subscription with your access. This is used only for authentication and subscription management.
           </p>
         </div>
 
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Web</span>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Web uses browser session and cookie storage so websites can keep you logged in. Site does not manually store usernames or passwords.
+        <div style={Section}>
+          <span style={Label}>Documents and uploaded files</span>
+          <p style={P}>
+            PDFs and images you add are stored locally on your device using IndexedDB. They are not uploaded to or stored on our servers. They count toward your storage limit and remain on your device until you remove them.
           </p>
         </div>
 
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Billing</span>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Billing is handled by Polar. Subscription validation may contact Polar to verify your access. No other data is transmitted.
+        <div style={Section}>
+          <span style={Label}>Saved pages and session data</span>
+          <p style={P}>
+            Saved pages store metadata only — title, URL, hostname, and timestamp — locally on your device. Full page content is not stored. Session state (open tabs, document selections, reader positions) is also stored locally and is not transmitted.
+          </p>
+          <p style={P}>
+            The web panel uses standard browser session and cookie storage so websites can keep you logged in. Site does not read, store, or transmit those credentials.
           </p>
         </div>
 
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Deletion</span>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Documents and Pages can be removed individually from within the app. Site → Reset Site Data… (desktop menu) removes all local files and state. Both operations are local and cannot be reversed.
+        <div style={Section}>
+          <span style={Label}>Payments</span>
+          <p style={P}>
+            Subscription payments are processed by Polar. Site does not handle or store payment card information directly. When your subscription status is checked, Site contacts Polar to verify access. No other data is shared during that process.
           </p>
         </div>
 
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Updates</span>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Site is updated periodically. Behavior may change as the product improves.
+        <div style={Section}>
+          <span style={Label}>Diagnostics and analytics</span>
+          <p style={P}>
+            Site does not include third-party analytics. Crash reports or diagnostic data, if collected, are used only to identify and fix problems in the app and are not linked to your documents or browsing activity.
           </p>
         </div>
 
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Contact</span>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
+        <div style={Section}>
+          <span style={Label}>Your data and deletion</span>
+          <p style={P}>
+            Documents and saved pages can be removed individually from within the app. To remove all local data at once, use <span style={{ color: '#999' }}>Site → Reset Site Data…</span> in the desktop menu. This clears all local files and state and cannot be undone.
+          </p>
+          <p style={P}>
+            To close your account or request deletion of any account-level data, contact us at the address below.
+          </p>
+        </div>
+
+        <div style={Section}>
+          <span style={Label}>Changes</span>
+          <p style={P}>
+            This policy may be updated as the product changes. Material changes will be noted in release notes. Continued use of Site after a change means you accept the updated terms.
+          </p>
+        </div>
+
+        <div style={Section}>
+          <span style={Label}>Contact</span>
+          <p style={P}>
             <a href="mailto:Official_Site_Support@protonmail.com?subject=Site%20privacy" style={{ color: '#999', textDecoration: 'underline', textDecorationColor: '#333', textUnderlineOffset: '3px' }}>
               Official_Site_Support@protonmail.com
             </a>

@@ -1,20 +1,9 @@
 import Nav from '@/components/Nav'
 import BackButton from '@/components/BackButton'
 
-const mono: React.CSSProperties = {
-  fontFamily: 'inherit',
-  background: '#111',
-  border: '1px solid #1e1e1e',
-  borderRadius: '3px',
-  padding: '1px 6px',
-  fontSize: '12px',
-  color: '#777',
-  letterSpacing: '0.02em',
-}
-
-function Kbd({ children }: { children: React.ReactNode }) {
-  return <span style={mono}>{children}</span>
-}
+const P: React.CSSProperties = { fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }
+const Label: React.CSSProperties = { fontSize: '11px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase' as const }
+const Section: React.CSSProperties = { padding: '20px 0', borderBottom: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column' as const, gap: '10px' }
 
 export default function About() {
   return (
@@ -27,83 +16,70 @@ export default function About() {
           About Site
         </span>
 
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Site keeps your documents, saved pages, and Web tabs together. Work in Views, browse in Web, open Library when you need it. Come back later and everything is still there.
+        <div style={Section}>
+          <p style={P}>
+            Site keeps the materials for a task in one place — documents, saved pages, and web tools — so you can start working immediately and pick up exactly where you stopped.
           </p>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            Documents, Pages, Views, and Web tabs all restore with each workspace. Switch workspaces and everything comes back.
-          </p>
-        </div>
-
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <span style={{ fontSize: '11px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Layout</span>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Library</span> — Documents and Pages for the workspace. Documents are files you add. Pages are Web pages you save. Both stay with the workspace.
-          </p>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>View 1 / View 2</span> — Hold a Document or Page while you keep browsing. Each View opens independently and restores on return.
-          </p>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Web</span> — Browse, search, and navigate. Use 1, 2, or Save to keep what matters.
-          </p>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Workspace</span> — Everything in a workspace — Documents, Pages, Views, and Web tabs — comes back when you return.
+          <p style={P}>
+            It is a desktop app for macOS.
           </p>
         </div>
 
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <span style={{ fontSize: '11px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Interactions</span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {[
-              { keys: ['Drop file'],           desc: 'Add a PDF or image to Documents' },
-              { keys: ['+'],                   desc: 'Add a PDF or image to Documents via file picker' },
-              { keys: ['Click document'],      desc: 'Open in View 1 or View 2' },
-              { keys: ['Drag document'],       desc: 'Drop onto View 1 or View 2 to open in that View' },
-              { keys: ['× on document row'],   desc: 'Remove from Documents' },
-              { keys: ['Click page'],          desc: 'Open in Web' },
-              { keys: ['× on page row'],       desc: 'Remove from Pages' },
-              { keys: ['URL bar'],             desc: 'Navigate or search in Web' },
-              { keys: ['1'],                   desc: 'Open current Web page in View' },
-              { keys: ['2'],                   desc: 'Open current Web page in View 2' },
-              { keys: ['Save'],                desc: 'Save the current Web page to Pages' },
-              { keys: ['Double-click tab'],    desc: 'Rename the workspace' },
-              { keys: ['+'],                   desc: 'Start a blank workspace' },
-              { keys: ['Esc'],                 desc: 'Close menus and overlays' },
-            ].map((row, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
-                <div style={{ display: 'flex', gap: '4px', flexShrink: 0, minWidth: '160px' }}>
-                  {row.keys.map((k, j) => <Kbd key={j}>{k}</Kbd>)}
-                </div>
-                <span style={{ fontSize: '13px', color: '#777', lineHeight: 1.5 }}>{row.desc}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <span style={{ fontSize: '11px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Document types</span>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>PDF</span> — Selectable text. Scanned documents render as image-only.
+        <div style={Section}>
+          <span style={Label}>Why Site exists</span>
+          <p style={P}>
+            Most focused work involves a cluster of things: a paper or brief to read, a handful of tabs open for reference, notes or pages saved along the way. Keeping that cluster together while you work isn't hard. Reassembling it the next day is.
           </p>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Image</span> — PNG, JPG, WEBP, GIF.
+          <p style={P}>
+            Site holds the cluster together for the duration of a task. Leave and come back — everything is where you left it.
           </p>
         </div>
 
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <span style={{ fontSize: '11px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Storage</span>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Free: 150 MB</span> for Documents. <span style={{ color: '#999' }}>Pro: 5 GB.</span> Pages store metadata only and do not count toward storage. Nothing is transmitted.
+        <div style={Section}>
+          <span style={Label}>Sessions</span>
+          <p style={P}>
+            A session is a named context. It holds the documents you've added, the pages you've saved, the web tabs you had open, and whichever documents you had pinned to the reader panes.
           </p>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#999' }}>Site → Reset Site Data…</span> (desktop menu) clears all local state. Cannot be reversed.
+          <p style={P}>
+            Sessions restore fully when you return. Switch between sessions the same way — each one comes back intact.
           </p>
         </div>
 
-        <div style={{ padding: '20px 0', borderBottom: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <span style={{ fontSize: '11px', color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Support</span>
-          <p style={{ fontSize: '14px', color: '#777', lineHeight: 1.75, margin: 0 }}>
+        <div style={Section}>
+          <span style={Label}>Who it's for</span>
+          <p style={P}>
+            Site is useful for people whose work involves reading, referencing, and browsing at the same time. Researchers, writers, analysts, students — anyone who regularly opens the same cluster of files and tabs for a recurring task.
+          </p>
+          <p style={P}>
+            It works best when you have distinct tasks you return to, each with its own materials.
+          </p>
+        </div>
+
+        <div style={Section}>
+          <span style={Label}>What Site is not</span>
+          <p style={P}>
+            Site is not a note-taking app, a document editor, or a permanent filing system. It doesn't organize your files — it holds them open while you work.
+          </p>
+          <p style={P}>
+            It's also not a full browser replacement. The web panel is for browsing as part of a task, not for managing bookmarks or a browsing history across everything you do.
+          </p>
+        </div>
+
+        <div style={Section}>
+          <span style={Label}>Storage</span>
+          <p style={P}>
+            <span style={{ color: '#999' }}>Free: 150 MB</span> for documents.{' '}
+            <span style={{ color: '#999' }}>Pro: 5 GB.</span>{' '}
+            Saved pages store metadata only (title, URL, timestamp) and do not count toward storage.
+          </p>
+          <p style={P}>
+            <span style={{ color: '#999' }}>Site → Reset Site Data…</span> in the desktop menu clears all local state. This cannot be undone.
+          </p>
+        </div>
+
+        <div style={Section}>
+          <span style={Label}>Support</span>
+          <p style={P}>
             <a href="mailto:Official_Site_Support@protonmail.com?subject=Site%20support" style={{ color: '#999', textDecoration: 'underline', textDecorationColor: '#333', textUnderlineOffset: '3px' }}>
               Official_Site_Support@protonmail.com
             </a>
