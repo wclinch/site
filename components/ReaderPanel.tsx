@@ -24,7 +24,7 @@ export default function ReaderPanel({
     selectedSource, setSelectedId,
     selectedSource2, setSelectedId2,
     uploadFiles, patchSource,
-    view1Page, view2Page, clearView, pinPageToView,
+    view1Page, view2Page, clearView, pinPageToView, pinUrlToView,
     sources,
     splitView, setSplitView,
   } = useApp()
@@ -85,11 +85,13 @@ export default function ReaderPanel({
             isHidden={hide1}
             onClose={(view1Page || selectedSource) ? handleClose1 : undefined}
             onSelectId={handleDrop1}
+            onDropUrl={(url, title) => pinUrlToView(1, url, title)}
             uploadFiles={uploadFiles}
             patchSource={patchSource}
             onToggleSplit={() => handleToggleSplitFromPane(1)}
             splitActive={splitView}
-            isFocused={isFocused}
+            isFocused={isFocused || (!splitView && soloPane === 1)}
+            isExpanded={isFocused}
             onFocusToggle={onFocusToggle}
           />
         </div>
@@ -105,11 +107,13 @@ export default function ReaderPanel({
             isHidden={hide2}
             onClose={(view2Page || selectedSource2) ? handleClose2 : undefined}
             onSelectId={handleDrop2}
+            onDropUrl={(url, title) => pinUrlToView(2, url, title)}
             uploadFiles={uploadFiles}
             patchSource={patchSource}
             onToggleSplit={() => handleToggleSplitFromPane(2)}
             splitActive={splitView}
-            isFocused={isFocused}
+            isFocused={isFocused || (!splitView && soloPane === 2)}
+            isExpanded={isFocused}
             onFocusToggle={onFocusToggle}
           />
         </div>
@@ -122,8 +126,8 @@ export default function ReaderPanel({
 
 function ViewPane({
   viewId, label, source, viewPage, isHidden, alwaysShowClose,
-  onClose, onSelectId, uploadFiles, patchSource,
-  onToggleSplit, splitActive, isFocused, onFocusToggle,
+  onClose, onSelectId, onDropUrl, uploadFiles, patchSource,
+  onToggleSplit, splitActive, isFocused, isExpanded, onFocusToggle,
 }: {
   viewId: 1 | 2
   label: string
@@ -133,14 +137,18 @@ function ViewPane({
   alwaysShowClose?: boolean
   onClose?: () => void
   onSelectId: (id: string) => void
+  onDropUrl?: (url: string, title: string) => void
   uploadFiles: (files: FileList | File[]) => Promise<void>
   patchSource: (projId: string, srcId: string, patch: Partial<QueuedSource>) => void
   onToggleSplit?: () => void
   splitActive?: boolean
   isFocused?: boolean
+  isExpanded?: boolean
   onFocusToggle?: () => void
 }) {
-  const [dragOver, setDragOver] = useState(false)
+  const [dragOver,     setDragOver]     = useState(false)
+  const [dropFeedback, setDropFeedback] = useState<string | null>(null)
+  const feedbackTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
   const viewportRef    = useRef<HTMLDivElement>(null)
   const navigatedUrl   = useRef<string | null>(null)
 
@@ -159,7 +167,7 @@ function ViewPane({
       if (!el) return
       const r = el.getBoundingClientRect()
       api.setBounds?.(String(viewId), {
-        x: r.left, y: r.top,
+        x: Math.floor(r.left), y: Math.floor(r.top),
         width: Math.round(r.width), height: Math.round(r.height),
         innerWidth: window.innerWidth, innerHeight: window.innerHeight,
       })
@@ -194,45 +202,67 @@ function ViewPane({
     <div
       style={{
         flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
-        border: `1px solid ${dragOver ? '#444' : '#1e1e1e'}`, borderRadius: '4px',
+        border: `1px solid ${dragOver ? '#333' : isFocused ? '#333' : '#232523'}`, borderRadius: '4px',
         overflow: 'hidden',
-        background: dragOver ? 'rgba(255,255,255,0.01)' : 'transparent',
-        transition: 'border-color 0.15s, background 0.15s',
+        background: dragOver ? 'rgba(255,255,255,0.015)' : 'transparent',
+        transition: 'border-color 0.15s ease, background 0.15s',
         WebkitAppRegion: 'no-drag',
       } as React.CSSProperties}
       onDragOver={e => {
-        if (viewPage) return
-        const hasStackSrc = e.dataTransfer.types.includes('application/x-proof-source-id')
-        const hasFile     = e.dataTransfer.types.includes('Files')
-        if (hasStackSrc || hasFile) { e.preventDefault(); setDragOver(true) }
+        const t = e.dataTransfer.types
+        if (t.includes('application/x-proof-source-id') || t.includes('application/x-proof-web-url') || t.includes('Files')) {
+          e.preventDefault(); setDragOver(true)
+        }
       }}
       onDragEnter={e => {
-        if (viewPage) return
-        const hasStackSrc = e.dataTransfer.types.includes('application/x-proof-source-id')
-        const hasFile     = e.dataTransfer.types.includes('Files')
-        if (hasStackSrc || hasFile) setDragOver(true)
+        const t = e.dataTransfer.types
+        if (t.includes('application/x-proof-source-id') || t.includes('application/x-proof-web-url') || t.includes('Files'))
+          setDragOver(true)
       }}
       onDragLeave={e => {
         if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDragOver(false)
       }}
       onDrop={e => {
-        if (viewPage) return
         e.preventDefault(); setDragOver(false)
         const srcId = e.dataTransfer.getData('application/x-proof-source-id')
-        if (srcId) { onSelectId(srcId); return }
+        if (srcId) {
+          onSelectId(srcId)
+          setDropFeedback(`Opened in ${label}`)
+          if (feedbackTimer.current) clearTimeout(feedbackTimer.current)
+          feedbackTimer.current = setTimeout(() => setDropFeedback(null), 1600)
+          return
+        }
+        const webRaw = e.dataTransfer.getData('application/x-proof-web-url')
+        if (webRaw && onDropUrl) {
+          try {
+            const { url, title } = JSON.parse(webRaw)
+            onDropUrl(url, title)
+            setDropFeedback(`Opened in ${label}`)
+            if (feedbackTimer.current) clearTimeout(feedbackTimer.current)
+            feedbackTimer.current = setTimeout(() => setDropFeedback(null), 1600)
+          } catch {}
+          return
+        }
         if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files)
       }}
     >
       <PaneHeader
-        label={label}
+        label={dropFeedback ?? label}
         onClose={showClose ? onClose : undefined}
         onToggleSplit={onToggleSplit}
         splitActive={splitActive}
         isFocused={isFocused}
+        isExpanded={isExpanded}
         onFocusToggle={onFocusToggle}
+        dragUrl={viewPage ? { url: viewPage.url, title: viewPage.title } : undefined}
+        showSidebarToggle={viewId === 1}
       />
       {viewPage
-        ? <div ref={viewportRef} style={{ flex: 1, minHeight: 0, background: '#060606', WebkitAppRegion: 'no-drag' } as React.CSSProperties} />
+        ? (
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '0 1px 1px' }}>
+            <div ref={viewportRef} style={{ flex: 1, minHeight: 0, background: '#080909', WebkitAppRegion: 'no-drag' } as React.CSSProperties} />
+          </div>
+        )
         : source
           ? <SourceContent source={source} patchSource={patchSource} />
           : <EmptySource viewId={viewId} uploadFiles={uploadFiles} />
@@ -253,7 +283,7 @@ function SourceContent({
   if (source.fileType === 'pdf')   return <PdfViewer   source={source} />
   if (source.fileType === 'image') return <ImageViewer source={source} />
   return (
-    <div style={{ flex: 1, background: '#080808', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ flex: 1, background: '#080909', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <Empty label="Unsupported file type" />
     </div>
   )
@@ -277,10 +307,10 @@ function EmptySource({ viewId, uploadFiles }: { viewId: 1 | 2; uploadFiles: (fil
     <div
       style={{
         flex: 1,
-        background: fileDragOver ? '#0f0f0f' : 'linear-gradient(180deg, #0e0e0e 0%, #060606 100%)',
+        background: fileDragOver ? '#171817' : '#080909',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
-        padding: '32px', gap: '14px',
+        padding: '32px', gap: '8px',
         transition: 'background 0.15s',
       }}
       onDragOver={e => {
@@ -294,33 +324,18 @@ function EmptySource({ viewId, uploadFiles }: { viewId: 1 | 2; uploadFiles: (fil
         if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files)
       }}
     >
+      <span style={{
+        fontSize: '12px', color: fileDragOver ? '#8A8780' : '#8A8780',
+        letterSpacing: '0.03em', textAlign: 'center', transition: 'color 0.15s',
+        userSelect: 'none',
+      }}>
+        {fileDragOver ? 'Drop to open.' : viewId === 2 ? 'Nothing open here.' : 'Nothing open here.'}
+      </span>
       {!fileDragOver && (
-        <svg width="16" height="20" viewBox="0 0 16 20" fill="none" stroke="currentColor" strokeWidth="1"
-          strokeLinecap="round" strokeLinejoin="round" style={{ color: '#222', flexShrink: 0 }}>
-          <rect x="1" y="1" width="14" height="18" rx="2" />
-          <line x1="4" y1="7" x2="12" y2="7" />
-          <line x1="4" y1="10.5" x2="12" y2="10.5" />
-          <line x1="4" y1="14" x2="9" y2="14" />
-        </svg>
-      )}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
-        <span style={{
-          fontSize: '12px', color: fileDragOver ? '#999' : '#555',
-          letterSpacing: '0.03em', textAlign: 'center', transition: 'color 0.15s',
-        }}>
-          {fileDragOver ? 'Drop to open.' : viewId === 2 ? 'Add a second source.' : 'Open a document or page.'}
+        <span style={{ fontSize: '11px', color: '#9b9892', letterSpacing: '0.02em', textAlign: 'center', userSelect: 'none' }}>
+          {viewId === 2 ? 'Select a source, or drop a file.' : 'Select a source, or drop a file.'}
         </span>
-        {!fileDragOver && (
-          <span style={{
-            fontSize: '11px', color: '#383838',
-            letterSpacing: '0.02em', textAlign: 'center', lineHeight: 1.5,
-          }}>
-            {viewId === 2
-              ? 'Click · 2 · in the sidebar, or drag one here.'
-              : 'Select from the sidebar, or drag a file here.'}
-          </span>
-        )}
-      </div>
+      )}
 
       <input
         ref={fileRef} type="file"
@@ -334,30 +349,66 @@ function EmptySource({ viewId, uploadFiles }: { viewId: 1 | 2; uploadFiles: (fil
 
 // ─── Pane header ─────────────────────────────────────────────────────────────
 
-function PaneHeader({ label, onClose, onToggleSplit, splitActive, isFocused, onFocusToggle }: {
+function PaneHeader({ label, onClose, onToggleSplit, splitActive, isFocused, isExpanded, onFocusToggle, dragUrl, showSidebarToggle }: {
   label: string
   onClose?: () => void
   onToggleSplit?: () => void
   splitActive?: boolean
   isFocused?: boolean
+  isExpanded?: boolean
   onFocusToggle?: () => void
+  dragUrl?: { url: string; title: string }
+  showSidebarToggle?: boolean
 }) {
   return (
     <div style={{
       height: '32px', flexShrink: 0,
       display: 'flex', alignItems: 'center',
-      padding: '0 6px 0 16px',
-      borderBottom: '1px solid #1e1e1e',
+      padding: '0 6px 0 6px',
+      borderBottom: '1px solid #232523',
       gap: '2px',
       WebkitAppRegion: 'no-drag',
     } as React.CSSProperties}>
-      <span style={{ flex: 1, fontSize: '10px', color: '#666', letterSpacing: '0.04em', userSelect: 'none' }}>
+      {showSidebarToggle && <SidebarToggleBtn />}
+      <span
+        draggable={!!dragUrl}
+        onDragStart={dragUrl ? e => {
+          e.dataTransfer.setData('application/x-proof-web-url', JSON.stringify(dragUrl))
+          e.dataTransfer.effectAllowed = 'copy'
+        } : undefined}
+        title={dragUrl ? `Drag to Web to open in a new tab` : undefined}
+        style={{ flex: 1, fontSize: '10px', color: '#E6E2D8', letterSpacing: '0.04em', userSelect: 'none', cursor: dragUrl ? 'grab' : 'default', paddingLeft: showSidebarToggle ? '4px' : '10px' }}>
         {label}
       </span>
       {onToggleSplit && <SplitBtn active={!!splitActive} onClick={onToggleSplit} />}
-      {onFocusToggle && <FocusBtn active={!!isFocused} onClick={onFocusToggle} />}
-      {onClose && <IconBtn onClick={onClose} title="Clear View"><CloseIcon /></IconBtn>}
+      {onFocusToggle && <FocusBtn active={!!isExpanded} onClick={onFocusToggle} />}
+      {onClose && <IconBtn onClick={onClose} title="Close"><CloseIcon /></IconBtn>}
     </div>
+  )
+}
+
+function SidebarToggleBtn() {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={() => window.dispatchEvent(new Event('proof:toggle-sidebar'))}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      title="Toggle sidebar"
+      style={{
+        width: '26px', height: '26px', flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'none', border: 'none', borderRadius: '3px',
+        color: hov ? '#8A8780' : '#8A8780',
+        cursor: 'pointer', padding: 0, outline: 'none', lineHeight: 0,
+        transition: 'color 0.12s',
+      }}
+    >
+      <svg width="14" height="11" viewBox="0 0 14 11" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="0.7" y="0.7" width="12.6" height="9.6" rx="1.5" />
+        <line x1="4.7" y1="0.7" x2="4.7" y2="10.3" />
+      </svg>
+    </button>
   )
 }
 
@@ -384,7 +435,7 @@ function NoteEditor({
   }
 
   return (
-    <div style={{ flex: 1, overflow: 'auto', background: '#080808', display: 'flex', flexDirection: 'column', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+    <div style={{ flex: 1, overflow: 'auto', background: '#080909', display: 'flex', flexDirection: 'column', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
       <textarea
         value={text}
         onChange={e => handleChange(e.target.value)}
@@ -393,7 +444,7 @@ function NoteEditor({
           flex: 1, width: '100%', minHeight: '100%',
           background: 'transparent', border: 'none', outline: 'none',
           resize: 'none', padding: '20px 24px',
-          fontSize: '13px', lineHeight: 1.8, color: '#bbb',
+          fontSize: '13px', lineHeight: 1.8, color: '#8A8780',
           fontFamily: 'Georgia, "Times New Roman", serif',
           boxSizing: 'border-box',
         }}
@@ -402,11 +453,22 @@ function NoteEditor({
   )
 }
 
+// ─── Zoom cursors ─────────────────────────────────────────────────────────────
+
+const CURSOR_IN  = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 22 22'%3E%3Ccircle cx='9' cy='9' r='6.5' fill='none' stroke='white' stroke-width='1.4'/%3E%3Cline x1='6' y1='9' x2='12' y2='9' stroke='white' stroke-width='1.4' stroke-linecap='round'/%3E%3Cline x1='9' y1='6' x2='9' y2='12' stroke='white' stroke-width='1.4' stroke-linecap='round'/%3E%3Cline x1='14' y1='14' x2='20' y2='20' stroke='white' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") 5 5, zoom-in`
+const CURSOR_OUT = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 22 22'%3E%3Ccircle cx='9' cy='9' r='6.5' fill='none' stroke='white' stroke-width='1.4'/%3E%3Cline x1='6' y1='9' x2='12' y2='9' stroke='white' stroke-width='1.4' stroke-linecap='round'/%3E%3Cline x1='14' y1='14' x2='20' y2='20' stroke='white' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") 5 5, zoom-out`
+
 // ─── Image viewer ────────────────────────────────────────────────────────────
 
 function ImageViewer({ source }: { source: QueuedSource }) {
-  const [imgUrl, setImgUrl] = useState<string | null>(null)
-  const prevUrl = useRef<string | null>(null)
+  const [imgUrl,     setImgUrl]     = useState<string | null>(null)
+  const [zoomed,     setZoomed]     = useState(false)
+  const [zoomOrigin, setZoomOrigin] = useState<{ x: number; y: number } | null>(null)
+  const prevUrl      = useRef<string | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const reducedMotion = typeof window !== 'undefined'
+    && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
   useEffect(() => {
     if (source.status !== 'done') { setImgUrl(null); return }
@@ -422,20 +484,79 @@ function ImageViewer({ source }: { source: QueuedSource }) {
     return () => { cancelled = true }
   }, [source.id, source.status])
 
+  useEffect(() => { setZoomed(false); setZoomOrigin(null) }, [source.id])
+
   useEffect(() => () => {
     if (prevUrl.current) URL.revokeObjectURL(prevUrl.current)
   }, [])
 
+  // Escape exits zoom
+  useEffect(() => {
+    if (!zoomed) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setZoomed(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [zoomed])
+
+  // Scroll to clicked point after zooming in
+  useEffect(() => {
+    if (!zoomed || !zoomOrigin || !containerRef.current) return
+    const container = containerRef.current
+    const img = container.querySelector('img') as HTMLImageElement | null
+    if (!img) return
+    const doScroll = () => {
+      const scrollX = img.naturalWidth  * zoomOrigin.x - container.clientWidth  / 2
+      const scrollY = img.naturalHeight * zoomOrigin.y - container.clientHeight / 2
+      container.scrollLeft = Math.max(0, scrollX)
+      container.scrollTop  = Math.max(0, scrollY)
+    }
+    if (reducedMotion) doScroll(); else requestAnimationFrame(doScroll)
+  }, [zoomed, zoomOrigin, reducedMotion])
+
+  function handleClick(e: React.MouseEvent<HTMLDivElement>) {
+    if (zoomed) { setZoomed(false); setZoomOrigin(null); return }
+    const img = (e.currentTarget as HTMLDivElement).querySelector('img')
+    if (!img) return
+    const rect = img.getBoundingClientRect()
+    setZoomOrigin({
+      x: Math.max(0, Math.min(1, (e.clientX - rect.left)  / rect.width)),
+      y: Math.max(0, Math.min(1, (e.clientY - rect.top)   / rect.height)),
+    })
+    setZoomed(true)
+  }
+
   return (
-    <div style={{ flex: 1, background: '#080808', display: 'flex', flexDirection: 'column', overflow: 'hidden', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-      {source.status !== 'done' && <Msg>Loading...</Msg>}
-      {source.status === 'done' && !imgUrl && <Msg>Image failed to load.</Msg>}
+    <div style={{ flex: 1, background: '#080909', display: 'flex', flexDirection: 'column', overflow: 'hidden', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+      {source.status !== 'done' && <Msg>Loading…</Msg>}
+      {source.status === 'done' && !imgUrl && <Msg>Could not load image.</Msg>}
       {source.status === 'done' && imgUrl && (
-        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-          <img src={imgUrl} alt={source.label ?? source.raw}
+        <div
+          ref={containerRef}
+          onClick={handleClick}
+          style={{
+            flex: 1, minHeight: 0,
+            display: 'flex',
+            alignItems: zoomed ? 'flex-start' : 'center',
+            justifyContent: zoomed ? 'flex-start' : 'center',
+            overflow: zoomed ? 'auto' : 'hidden',
+            padding: zoomed ? '0' : '20px',
+            cursor: zoomed ? CURSOR_OUT : CURSOR_IN,
+          }}
+        >
+          <img
+            src={imgUrl}
+            alt={source.label ?? source.raw}
             draggable={false}
             onDragStart={e => e.preventDefault()}
-            style={{ width: '100%', height: 'auto', display: 'block', userSelect: 'none' }} />
+            style={{
+              display: 'block',
+              userSelect: 'none',
+              borderRadius: zoomed ? '0' : '2px',
+              maxWidth:  zoomed ? 'none' : '100%',
+              maxHeight: zoomed ? 'none' : '100%',
+              width: 'auto', height: 'auto',
+            }}
+          />
         </div>
       )}
     </div>
@@ -483,12 +604,12 @@ function PdfViewer({ source }: { source: QueuedSource }) {
   }, [])
 
   return (
-    <div ref={containerRef} style={{ flex: 1, overflow: 'auto', background: '#080808', display: 'flex', flexDirection: 'column', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-      {source.status === 'queued'           && <Msg>Waiting...</Msg>}
-      {source.status === 'extracting'       && <Msg>Reading document...</Msg>}
-      {source.status === 'done' && !fileUrl && <Msg>Loading...</Msg>}
-      {source.status === 'error'            && <Msg>{source.error ?? 'Document failed to load.'}</Msg>}
-      {source.status === 'done' && loadError && <Msg>PDF could not be parsed.</Msg>}
+    <div ref={containerRef} style={{ flex: 1, overflow: 'auto', background: '#080909', display: 'flex', flexDirection: 'column', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+      {source.status === 'queued'           && <Msg>Queued…</Msg>}
+      {source.status === 'extracting'       && <Msg>Reading…</Msg>}
+      {source.status === 'done' && !fileUrl && <Msg>Loading…</Msg>}
+      {source.status === 'error'            && <Msg>{source.error ?? 'Could not load document.'}</Msg>}
+      {source.status === 'done' && loadError && <Msg>Could not parse this PDF.</Msg>}
       {source.status === 'done' && fileUrl && !loadError && (
         <div>
           <Document
@@ -527,11 +648,11 @@ function PaneIconBtn({ title, active, faint, onClick, children }: {
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        width: '26px', height: '22px',
+        width: '28px', height: '26px',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'none', border: 'none', cursor: 'pointer',
         padding: 0, lineHeight: 0, flexShrink: 0,
-        color: active ? '#777' : hov ? '#666' : faint ? '#303030' : '#3a3a3a',
+        color: active ? '#8A8780' : hov ? '#8A8780' : '#8A8780',
         borderRadius: '3px',
         transition: 'color 0.12s',
       }}
@@ -545,17 +666,17 @@ function PaneIconBtn({ title, active, faint, onClick, children }: {
 
 function SplitBtn({ active, onClick }: { active: boolean; onClick: () => void }) {
   return (
-    <PaneIconBtn title={active ? 'Exit Split View' : 'Split View'} active={active} onClick={onClick}>
+    <PaneIconBtn title={active ? 'Single view' : 'Split'} active={active} onClick={onClick}>
       {active ? (
-        // Single panel → click collapses split
-        <svg width="12" height="9" viewBox="0 0 12 9" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="0.8" y="0.8" width="10.4" height="7.4" rx="0.9" />
+        // Currently split → single rect with dividing line (click exits split)
+        <svg width="12" height="10" viewBox="0 0 12 10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="0.8" y="0.8" width="10.4" height="8.4" rx="1" />
+          <line x1="0.8" y1="5" x2="11.2" y2="5" />
         </svg>
       ) : (
-        // Two stacked panels → click enables split
-        <svg width="12" height="9" viewBox="0 0 12 9" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="0.8" y="0.8" width="10.4" height="3" rx="0.9" />
-          <rect x="0.8" y="5.2" width="10.4" height="3" rx="0.9" />
+        // Currently single → plain rect (click enters split)
+        <svg width="12" height="10" viewBox="0 0 12 10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="0.8" y="0.8" width="10.4" height="8.4" rx="1" />
         </svg>
       )}
     </PaneIconBtn>
@@ -566,16 +687,22 @@ function SplitBtn({ active, onClick }: { active: boolean; onClick: () => void })
 
 function FocusBtn({ active, onClick }: { active: boolean; onClick: () => void }) {
   return (
-    <PaneIconBtn title={active ? 'Restore Size' : 'Expand View'} active={active} onClick={onClick}>
+    <PaneIconBtn title={active ? 'Restore' : 'Expand'} active={active} onClick={onClick}>
       {active ? (
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="1,3 3,3 3,1" /><polyline points="9,3 7,3 7,1" />
-          <polyline points="1,7 3,7 3,9" /><polyline points="9,7 7,7 7,9" />
+        // Compress — corner brackets pointing inward
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="4,1 4,4 1,4" />
+          <polyline points="8,1 8,4 11,4" />
+          <polyline points="11,8 8,8 8,11" />
+          <polyline points="1,8 4,8 4,11" />
         </svg>
       ) : (
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="3,1 1,1 1,3" /><polyline points="7,1 9,1 9,3" />
-          <polyline points="3,9 1,9 1,7" /><polyline points="7,9 9,9 9,7" />
+        // Expand — corner brackets pointing outward
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="1,4 1,1 4,1" />
+          <polyline points="8,1 11,1 11,4" />
+          <polyline points="11,8 11,11 8,11" />
+          <polyline points="4,11 1,11 1,8" />
         </svg>
       )}
     </PaneIconBtn>
@@ -611,7 +738,7 @@ function Msg({ children }: { children: React.ReactNode }) {
     <div style={{
       flex: 1, minHeight: '40px',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: '11px', color: '#555', letterSpacing: '0.02em',
+      fontSize: '11px', color: '#8A8780', letterSpacing: '0.02em',
     }}>
       {children}
     </div>
@@ -625,7 +752,7 @@ function Empty({ label }: { label: string }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: '32px 24px',
     }}>
-      <span style={{ fontSize: '13px', color: '#444', letterSpacing: '0.02em' }}>{label}</span>
+      <span style={{ fontSize: '13px', color: '#8A8780', letterSpacing: '0.02em' }}>{label}</span>
     </div>
   )
 }

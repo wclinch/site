@@ -6,18 +6,18 @@ export const ONBOARDING_KEY = 'proof-onboarding-v1'
 
 const STEPS = [
   {
-    title: 'Everything stays with this session.',
-    body:  'Documents, saved Pages, Views, and Web tabs come back when you return.',
+    title: 'Everything stays with the session.',
+    body:  'Documents, saved pages, views, and web tabs come back when you return.',
     hint:  '↖ Session tabs · top bar',
   },
   {
-    title: 'Browse, then hold what matters.',
-    body:  'Use 1 or 2 to open the current Web page in View.',
+    title: 'Hold what you need open.',
+    body:  'Use 1 or 2 to send the current page to a view.',
     hint:  '1 · 2 · Web toolbar',
   },
   {
     title: 'Save pages for later.',
-    body:  'Use Save to keep the current page in Pages.',
+    body:  'Save keeps the current page with the session.',
     hint:  'Save · Web toolbar',
   },
 ]
@@ -43,7 +43,7 @@ export default function OnboardingOverlay({ onClose }: { onClose: () => void }) 
         onClick={e => e.stopPropagation()}
         style={{
           width: '400px', maxWidth: 'calc(100vw - 48px)',
-          background: '#080808', border: '1px solid #1e1e1e',
+          background: '#080909', border: '1px solid #1e1e1e',
           borderRadius: '6px', boxShadow: '0 24px 60px rgba(0,0,0,0.72)',
           padding: '36px 32px 28px',
           fontFamily: 'inherit',
@@ -55,7 +55,7 @@ export default function OnboardingOverlay({ onClose }: { onClose: () => void }) 
           {STEPS.map((_, i) => (
             <div key={i} style={{
               width: '18px', height: '2px', borderRadius: '1px',
-              background: i === step ? '#484848' : '#1e1e1e',
+              background: i === step ? 'rgba(230,226,216,0.24)' : '#232523',
               transition: 'background 0.2s',
             }} />
           ))}
@@ -63,7 +63,7 @@ export default function OnboardingOverlay({ onClose }: { onClose: () => void }) 
 
         {/* Title */}
         <h2 style={{
-          fontSize: '18px', fontWeight: 500, color: '#bbb',
+          fontSize: '18px', fontWeight: 500, color: '#E6E2D8',
           margin: '0 0 12px', letterSpacing: '-0.01em', lineHeight: 1.3,
         }}>
           {title}
@@ -71,7 +71,7 @@ export default function OnboardingOverlay({ onClose }: { onClose: () => void }) 
 
         {/* Body */}
         <p style={{
-          fontSize: '13px', color: '#666', lineHeight: 1.7,
+          fontSize: '13px', color: 'rgba(230,226,216,0.38)', lineHeight: 1.7,
           margin: '0 0 16px',
         }}>
           {body}
@@ -79,7 +79,7 @@ export default function OnboardingOverlay({ onClose }: { onClose: () => void }) 
 
         {/* Location hint */}
         <div style={{
-          fontSize: '10px', color: '#2e2e2e',
+          fontSize: '10px', color: '#232523',
           letterSpacing: '0.06em', textTransform: 'uppercase',
           marginBottom: '32px',
         }}>
@@ -92,11 +92,11 @@ export default function OnboardingOverlay({ onClose }: { onClose: () => void }) 
             onClick={onClose}
             style={{
               background: 'none', border: 'none', padding: 0,
-              fontSize: '11px', color: '#333', letterSpacing: '0.06em',
+              fontSize: '11px', color: '#333533', letterSpacing: '0.06em',
               cursor: 'pointer', fontFamily: 'inherit', transition: 'color 0.15s',
             }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#666')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#333')}
+            onMouseEnter={e => (e.currentTarget.style.color = 'rgba(230,226,216,0.38)')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#333533')}
           >
             Skip
           </button>
@@ -107,11 +107,11 @@ export default function OnboardingOverlay({ onClose }: { onClose: () => void }) 
                 onClick={() => setStep(s => s - 1)}
                 style={{
                   background: 'none', border: 'none', padding: 0,
-                  fontSize: '11px', color: '#444', letterSpacing: '0.06em',
+                  fontSize: '11px', color: 'rgba(230,226,216,0.22)', letterSpacing: '0.06em',
                   cursor: 'pointer', fontFamily: 'inherit', transition: 'color 0.15s',
                 }}
                 onMouseEnter={e => (e.currentTarget.style.color = '#888')}
-                onMouseLeave={e => (e.currentTarget.style.color = '#444')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'rgba(230,226,216,0.22)')}
               >
                 ← Back
               </button>
@@ -119,17 +119,17 @@ export default function OnboardingOverlay({ onClose }: { onClose: () => void }) 
             <button
               onClick={() => { if (isLast) { onClose(); return }; setStep(s => s + 1) }}
               style={{
-                background: '#141414', border: '1px solid #2a2a2a',
-                color: '#bbb', padding: '8px 18px',
+                background: '#171817', border: '1px solid #232523',
+                color: '#E6E2D8', padding: '8px 18px',
                 fontSize: '11px', fontFamily: 'inherit',
                 letterSpacing: '0.08em', textTransform: 'uppercase',
                 cursor: 'pointer', borderRadius: '3px',
                 transition: 'color 0.15s, border-color 0.15s',
               }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#444'; e.currentTarget.style.color = '#eee' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#2a2a2a'; e.currentTarget.style.color = '#bbb' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(230,226,216,0.22)'; e.currentTarget.style.color = '#E6E2D8' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = '#232523'; e.currentTarget.style.color = '#E6E2D8' }}
             >
-              {isLast ? 'Start using Site' : 'Next →'}
+              {isLast ? 'Begin' : 'Next →'}
             </button>
           </div>
         </div>

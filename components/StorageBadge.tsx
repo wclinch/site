@@ -98,7 +98,7 @@ export default function StorageBadge() {
     pct >= 0.9 ? '#a55' :
     pct >= 0.5 ? '#888' :
     '#555'
-  const color = hover ? (pct >= 0.9 ? '#e55' : '#aaa') : baseColor
+  const color = hover ? (pct >= 0.9 ? '#d27b6a' : '#aaa') : baseColor
 
   async function reset() {
     // First click arms the confirm step; second click does the actual wipe.
@@ -162,7 +162,7 @@ export default function StorageBadge() {
             onClick={e => e.stopPropagation()}
             style={{
               width: '360px', maxWidth: 'calc(100vw - 48px)',
-              background: '#111', border: '1px solid #222', borderRadius: '4px',
+              background: '#111', border: '1px solid #232523', borderRadius: '4px',
               boxShadow: '0 12px 40px rgba(0,0,0,0.6)',
               fontFamily: 'inherit',
             }}
@@ -172,7 +172,7 @@ export default function StorageBadge() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                 <div style={{
                   fontSize: '11px',
-                  color: armed ? '#c44' : '#777',
+                  color: armed ? '#c46b5a' : '#777',
                   letterSpacing: '0.1em', textTransform: 'uppercase',
                   transition: 'color 0.15s',
                 }}>
@@ -182,7 +182,7 @@ export default function StorageBadge() {
                   {[1, 2].map(s => (
                     <div key={s} style={{
                       width: '16px', height: '2px', borderRadius: '1px',
-                      background: s === 1 ? (armed ? '#1e1e1e' : '#3a3a3a') : (armed ? '#c44' : '#1e1e1e'),
+                      background: s === 1 ? (armed ? '#1e1e1e' : '#3a3a3a') : (armed ? '#c46b5a' : '#1e1e1e'),
                       transition: 'background 0.2s',
                     }} />
                   ))}
@@ -247,10 +247,10 @@ function ModalButton({
 }) {
   const [hover, setHover] = useState(false)
 
-  const idleBorder = destructive ? '#2a1515' : '#252525'
+  const idleBorder = destructive ? '#2a1c18' : '#232523'
   const hoverBorder = destructive ? '#3a1515' : '#333'
-  const idleColor  = destructive ? '#c44' : '#666'
-  const hoverColor = destructive ? '#e55' : '#aaa'
+  const idleColor  = destructive ? '#c46b5a' : '#666'
+  const hoverColor = destructive ? '#d27b6a' : '#aaa'
 
   return (
     <button

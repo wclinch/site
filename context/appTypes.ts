@@ -58,6 +58,8 @@ export interface AppState {
   retrySource: (srcId: string) => Promise<void>
   removeSource: (srcId: string) => void
   removeSelected: () => void
+  restoreArchivedSource: (srcId: string, projectId: string) => void
+  permanentlyDeleteArchived: (srcId: string, projectId: string) => void
   createNote: (targetProjId?: string) => void
   addUrl: (url: string, targetProjId?: string, label?: string) => Promise<void>
   // Workspace actions

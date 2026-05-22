@@ -165,7 +165,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       fixed = named
       if (fixed.length === 0) {
         const def = newProject(1)
-        def.name = 'Untitled'
+        def.name = 'New Session'
         fixed = [def]
       }
       setProjects(fixed)
@@ -227,9 +227,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       })()
     } else {
-      // First launch — default Untitled workspace.
+      // First launch — default session.
       const def = newProject(1)
-      def.name = 'Untitled'
+      def.name = 'New Session'
       setProjects([def])
       setActiveId(def.id)
     }
@@ -403,12 +403,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const p = newProject(namedProjectCount + 1)
     const usedNames = new Set(projectsRef.current.map(w => w.name))
-    let untitledName = 'Untitled'
-    for (let i = 1; i <= projectsRef.current.length + 1; i++) {
-      const candidate = `Untitled-${String(i).padStart(2, '0')}`
-      if (!usedNames.has(candidate)) { untitledName = candidate; break }
+    let sessionName = 'New Session'
+    if (usedNames.has(sessionName)) {
+      for (let i = 2; i <= projectsRef.current.length + 2; i++) {
+        const candidate = `New Session ${i}`
+        if (!usedNames.has(candidate)) { sessionName = candidate; break }
+      }
     }
-    p.name = untitledName
+    p.name = sessionName
     setProjects(ps => [...ps, p])
     setActiveId(p.id)
     setSelectedId(null)
@@ -722,6 +724,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   function removeSource(srcId: string) {
+    // Find source + its project for per-session archiving
+    let srcProjectId: string | null = null
+    let src: QueuedSource | undefined
+    for (const p of projectsRef.current) {
+      const found = p.sources.find(s => s.id === srcId)
+      if (found) { src = found; srcProjectId = p.id; break }
+    }
+    if (src && srcProjectId) {
+      try {
+        const key = `proof-archive-${srcProjectId}`
+        const archived = JSON.parse(localStorage.getItem(key) || '[]')
+        archived.unshift({ source: src, projectId: srcProjectId, deletedAt: Date.now() })
+        localStorage.setItem(key, JSON.stringify(archived.slice(0, 50)))
+      } catch {}
+    }
     setProjects(ps => ps.map(p => ({
       ...p,
       sources: p.sources.filter(s => s.id !== srcId),
@@ -730,6 +747,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (selectedId2 === srcId) setSelectedId2(null)
     setSelectedIds(new Set())
     setAnchorId(null)
+    // File data kept in IDB — needed for restore. Only cleaned up on permanent delete.
+  }
+
+  function restoreArchivedSource(srcId: string, projectId: string) {
+    const key = `proof-archive-${projectId}`
+    try {
+      const archived: Array<{ source: QueuedSource; projectId: string; deletedAt: number }> =
+        JSON.parse(localStorage.getItem(key) || '[]')
+      const entry = archived.find(e => e.source.id === srcId)
+      if (!entry) return
+      // Re-add to the project
+      setProjects(ps => ps.map(p =>
+        p.id !== projectId ? p : { ...p, sources: [...p.sources, entry.source] }
+      ))
+      // Remove from archive
+      localStorage.setItem(key, JSON.stringify(archived.filter(e => e.source.id !== srcId)))
+    } catch {}
+  }
+
+  function permanentlyDeleteArchived(srcId: string, projectId: string) {
+    const key = `proof-archive-${projectId}`
+    try {
+      const archived: Array<{ source: QueuedSource; projectId: string; deletedAt: number }> =
+        JSON.parse(localStorage.getItem(key) || '[]')
+      localStorage.setItem(key, JSON.stringify(archived.filter(e => e.source.id !== srcId)))
+    } catch {}
     Promise.allSettled([deleteFile(srcId), deleteContent(srcId)]).then(notifyStorageChanged)
   }
 
@@ -967,6 +1010,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setProjects, updateProject, patchSource, moveSource, moveSourceToProject, moveProject,
     uploadFiles, retrySource,
     removeSource, removeSelected,
+    restoreArchivedSource, permanentlyDeleteArchived,
     createNote, addUrl,
     addToStack, removeFromStack, clearStack, reorderStack, openInPane,
     switchWorkspace, newWorkspace, duplicateWorkspace, pinWorkspace, saveWorkspace, removeWorkspace,

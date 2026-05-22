@@ -17,9 +17,9 @@ const DEF_SOURCE = '20%'
 
 
 const PRO_FEATURES = [
-  'Unlimited workspaces',
-  'Unlimited Documents',
-  '5 GB Documents',
+  'Unlimited sessions',
+  'Unlimited documents',
+  '5 GB document storage',
 ]
 
 function UpgradeModal({ onClose }: { onClose: () => void }) {
@@ -69,7 +69,7 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
       style={{
         position: 'fixed', inset: 0, zIndex: 2000,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(0,0,0,0.72)',
+        background: 'rgba(0,0,0,0.6)',
         backdropFilter: 'blur(3px)',
         WebkitBackdropFilter: 'blur(3px)',
         WebkitAppRegion: 'no-drag',
@@ -79,40 +79,40 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
         onClick={e => e.stopPropagation()}
         style={{
           width: '440px', maxWidth: 'calc(100vw - 48px)',
-          background: '#111', border: '1px solid #222',
+          background: '#171817', border: '1px solid #232523',
           borderRadius: '6px', boxShadow: '0 24px 60px rgba(0,0,0,0.7)',
           padding: '32px 28px 28px', fontFamily: 'inherit',
         }}
       >
-        <div style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '16px' }}>
+        <div style={{ fontSize: '11px', color: '#8A8780', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '16px' }}>
           Upgrade to Pro
         </div>
 
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', margin: '0 0 18px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 500, color: '#bbb', margin: 0, letterSpacing: '-0.01em' }}>
-            Unlock unlimited workspaces.
+          <h2 style={{ fontSize: '18px', fontWeight: 500, color: '#8A8780', margin: 0, letterSpacing: '-0.01em' }}>
+            Unlock unlimited sessions.
           </h2>
-          <span style={{ fontSize: '13px', color: '#555', letterSpacing: '0.01em' }}>$8.99 / mo</span>
+          <span style={{ fontSize: '13px', color: '#8A8780', letterSpacing: '0.01em' }}>$8.99 / mo</span>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '26px' }}>
           {PRO_FEATURES.map(f => (
             <div key={f} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '11px', color: '#444' }}>—</span>
-              <span style={{ fontSize: '13px', color: '#777' }}>{f}</span>
+              <span style={{ fontSize: '11px', color: '#8A8780' }}>—</span>
+              <span style={{ fontSize: '13px', color: '#8A8780' }}>{f}</span>
             </div>
           ))}
         </div>
 
-        <div style={{ height: '1px', background: '#1e1e1e', marginBottom: '22px' }} />
+        <div style={{ height: '1px', background: '#232523', marginBottom: '22px' }} />
 
         {/* Checkout button — always shown when not Pro */}
         {!isPro && (
           <button
             onClick={() => window.open(checkoutUrl || 'https://polar.sh', '_blank', 'noopener,noreferrer')}
             style={{
-              background: '#141414', border: '1px solid #2a2a2a',
-              color: '#bbb', padding: '10px 20px',
+              background: '#171817', border: '1px solid #232523',
+              color: '#8A8780', padding: '10px 20px',
               fontSize: '12px', fontFamily: 'inherit',
               letterSpacing: '0.06em', textTransform: 'uppercase',
               cursor: 'pointer', borderRadius: '3px',
@@ -120,8 +120,8 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
               display: 'block', width: '100%', textAlign: 'left',
               marginBottom: '20px',
             }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#444'; e.currentTarget.style.color = '#eee' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = '#2a2a2a'; e.currentTarget.style.color = '#bbb' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#8A8780'; e.currentTarget.style.color = '#8A8780' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#9b9892'; e.currentTarget.style.color = '#8A8780' }}
           >
             Upgrade to Pro →
           </button>
@@ -133,11 +133,11 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
             onClick={() => setShowSignIn(true)}
             style={{
               background: 'none', border: 'none', padding: 0,
-              fontSize: '12px', color: '#555', fontFamily: 'inherit',
+              fontSize: '12px', color: '#8A8780', fontFamily: 'inherit',
               cursor: 'pointer', transition: 'color 0.15s',
             }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#888')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#555')}
+            onMouseEnter={e => (e.currentTarget.style.color = '#8A8780')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#8A8780')}
           >
             Already subscribed? Sign in →
           </button>
@@ -149,7 +149,7 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
             {!user && (
               <>
                 <div style={{
-                  background: '#0d0d0d', border: `1px solid ${error ? '#3a1f1f' : '#1e1e1e'}`,
+                  background: '#171817', border: `1px solid ${error ? '#3a2520' : '#232523'}`,
                   borderRadius: '4px', padding: '11px 14px', marginBottom: '8px',
                 }}>
                   <input
@@ -158,11 +158,11 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
                     onKeyDown={e => { if (e.key === 'Enter') handleSignIn() }}
                     placeholder="you@example.com"
                     spellCheck={false} autoCapitalize="off" autoCorrect="off"
-                    style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', color: '#ccc', fontFamily: 'inherit', letterSpacing: '0.02em' }}
+                    style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', color: '#8A8780', fontFamily: 'inherit', letterSpacing: '0.02em' }}
                   />
                 </div>
                 <div style={{
-                  background: '#0d0d0d', border: `1px solid ${error ? '#3a1f1f' : '#1e1e1e'}`,
+                  background: '#171817', border: `1px solid ${error ? '#3a2520' : '#232523'}`,
                   borderRadius: '4px', padding: '11px 14px', marginBottom: error ? '8px' : '12px',
                 }}>
                   <input
@@ -171,22 +171,22 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
                     onKeyDown={e => { if (e.key === 'Enter') handleSignIn() }}
                     placeholder="XXXX-XXXX-XXXX-XXXX"
                     spellCheck={false} autoCapitalize="off" autoCorrect="off"
-                    style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', color: '#ccc', fontFamily: 'monospace', letterSpacing: '0.06em' }}
+                    style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', color: '#8A8780', fontFamily: 'monospace', letterSpacing: '0.06em' }}
                   />
                 </div>
                 {error && <div style={{ fontSize: '11px', color: '#a55', margin: '0 0 12px' }}>{error}</div>}
                 <button
                   onClick={handleSignIn} disabled={busy || !email.trim() || !key.trim()}
                   style={{
-                    background: 'transparent', border: '1px solid #2a2a2a',
-                    color: busy || !email.trim() || !key.trim() ? '#555' : '#bbb',
+                    background: 'transparent', border: '1px solid #232523',
+                    color: busy || !email.trim() || !key.trim() ? '#5a5a5a' : '#8A8780',
                     padding: '9px 18px', fontSize: '11px', fontFamily: 'inherit',
                     letterSpacing: '0.08em', textTransform: 'uppercase',
                     cursor: busy || !email.trim() || !key.trim() ? 'not-allowed' : 'pointer',
                     borderRadius: '3px', transition: 'color 0.15s, border-color 0.15s',
                   }}
-                  onMouseEnter={e => { if (!busy && email.trim() && key.trim()) { e.currentTarget.style.borderColor = '#444'; e.currentTarget.style.color = '#eee' } }}
-                  onMouseLeave={e => { if (!busy && email.trim() && key.trim()) { e.currentTarget.style.borderColor = '#2a2a2a'; e.currentTarget.style.color = '#bbb' } }}
+                  onMouseEnter={e => { if (!busy && email.trim() && key.trim()) { e.currentTarget.style.borderColor = '#8A8780'; e.currentTarget.style.color = '#8A8780' } }}
+                  onMouseLeave={e => { if (!busy && email.trim() && key.trim()) { e.currentTarget.style.borderColor = '#9b9892'; e.currentTarget.style.color = '#8A8780' } }}
                 >
                   {busy ? 'Signing in…' : 'Sign in'}
                 </button>
@@ -198,16 +198,16 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
                   onClick={handleRefresh} disabled={busy}
                   style={{
                     background: 'none', border: 'none', padding: 0,
-                    fontSize: '12px', color: '#444', fontFamily: 'inherit',
+                    fontSize: '12px', color: '#8A8780', fontFamily: 'inherit',
                     cursor: busy ? 'default' : 'pointer', transition: 'color 0.15s',
                   }}
-                  onMouseEnter={e => { if (!busy) e.currentTarget.style.color = '#888' }}
-                  onMouseLeave={e => { e.currentTarget.style.color = '#444' }}
+                  onMouseEnter={e => { if (!busy) e.currentTarget.style.color = '#8A8780' }}
+                  onMouseLeave={e => { e.currentTarget.style.color = '#8A8780' }}
                 >
                   {busy ? 'Checking…' : 'Already subscribed? Check now'}
                 </button>
                 {checked && !isPro && (
-                  <div style={{ fontSize: '11px', color: '#555', marginTop: '10px' }}>
+                  <div style={{ fontSize: '11px', color: '#8A8780', marginTop: '10px' }}>
                     No active subscription found.
                   </div>
                 )}
@@ -220,20 +220,20 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
           onClick={onClose}
           style={{
             marginTop: '28px', background: 'none', border: 'none', padding: 0,
-            fontSize: '11px', color: '#444', letterSpacing: '0.06em',
+            fontSize: '11px', color: '#8A8780', letterSpacing: '0.06em',
             cursor: 'pointer', fontFamily: 'inherit', transition: 'color 0.15s',
             display: 'block',
           }}
-          onMouseEnter={e => (e.currentTarget.style.color = '#888')}
-          onMouseLeave={e => (e.currentTarget.style.color = '#444')}
+          onMouseEnter={e => (e.currentTarget.style.color = '#8A8780')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#8A8780')}
         >← Back</button>
       </div>
     </div>
   )
 }
 
-type WorkspaceLayout = { researchFocused: boolean; viewFocused: boolean; soloPane: 1 | 2 }
-const DEFAULT_LAYOUT: WorkspaceLayout = { researchFocused: false, viewFocused: false, soloPane: 1 }
+type WorkspaceLayout = { researchFocused: boolean; viewFocused: boolean; soloPane: 1 | 2; sidebarCollapsed: boolean }
+const DEFAULT_LAYOUT: WorkspaceLayout = { researchFocused: false, viewFocused: false, soloPane: 1, sidebarCollapsed: false }
 
 function layoutKey(id: string) { return `proof-layout:${id}` }
 function saveLayout(id: string, l: WorkspaceLayout) {
@@ -249,8 +249,9 @@ function loadLayout(id: string): WorkspaceLayout {
 
 function AppShell() {
   const { mounted, activeId } = useApp()
-  const [researchFocused, setResearchFocused] = useState(false)
-  const [viewFocused,     setViewFocused]     = useState(false)
+  const [researchFocused,  setResearchFocused]  = useState(false)
+  const [viewFocused,      setViewFocused]      = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [showAccount, setShowAccount] = useState(false)
   const [soloPane, setSoloPane] = useState<1 | 2>(1)
@@ -258,7 +259,7 @@ function AppShell() {
   const layoutMapRef    = useRef<Record<string, WorkspaceLayout>>({})
   const prevActiveRef   = useRef<string | null>(null)
   const currentLayout   = useRef<WorkspaceLayout>(DEFAULT_LAYOUT)
-  currentLayout.current = { researchFocused, viewFocused, soloPane }
+  currentLayout.current = { researchFocused, viewFocused, soloPane, sidebarCollapsed }
 
   // Save current layout on page unload (covers hard reload)
   useEffect(() => {
@@ -284,6 +285,7 @@ function AppShell() {
       setResearchFocused(saved.researchFocused)
       setViewFocused(saved.viewFocused)
       setSoloPane(saved.soloPane)
+      setSidebarCollapsed(saved.sidebarCollapsed ?? false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId])
@@ -323,8 +325,14 @@ function AppShell() {
     }
   }, [showUpgrade, showAccount])
 
-  // Poll resize events after focus mode changes so Electron WebContentsViews
-  // recapture their bounds after the flex layout settles.
+  // Sidebar toggle via event (dispatched from ProjectBar button)
+  useEffect(() => {
+    const handler = () => setSidebarCollapsed(v => !v)
+    window.addEventListener('proof:toggle-sidebar', handler)
+    return () => window.removeEventListener('proof:toggle-sidebar', handler)
+  }, [])
+
+  // Poll resize events after layout changes so Electron WebContentsViews recapture bounds.
   useEffect(() => {
     const start = Date.now()
     const id = setInterval(() => {
@@ -332,11 +340,11 @@ function AppShell() {
       if (Date.now() - start > 500) clearInterval(id)
     }, 32)
     return () => clearInterval(id)
-  }, [researchFocused, viewFocused])
+  }, [researchFocused, viewFocused, sidebarCollapsed])
 
   if (!mounted) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#080808' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#080909' }}>
         <ProjectBar />
       </div>
     )
@@ -344,10 +352,10 @@ function AppShell() {
 
   return (
     <>
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#080808', WebkitAppRegion: 'drag' } as React.CSSProperties}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#080909', WebkitAppRegion: 'drag' } as React.CSSProperties}>
         <ProjectBar />
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: '0 7px 7px 0' }}>
-          <SourcePanel width={DEF_SOURCE} hidden={viewFocused} />
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: '0 7px 7px 7px' }}>
+          <SourcePanel width={DEF_SOURCE} hidden={viewFocused || sidebarCollapsed} />
           <ReaderPanel
             soloPane={soloPane} setSoloPane={setSoloPane}
             isFocused={viewFocused} onFocusToggle={() => setViewFocused(f => !f)}

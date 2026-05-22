@@ -6,7 +6,6 @@ import type { TabState, TabStatus } from './web/webTypes'
 import { isAuthUrl, isAuthBlockedTitle } from './web/webTypes'
 import WebTabBar from './web/WebTabBar'
 import WebToolbar from './web/WebToolbar'
-import WorkspaceSearchPanel from './web/WorkspaceSearchPanel'
 import WebHomePage, { type WebHomePageHandle } from './web/WebHomePage'
 
 const MAX_TABS = 20
@@ -25,9 +24,9 @@ function FallbackBtn({ children, onClick }: { children: React.ReactNode; onClick
       style={{
         height: '26px', padding: '0 12px', flexShrink: 0,
         background: 'none',
-        border: `1px solid ${hov ? '#333' : '#252525'}`,
+        border: `1px solid ${hov ? '#3c3c3c' : '#232523'}`,
         borderRadius: '3px',
-        color: hov ? '#ccc' : '#777',
+        color: hov ? '#8A8780' : '#8A8780',
         fontSize: '11px', letterSpacing: '0.03em',
         cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
         transition: 'color 0.12s, border-color 0.12s',
@@ -41,20 +40,18 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
   onFocusToggle?: () => void
 }) {
   const panelId = 'A'
-  const { addUrl, sources, pinUrlToView, activeId } = useApp()
+  const { addUrl, sources, activeId } = useApp()
 
   const tabsKey = 'proof-v3-research-tabs'
 
   const [isElectron, setIsElectron]   = useState(false)
   const [tabs, setTabs]               = useState<TabState[]>([makePlaceholderTab()])
   const [activeTabId, setActiveTabId] = useState<string>('tab-init')
+  const [startHighlight, setStartHighlight] = useState(true)
   const [urlInput, setUrlInput]       = useState('')
   const [urlFocused, setUrlFocused]   = useState(false)
-  const [actionFeedback, setActionFeedback] = useState<null | 'view1' | 'view2' | 'saved' | 'duplicate'>(null)
+  const [actionFeedback, setActionFeedback] = useState<null | 'saved' | 'duplicate'>(null)
   const [homeMode, setHomeMode]       = useState(true)
-  const [showSearch, setShowSearch] = useState(() => {
-    try { return localStorage.getItem('proof-workspace-search') === 'true' } catch { return false }
-  })
 
 
   const viewportRef    = useRef<HTMLDivElement>(null)
@@ -76,6 +73,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
   useEffect(() => { activeTabIdRef.current = activeTabId }, [activeTabId])
   useEffect(() => { tabsRef.current = tabs }, [tabs])
   useEffect(() => { setIsElectron(!!window.electronAPI) }, [])
+  useEffect(() => { const t = setTimeout(() => setStartHighlight(false), 2000); return () => clearTimeout(t) }, [])
 
   useEffect(() => {
     const st = tabStatuses[activeTabId]
@@ -322,30 +320,6 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
     return () => window.removeEventListener('proof:settings-changed', onSettingsChanged)
   }, [])
 
-  useEffect(() => {
-    try { localStorage.setItem('proof-workspace-search', showSearch ? 'true' : 'false') } catch {}
-  }, [showSearch])
-
-  useEffect(() => {
-    function onToggle() {
-      setShowSearch(v => {
-        if (!homeModeRef.current && !showFallbackRef.current) {
-          suppressBoundsRef.current = true
-          window.electronAPI?.research?.setBounds(panelId, {
-            x: 0, y: 0, width: 0, height: 0,
-            innerWidth: window.innerWidth, innerHeight: window.innerHeight,
-          })
-          setTimeout(() => {
-            suppressBoundsRef.current = false
-            window.dispatchEvent(new Event('resize'))
-          }, 280)
-        }
-        return !v
-      })
-    }
-    window.addEventListener('proof:workspace-search', onToggle)
-    return () => window.removeEventListener('proof:workspace-search', onToggle)
-  }, [])
 
   useEffect(() => {
     const start = Date.now()
@@ -398,12 +372,6 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
     savedTimerRef.current = setTimeout(() => setActionFeedback(null), 2000)
   }
 
-  function handlePin(view: 1 | 2) {
-    if (!active?.url) return
-    pinUrlToView(view, active.url, active.title || active.url)
-    flash(view === 1 ? 'view1' : 'view2')
-  }
-
   function openExternal(url: string) {
     window.electronAPI?.openExternal?.(url)
   }
@@ -428,28 +396,9 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
     }}>
       <div style={{
         flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
-        border: '1px solid #1e1e1e', borderRadius: '4px', overflow: 'hidden',
+        border: `1px solid ${isFocused ? '#333' : startHighlight ? '#222' : '#232523'}`, borderRadius: '4px', overflow: 'hidden',
+        transition: 'border-color 0.6s ease',
       }}>
-
-        {/* Workspace panels (search / history) */}
-        <div style={{
-          flexGrow: showSearch ? 1 : 0,
-          flexShrink: 1, flexBasis: 0,
-          minHeight: 0, overflow: 'hidden',
-          transition: 'flex-grow 0.22s ease',
-          display: 'flex', flexDirection: 'column',
-        }}>
-          {showSearch && (
-            <WorkspaceSearchPanel
-              visible={showSearch}
-              tabs={tabs}
-              panelId={panelId}
-              onClose={() => setShowSearch(false)}
-              onNavigate={navigateUrl}
-              onSwitchTab={id => window.electronAPI?.research?.switchTab(panelId, id)}
-            />
-          )}
-        </div>
 
         <WebTabBar
           tabs={tabs}
@@ -477,7 +426,6 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
             else window.electronAPI?.research?.reload(panelId)
           }}
           onHome={() => setHomeMode(true)}
-          onPin={handlePin}
           onSave={savePage}
         />
 
@@ -487,18 +435,19 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
             height: '22px', flexShrink: 0,
             display: 'flex', alignItems: 'center',
             padding: '0 12px',
-            background: '#060606', borderBottom: '1px solid #0f0f0f',
-            fontSize: '10px', color: '#2e2e2e', letterSpacing: '0.03em',
+            background: '#080909', borderBottom: '1px solid #181818',
+            fontSize: '10px', color: '#8A8780', letterSpacing: '0.03em',
             userSelect: 'none',
           }}>
             {getShortcutHint(urlInput)}
           </div>
         )}
 
-        {/* Native browser viewport */}
+        {/* Native browser viewport — outer shell insets the native view 1px from the panel border */}
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '0 1px 1px' }}>
         <div
           ref={viewportRef}
-          style={{ flex: 1, minHeight: 0, background: 'linear-gradient(180deg, #0d0d0d 0%, #020202 100%)', position: 'relative', overflow: 'hidden', WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          style={{ flex: 1, minHeight: 0, background: '#080909', position: 'relative', overflow: 'hidden', WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           {showFallback && (() => {
             const st = tabStatuses[activeTabId]
@@ -507,20 +456,20 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
             return (
               <div style={{
                 position: 'absolute', inset: 0, zIndex: 10,
-                background: 'linear-gradient(180deg, #0d0d0d 0%, #020202 100%)',
+                background: '#080909',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                 gap: '8px', padding: '32px', userSelect: 'none',
               }}>
-                <p style={{ fontSize: '13px', color: '#bbb', margin: 0, fontWeight: 500, textAlign: 'center' }}>
-                  {isBlocked ? 'This sign-in may need your browser.' : "Couldn't load this page."}
+                <p style={{ fontSize: '13px', color: '#8A8780', margin: 0, fontWeight: 500, textAlign: 'center' }}>
+                  {isBlocked ? 'Sign-in may need your default browser.' : "Couldn't load this page."}
                 </p>
-                <p style={{ fontSize: '11px', color: '#555', margin: '4px 0 12px', lineHeight: 1.65, textAlign: 'center', maxWidth: '300px' }}>
+                <p style={{ fontSize: '11px', color: '#8A8780', margin: '4px 0 12px', lineHeight: 1.65, textAlign: 'center', maxWidth: '300px' }}>
                   {isBlocked
-                    ? 'Some websites block embedded sign-in.'
-                    : 'Check your connection or try again.'}
+                    ? 'Some sites block embedded sign-in.'
+                    : 'Check the connection or try again.'}
                 </p>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                  <FallbackBtn onClick={() => openExternal(url)}>Open in browser</FallbackBtn>
+                  <FallbackBtn onClick={() => openExternal(url)}>Open in default browser</FallbackBtn>
                   <FallbackBtn onClick={() => {
                     setTabStatuses(prev => ({ ...prev, [activeTabId]: {} }))
                     window.electronAPI?.research?.reload(panelId)
@@ -535,10 +484,11 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
           {!isElectron && !homeMode && (
             <div style={{
               position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-              justifyContent: 'center', color: '#2a2a2a', fontSize: '11px',
+              justifyContent: 'center', color: '#8A8780', fontSize: '11px',
               letterSpacing: '0.08em', userSelect: 'none',
             }}>Desktop app required</div>
           )}
+        </div>
         </div>
       </div>
     </div>

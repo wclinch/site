@@ -179,6 +179,7 @@ function getOrCreateViewPane(win, paneId) {
   })
   win.contentView.addChildView(view)
   view.setBounds({ x: 0, y: 0, width: 0, height: 0 })
+  try { view.setBackgroundColor('#070707') } catch {}
   const wc = view.webContents
   wc.on('will-navigate', (event, url) => {
     try {
@@ -193,7 +194,8 @@ function getOrCreateViewPane(win, paneId) {
     return { action: 'deny' }
   })
 
-  // Re-apply zoom after every navigation (cross-origin resets Chromium's stored value).
+  // Reset zoom after navigation — cross-origin navigations reset Chromium's stored
+  // zoom factor. Only reset on load, not on every bounds update.
   wc.on('did-finish-load', () => {
     if (wcAlive(view)) view.webContents.setZoomFactor(1.0)
   })
@@ -836,7 +838,6 @@ function setupResearchBrowser(win) {
         try { win.contentView.removeChildView(view) } catch {}
         win.contentView.addChildView(view)
         view.setBounds({ x, y, width: w, height: h })
-        if (wcAlive(view)) view.webContents.setZoomFactor(1.0)
         if (!pane.pendingUrl) scheduleScrollRestore()
         if (pane.pendingUrl) {
           const url = pane.pendingUrl

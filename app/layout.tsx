@@ -12,8 +12,8 @@ const BASE = 'https://site.app' // TODO: update to production domain before depl
 
 // One canonical description, reused everywhere — keeps OG / Twitter / OG
 // image / landing all telling the same story instead of three.
-const DESCRIPTION = 'A local workspace and a live web browser, side by side. Save files and pages on the left. Read the open file in the middle. Browse the live web on the right. One window, on the device. No account.'
-const TAGLINE     = 'Site — Files and the live web. One window.'
+const DESCRIPTION = 'Documents, saved pages, and the live web — held together in a session. Leave and come back to the same setup.'
+const TAGLINE     = 'Site — Sessions for focused work.'
 
 export const metadata: Metadata = {
   title: {

@@ -1,5 +1,5 @@
 'use client'
-import { useImperativeHandle, useRef, useState, forwardRef } from 'react'
+import { useImperativeHandle, useRef, useState, useEffect, forwardRef } from 'react'
 
 export interface WebHomePageHandle { focus: () => void }
 
@@ -9,17 +9,101 @@ const STARTERS: [string, string][] = [
   ['wikipedia', 'Wikipedia'],
 ]
 
-function GlobeIcon() {
-  return (
-    <svg width="26" height="26" viewBox="0 0 20 20" fill="none"
-      stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="10" cy="10" r="8" />
-      <path d="M10 2c-2.5 2.5-4 5-4 8s1.5 5.5 4 8" />
-      <path d="M10 2c2.5 2.5 4 5 4 8s-1.5 5.5-4 8" />
-      <line x1="2" y1="10" x2="18" y2="10" />
-    </svg>
-  )
+// ─── 3-D wireframe globe ──────────────────────────────────────────────────────
+
+function SpinningGlobe() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const rafRef    = useRef<number>(0)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')!
+    if (!ctx) return
+
+    const SIZE = 38
+    const dpr  = window.devicePixelRatio || 1
+    canvas.width  = SIZE * dpr
+    canvas.height = SIZE * dpr
+    canvas.style.width  = SIZE + 'px'
+    canvas.style.height = SIZE + 'px'
+    ctx.scale(dpr, dpr)
+
+    const R    = 11.5
+    const cx   = SIZE / 2
+    const cy   = SIZE / 2
+    const TILT = 28 * Math.PI / 180   // fixed axial tilt — makes lat lines curve
+    const SPEED = 0.00045             // radians per ms
+
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    let start: number | null = null
+
+    function project(phi: number, lam: number, theta: number) {
+      const x0 = R * Math.cos(phi) * Math.cos(lam)
+      const y0 = R * Math.sin(phi)
+      const z0 = R * Math.cos(phi) * Math.sin(lam)
+      // Y-axis spin
+      const x1 =  x0 * Math.cos(theta) - z0 * Math.sin(theta)
+      const z1 =  x0 * Math.sin(theta) + z0 * Math.cos(theta)
+      // X-axis tilt
+      const y2 = y0 * Math.cos(TILT) - z1 * Math.sin(TILT)
+      const z2 = y0 * Math.sin(TILT) + z1 * Math.cos(TILT)
+      return { sx: cx + x1, sy: cy - y2, vis: z2 > 0 }
+    }
+
+    function drawCurve(pts: Array<{ sx: number; sy: number; vis: boolean }>) {
+      let open = false
+      ctx.beginPath()
+      for (const p of pts) {
+        if (!p.vis) { open = false; continue }
+        if (!open)  { ctx.moveTo(p.sx, p.sy); open = true }
+        else          ctx.lineTo(p.sx, p.sy)
+      }
+      ctx.stroke()
+    }
+
+    function render(ts: number) {
+      if (!start) start = ts
+      const theta = reduced ? 0 : (ts - start) * SPEED
+
+      ctx.clearRect(0, 0, SIZE, SIZE)
+      ctx.strokeStyle = '#727272'
+      ctx.lineWidth   = 0.65
+
+      const N = 64
+
+      // Latitude rings
+      for (const deg of [-60, -30, 0, 30, 60]) {
+        const phi = deg * Math.PI / 180
+        drawCurve(Array.from({ length: N + 1 }, (_, i) =>
+          project(phi, (i / N) * Math.PI * 2, theta)
+        ))
+      }
+
+      // Longitude meridians
+      for (let i = 0; i < 8; i++) {
+        const lam = (i / 8) * Math.PI * 2
+        drawCurve(Array.from({ length: N + 1 }, (_, j) =>
+          project((j / N) * Math.PI - Math.PI / 2, lam, theta)
+        ))
+      }
+
+      // Silhouette circle
+      ctx.beginPath()
+      ctx.arc(cx, cy, R, 0, Math.PI * 2)
+      ctx.stroke()
+
+      rafRef.current = requestAnimationFrame(render)
+    }
+
+    rafRef.current = requestAnimationFrame(render)
+    return () => cancelAnimationFrame(rafRef.current)
+  }, [])
+
+  return <canvas ref={canvasRef} style={{ display: 'block' }} />
 }
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 const WebHomePage = forwardRef<WebHomePageHandle, { navigate: (raw: string) => void }>(
 function WebHomePage({ navigate }, ref) {
@@ -39,39 +123,42 @@ function WebHomePage({ navigate }, ref) {
       position: 'absolute', inset: 0,
       display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
-      gap: '0',
     }}>
-      <style>{`.wb-search::placeholder { color: #484848; }`}</style>
+      <style>{`.wb-search::placeholder { color: #666; }`}</style>
 
-      {/* Icon + label */}
-      <div style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
-        marginBottom: '28px', color: '#383838',
-      }}>
-        <GlobeIcon />
+      {/* Globe */}
+      <div style={{ marginBottom: '22px', lineHeight: 0 }}>
+        <SpinningGlobe />
       </div>
 
       {/* Search input */}
-      <input
-        ref={inputRef}
-        className="wb-search"
-        value={query}
-        onChange={e => setQuery(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter') submit() }}
-        placeholder="Search or enter URL"
-        autoComplete="off"
-        spellCheck={false}
-        style={{
-          width: '360px', height: '42px',
-          background: '#0e0e0e', border: '1px solid #252525',
-          borderRadius: '8px', color: '#d0d0d0',
-          fontSize: '13px', padding: '0 16px',
-          outline: 'none', fontFamily: 'inherit', letterSpacing: '0.01em',
-          transition: 'border-color 0.15s, background 0.15s',
-        }}
-        onFocus={e => { e.currentTarget.style.borderColor = '#3a3a3a'; e.currentTarget.style.background = '#111' }}
-        onBlur={e  => { e.currentTarget.style.borderColor = '#252525'; e.currentTarget.style.background = '#0e0e0e' }}
-      />
+      <div style={{ position: 'relative', width: '400px' }}>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"
+          style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)', color: '#a09e96', pointerEvents: 'none' }}>
+          <circle cx="6" cy="6" r="4.5" />
+          <line x1="9.5" y1="9.5" x2="13" y2="13" />
+        </svg>
+        <input
+          ref={inputRef}
+          className="wb-search"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') submit() }}
+          placeholder="Search or enter URL"
+          autoComplete="off"
+          spellCheck={false}
+          style={{
+            width: '100%', height: '42px',
+            background: '#171817', border: '1px solid #232523',
+            borderRadius: '6px', color: '#8A8780',
+            fontSize: '13px', padding: '0 16px 0 36px',
+            outline: 'none', fontFamily: 'inherit', letterSpacing: '0.01em',
+            transition: 'border-color 0.15s, background 0.15s',
+          }}
+          onFocus={e => { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.background = '#171817' }}
+          onBlur={e  => { e.currentTarget.style.borderColor = '#232523'; e.currentTarget.style.background = '#171817' }}
+        />
+      </div>
 
       {/* Starter chips */}
       <div style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
@@ -81,8 +168,8 @@ function WebHomePage({ navigate }, ref) {
       </div>
 
       {/* Hint */}
-      <span style={{ marginTop: '20px', fontSize: '10px', color: '#313131', letterSpacing: '0.03em' }}>
-        <span style={{ fontFamily: 'monospace', color: '#444' }}>? query</span>
+      <span style={{ marginTop: '20px', fontSize: '10px', color: '#a09e96', letterSpacing: '0.03em' }}>
+        <span style={{ fontFamily: 'monospace', color: '#a09e96' }}>? query</span>
         {' '}searches Google
       </span>
     </div>
@@ -100,10 +187,10 @@ function StarterChip({ label, onClick }: { label: string; onClick: () => void })
       onMouseLeave={() => setHov(false)}
       style={{
         height: '28px', padding: '0 14px',
-        background: hov ? '#141414' : 'transparent',
-        border: `1px solid ${hov ? '#303030' : '#222'}`,
+        background: hov ? '#171817' : '#080909',
+        border: `1px solid ${hov ? '#5e5d5a' : '#282828'}`,
         borderRadius: '5px',
-        color: hov ? '#999' : '#404040',
+        color: hov ? '#8A8780' : '#a09e96',
         fontSize: '11px', letterSpacing: '0.03em',
         cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
         transition: 'color 0.12s, border-color 0.12s, background 0.12s',

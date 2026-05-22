@@ -38,7 +38,7 @@ export default function SourceContextMenu() {
   const menuBtn: React.CSSProperties = {
     display: 'block', width: '100%', textAlign: 'left',
     background: 'none', border: 'none', padding: '9px 14px',
-    cursor: 'pointer', fontSize: '12px', color: '#777',
+    cursor: 'pointer', fontSize: '12px', color: 'rgba(230,226,216,0.45)',
     letterSpacing: '0.04em', fontFamily: 'inherit',
   }
 
@@ -47,7 +47,7 @@ export default function SourceContextMenu() {
       onClick={e => e.stopPropagation()}
       style={{
         position: 'fixed', left: contextMenu.x, top: contextMenu.y,
-        background: '#111', border: '1px solid #222',
+        background: '#171817', border: '1px solid #232523',
         zIndex: 200, minWidth: '140px',
         overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
       }}
@@ -57,18 +57,18 @@ export default function SourceContextMenu() {
           <button
             onClick={handleRename}
             style={menuBtn}
-            onMouseEnter={e => (e.currentTarget.style.background = '#1e1e1e')}
+            onMouseEnter={e => (e.currentTarget.style.background = '#232523')}
             onMouseLeave={e => (e.currentTarget.style.background = 'none')}
           >
             Rename
           </button>
-          <div style={{ height: '1px', background: '#1e1e1e' }} />
+          <div style={{ height: '1px', background: '#232523' }} />
         </>
       )}
       <button
         onClick={handleRemove}
-        style={{ ...menuBtn, color: '#c44' }}
-        onMouseEnter={e => (e.currentTarget.style.background = '#1e1e1e')}
+        style={{ ...menuBtn, color: '#c46b5a' }}
+        onMouseEnter={e => (e.currentTarget.style.background = '#232523')}
         onMouseLeave={e => (e.currentTarget.style.background = 'none')}
       >
         {confirmDeleteSrcId === src.id

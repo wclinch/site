@@ -1,23 +1,33 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useApp } from '@/context/AppContext'
 import { getCheckoutUrl, getStoredCredentials } from '@/lib/auth'
+import { getStorageUsage } from '@/lib/storage-limit'
+
 type View = 'sign_in' | 'loading' | 'error' | 'signed_in'
 
 export default function AccountModal({ onClose }: { onClose: () => void }) {
-  const { user, isPro, signIn, signOut, openBilling, refreshEntitlement } = useApp()
+  const { user, isPro, limits, signIn, signOut, openBilling, refreshEntitlement } = useApp()
 
-  const [view,          setView]          = useState<View>(user ? 'signed_in' : 'sign_in')
-  const [email,         setEmail]         = useState('')
-  const [key,           setKey]           = useState('')
-  const [errorMsg,      setErrorMsg]      = useState<string | null>(null)
-  const [armed,         setArmed]         = useState(false)
+  const [view,         setView]         = useState<View>(user ? 'signed_in' : 'sign_in')
+  const [email,        setEmail]        = useState('')
+  const [key,          setKey]          = useState('')
+  const [errorMsg,     setErrorMsg]     = useState<string | null>(null)
+  const [armed,        setArmed]        = useState(false)
+  const [deleteArmed,  setDeleteArmed]  = useState(false)
+  const [storageBytes, setStorageBytes] = useState<number | null>(null)
+  const armedTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const refreshStorage = useCallback(() => { getStorageUsage().then(setStorageBytes) }, [])
+  useEffect(() => {
+    refreshStorage()
+    window.addEventListener('proof-storage-changed', refreshStorage)
+    return () => window.removeEventListener('proof-storage-changed', refreshStorage)
+  }, [refreshStorage])
 
   useEffect(() => {
-    if (user) {
-      refreshEntitlement()
-      return
-    }
+    if (user) { refreshEntitlement(); return }
     const creds = getStoredCredentials()
     if (creds) {
       setView('loading')
@@ -31,123 +41,130 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') { if (armed) setArmed(false); else onClose() }
+      if (e.key === 'Escape') {
+        if (deleteArmed) { setDeleteArmed(false); return }
+        if (armed) { setArmed(false); return }
+        onClose()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose, armed])
+  }, [onClose, armed, deleteArmed])
 
   async function handleSignIn() {
-    const trimmedEmail = email.trim()
-    const trimmedKey   = key.trim()
-    if (!trimmedEmail || !trimmedKey) return
-    setView('loading')
-    setErrorMsg(null)
-    const result = await signIn(trimmedEmail, trimmedKey)
+    const e = email.trim(), k = key.trim()
+    if (!e || !k) return
+    setView('loading'); setErrorMsg(null)
+    const result = await signIn(e, k)
     if (result.ok) {
       setView('signed_in')
     } else {
-      const msg =
+      setErrorMsg(
         result.error === 'invalid_key'    ? 'Subscription not found or inactive.' :
         result.error === 'email_mismatch' ? 'Email does not match this subscription.' :
         result.error === 'not_configured' ? 'Sign-in is not configured in this build.' :
                                             'Network unavailable. Try again when online.'
-      setErrorMsg(msg)
+      )
       setView('error')
     }
   }
 
-  function handleSignOut() {
-    signOut()
-    onClose()
+  function handleSignOut() { signOut(); onClose() }
+
+  function armDelete() {
+    setDeleteArmed(true)
+    if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current)
+    deleteTimerRef.current = setTimeout(() => setDeleteArmed(false), 2500)
+  }
+  function armSignOut() {
+    setArmed(true)
+    if (armedTimerRef.current) clearTimeout(armedTimerRef.current)
+    armedTimerRef.current = setTimeout(() => setArmed(false), 2500)
+  }
+  function confirmDelete() {
+    if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current)
+    setDeleteArmed(false)
+    if (deleteMailto) window.location.href = deleteMailto
+  }
+  function confirmSignOut() {
+    if (armedTimerRef.current) clearTimeout(armedTimerRef.current)
+    handleSignOut()
   }
 
-  const checkoutUrl = getCheckoutUrl(user?.email)
+  // Storage
+  let storageStr = '', storagePct = 0, storageBarColor = '#282828', storageTextColor = '#8A8780'
+  if (storageBytes !== null) {
+    const limitBytes = limits.storageBytes
+    storagePct = Math.min(1, storageBytes / limitBytes)
+    const usedMb = storageBytes / (1024 * 1024)
+    const limitMb = Math.round(limitBytes / (1024 * 1024))
+    const usedStr = usedMb < 1 ? `${Math.round(storageBytes / 1024)} KB`
+                  : usedMb < 10 ? `${usedMb.toFixed(1)} MB`
+                  : `${Math.round(usedMb)} MB`
+    const limitStr = limitMb >= 1024 ? `${Math.round(limitMb / 1024)} GB` : `${limitMb} MB`
+    storageStr = `${usedStr} / ${limitStr}`
+    if (storagePct >= 0.9) { storageBarColor = '#7a3a30'; storageTextColor = '#c46b5a' }
+    else if (storagePct >= 0.5) { storageBarColor = '#222'; storageTextColor = '#888' }
+  }
+
+  const deleteMailto = user
+    ? `mailto:Official_Site_Support@protonmail.com?subject=${encodeURIComponent('Delete my Site account')}&body=${encodeURIComponent(`Please delete my Site account.\n\nEmail: ${user.email}`)}`
+    : ''
 
   return (
     <div
-      onClick={() => { if (armed) setArmed(false); else onClose() }}
+      onClick={() => {
+        if (deleteArmed) { setDeleteArmed(false); return }
+        if (armed) { setArmed(false); return }
+        onClose()
+      }}
       style={{
         position: 'fixed', inset: 0, zIndex: 2000,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(0,0,0,0.55)',
-        backdropFilter: 'blur(2px)',
-        WebkitBackdropFilter: 'blur(2px)',
+        background: 'rgba(0,0,0,0.7)',
+        backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
         WebkitAppRegion: 'no-drag',
       } as React.CSSProperties}
     >
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          width: '360px', maxWidth: 'calc(100vw - 48px)',
-          background: '#111', border: '1px solid #222', borderRadius: '4px',
-          boxShadow: '0 12px 40px rgba(0,0,0,0.6)',
-          fontFamily: 'inherit',
+          width: '440px', maxWidth: 'calc(100vw - 40px)',
+          background: '#080909',
+          border: '1px solid #1e1f1e',
+          borderRadius: '6px',
+          boxShadow: '0 32px 80px rgba(0,0,0,0.9)',
+          fontFamily: 'inherit', overflow: 'hidden',
         }}
       >
 
-        {/* ── Sign-in view ── */}
+        {/* ── Sign-in / Error ── */}
         {(view === 'sign_in' || view === 'error') && (
           <>
-            <div style={{ padding: '16px 18px 14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <div style={{ fontSize: '11px', color: view === 'error' ? '#c44' : '#777', letterSpacing: '0.1em', textTransform: 'uppercase', transition: 'color 0.15s' }}>
-                  {view === 'error' ? 'Error' : 'Account'}
+            <div style={{ padding: '24px 28px 20px', borderBottom: '1px solid #1e1f1e' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: 500, color: '#E6E2D8', letterSpacing: '-0.01em' }}>Account</div>
+                  <div style={{ fontSize: '12px', color: '#8A8780', marginTop: '3px' }}>Enter your email and license key.</div>
                 </div>
+                <Lnk onClick={onClose}>Close</Lnk>
               </div>
-              <div style={{ fontSize: '12px', color: view === 'error' ? '#aaa' : '#888', lineHeight: 1.7 }}>
-                {view === 'error' && errorMsg
-                  ? errorMsg
-                  : 'Sign in with your email and subscription key.'}
-              </div>
+              {view === 'error' && errorMsg && (
+                <div style={{ marginTop: '14px', padding: '10px 14px', background: 'rgba(196,107,90,0.07)', border: '1px solid rgba(196,107,90,0.18)', borderRadius: '4px', fontSize: '12px', color: '#c46b5a', lineHeight: 1.6 }}>
+                  {errorMsg}
+                </div>
+              )}
             </div>
-
-            <div style={{ height: '1px', background: '#1e1e1e' }} />
-
-            <div style={{ padding: '11px 18px' }}>
-              <input
-                autoFocus
-                type="email"
-                value={email}
+            <div style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <Field autoFocus type="email" value={email} placeholder="Email"
                 onChange={e => { setEmail(e.target.value); if (view === 'error') { setErrorMsg(null); setView('sign_in') } }}
-                onKeyDown={e => { if (e.key === 'Enter') handleSignIn() }}
-                placeholder="you@example.com"
-                spellCheck={false}
-                autoCapitalize="off"
-                autoCorrect="off"
-                style={{
-                  width: '100%', background: 'transparent', border: 'none', outline: 'none',
-                  fontSize: '12px', color: '#ccc', fontFamily: 'inherit', letterSpacing: '0.02em',
-                }}
-              />
-            </div>
-
-            <div style={{ height: '1px', background: '#1e1e1e' }} />
-
-            <div style={{ padding: '11px 18px' }}>
-              <input
-                type="text"
-                value={key}
+                onKeyDown={e => { if (e.key === 'Enter') handleSignIn() }} />
+              <Field type="text" value={key} placeholder="XXXX-XXXX-XXXX-XXXX" mono
                 onChange={e => { setKey(e.target.value); if (view === 'error') { setErrorMsg(null); setView('sign_in') } }}
-                onKeyDown={e => { if (e.key === 'Enter') handleSignIn() }}
-                placeholder="XXXX-XXXX-XXXX-XXXX"
-                spellCheck={false}
-                autoCapitalize="off"
-                autoCorrect="off"
-                style={{
-                  width: '100%', background: 'transparent', border: 'none', outline: 'none',
-                  fontSize: '12px', color: '#ccc', fontFamily: 'monospace', letterSpacing: '0.06em',
-                }}
-              />
+                onKeyDown={e => { if (e.key === 'Enter') handleSignIn() }} />
             </div>
-
-            <div style={{ height: '1px', background: '#1e1e1e' }} />
-
-            <div style={{ padding: '14px 18px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              <ModalButton onClick={onClose}>Cancel</ModalButton>
-              <ModalButton onClick={handleSignIn} disabled={!email.trim() || !key.trim()} accent>
-                Sign In
-              </ModalButton>
+            <div style={{ padding: '0 28px 24px', display: 'flex', justifyContent: 'flex-end' }}>
+              <PrimaryBtn onClick={handleSignIn} disabled={!email.trim() || !key.trim()}>Sign in →</PrimaryBtn>
             </div>
           </>
         )}
@@ -155,121 +172,105 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
         {/* ── Loading ── */}
         {view === 'loading' && (
           <>
-            <div style={{ padding: '16px 18px 14px' }}>
-              <div style={{ fontSize: '11px', color: '#777', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>
-                Account
-              </div>
-              <div style={{ fontSize: '12px', color: '#888', lineHeight: 1.7 }}>
-                Checking account…
+            <div style={{ padding: '24px 28px 20px', borderBottom: '1px solid #1e1f1e' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontSize: '14px', fontWeight: 500, color: '#E6E2D8', letterSpacing: '-0.01em' }}>Account</div>
+                <Lnk onClick={onClose} disabled>Close</Lnk>
               </div>
             </div>
-            <div style={{ height: '1px', background: '#1e1e1e' }} />
-            <div style={{ padding: '14px 18px', display: 'flex', justifyContent: 'flex-end' }}>
-              <ModalButton onClick={onClose} disabled>Cancel</ModalButton>
-            </div>
+            <div style={{ padding: '24px 28px 48px', fontSize: '12px', color: '#8A8780' }}>Checking…</div>
           </>
         )}
 
         {/* ── Signed in ── */}
         {view === 'signed_in' && user && (
           <>
-            {/* Header — only shows confirmation text when armed */}
-            {armed && (
-              <>
-                <div style={{ padding: '16px 18px 14px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                    <div style={{ fontSize: '11px', color: '#c44', letterSpacing: '0.1em', textTransform: 'uppercase', transition: 'color 0.15s' }}>
-                      Confirm
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      {[1, 2].map(s => (
-                        <div key={s} style={{
-                          width: '16px', height: '2px', borderRadius: '1px',
-                          background: s === 1 ? '#1e1e1e' : '#c44',
-                          transition: 'background 0.2s',
-                        }} />
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#aaa', lineHeight: 1.7 }}>
-                    You will be signed out on this device.
+            {/* Header */}
+            <div style={{ padding: '24px 28px 20px', borderBottom: '1px solid #1e1f1e' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: 500, color: '#E6E2D8', letterSpacing: '-0.01em' }}>Account</div>
+                  <div style={{ fontSize: '12px', color: '#8A8780', marginTop: '3px', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {user.email}
                   </div>
                 </div>
-                <div style={{ height: '1px', background: '#1e1e1e' }} />
-              </>
-            )}
-
-            {/* Account header row — always visible when not armed */}
-            {!armed && (
-              <div style={{ padding: '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: '11px', color: '#777', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                  Account
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  {[1, 2].map(s => (
-                    <div key={s} style={{
-                      width: '16px', height: '2px', borderRadius: '1px',
-                      background: s === 1 ? '#3a3a3a' : '#1e1e1e',
-                    }} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div style={{ height: '1px', background: '#1e1e1e' }} />
-
-            <div style={{ padding: '12px 18px', fontSize: '11px', color: '#666', letterSpacing: '0.04em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>Email</span>
-              <span style={{ color: '#888', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</span>
-            </div>
-
-            <div style={{ height: '1px', background: '#1e1e1e' }} />
-
-            <div style={{ padding: '12px 18px', fontSize: '11px', color: '#666', letterSpacing: '0.04em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>Plan</span>
-              <span style={{ color: isPro ? '#5c9e6e' : '#666' }}>{isPro ? 'Pro' : 'Free'}</span>
-            </div>
-
-            {isPro && (
-              <>
-                <div style={{ height: '1px', background: '#1e1e1e' }} />
-                <div style={{ padding: '12px 18px', fontSize: '11px', color: '#666', letterSpacing: '0.04em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>Price</span>
-                  <span style={{ color: '#555' }}>$8.99 / mo</span>
-                </div>
-                <div style={{ height: '1px', background: '#1e1e1e' }} />
-                <ManageRow onClick={() => openBilling()} />
-              </>
-            )}
-
-            {/* Settings */}
-            <div style={{ height: '1px', background: '#1e1e1e' }} />
-            <div style={{ padding: '14px 18px 12px' }}>
-              <div style={{ fontSize: '11px', color: '#555', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '12px' }}>
-                Settings
+                <Lnk onClick={onClose}>Close</Lnk>
               </div>
             </div>
 
-            {/* Actions */}
-            <div style={{ height: '1px', background: '#1e1e1e' }} />
-            <div style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-              <ModalButton onClick={onClose} disabled={armed}>← Back</ModalButton>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                {!isPro && !armed && (
-                  <ModalButton
-                    onClick={() => { onClose(); setTimeout(() => window.dispatchEvent(new Event('proof:upgrade-needed')), 50) }}
+            <div style={{ padding: '20px 28px 24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+              {/* Plan card */}
+              <div style={{ background: '#0f100f', border: '1px solid #1e1f1e', borderRadius: '6px', overflow: 'hidden' }}>
+                {/* Plan row */}
+                <div style={{ padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: storageStr ? '1px solid #1a1b1a' : 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '13px', color: '#E6E2D8' }}>{isPro ? 'Pro' : 'Free'}</span>
+                    {isPro && (
+                      <span style={{ fontSize: '10px', color: '#7a9c7e', letterSpacing: '0.05em' }}>Active</span>
+                    )}
+                  </div>
+                  {isPro && <span style={{ fontSize: '12px', color: '#8A8780' }}>$8.99 / mo</span>}
+                  {!isPro && (
+                    <button
+                      onClick={() => { onClose(); setTimeout(() => window.dispatchEvent(new Event('proof:upgrade-needed')), 50) }}
+                      style={{ fontSize: '11px', color: '#8A8780', background: 'none', border: 'none', padding: 0, cursor: 'pointer', letterSpacing: '0.02em', fontFamily: 'inherit', transition: 'color 0.12s' }}
+                      onMouseEnter={e => (e.currentTarget.style.color = '#E6E2D8')}
+                      onMouseLeave={e => (e.currentTarget.style.color = '#8A8780')}
+                    >
+                      Upgrade →
+                    </button>
+                  )}
+                </div>
+
+                {/* Storage */}
+                {storageStr && (
+                  <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px', borderBottom: isPro ? '1px solid #1a1b1a' : 'none' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '11px', color: '#8A8780' }}>Storage</span>
+                      <span style={{ fontSize: '11px', color: storageTextColor }}>{storageStr}</span>
+                    </div>
+                    <div style={{ height: '1px', background: '#1e1f1e', borderRadius: '1px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${Math.max(1, storagePct * 100)}%`, background: storageBarColor, borderRadius: '1px', transition: 'width 0.4s ease' }} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Manage billing */}
+                {isPro && (
+                  <button
+                    onClick={() => openBilling()}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      width: '100%', padding: '12px 16px',
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
+                      transition: 'background 0.1s',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#151615')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'none')}
                   >
-                    Upgrade
-                  </ModalButton>
+                    <span style={{ fontSize: '12px', color: '#8A8780', letterSpacing: '0.01em' }}>Manage billing</span>
+                    <span style={{ fontSize: '11px', color: '#8A8780' }}>→</span>
+                  </button>
                 )}
-                {armed ? (
-                  <>
-                    <ModalButton onClick={() => setArmed(false)}>Cancel</ModalButton>
-                    <ModalButton onClick={handleSignOut} destructive>Confirm</ModalButton>
-                  </>
-                ) : (
-                  <ModalButton onClick={() => setArmed(true)} destructive>Sign Out</ModalButton>
-                )}
+              </div>
+
+              {/* Actions */}
+              <div style={{ background: '#0f100f', border: '1px solid #1e1f1e', borderRadius: '6px', overflow: 'hidden' }}>
+                <DangerRow
+                  label="Sign out"
+                  armed={armed}
+                  onArm={armSignOut}
+                  onConfirm={confirmSignOut}
+                  borderBottom
+                />
+                <DangerRow
+                  label="Delete account"
+                  armed={deleteArmed}
+                  onArm={armDelete}
+                  onConfirm={confirmDelete}
+                />
               </div>
             </div>
           </>
@@ -279,104 +280,96 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-function SettingToggle({ label, helper, value, onChange }: {
-  label: string
-  helper: string
-  value: boolean
-  onChange: (v: boolean) => void
+// ─── Primitives ───────────────────────────────────────────────────────────────
+
+
+
+
+function Field({ autoFocus, type, value, placeholder, mono, onChange, onKeyDown }: {
+  autoFocus?: boolean; type: string; value: string; placeholder: string; mono?: boolean
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void
 }) {
+  return (
+    <div
+      style={{ background: '#0f100f', border: '1px solid #1e1f1e', borderRadius: '5px', padding: '10px 14px', transition: 'border-color 0.15s' }}
+      onFocusCapture={e => { (e.currentTarget as HTMLDivElement).style.borderColor = '#8A8780' }}
+      onBlurCapture={e  => { (e.currentTarget as HTMLDivElement).style.borderColor = '#1e1f1e' }}
+    >
+      <input
+        autoFocus={autoFocus} type={type} value={value} placeholder={placeholder}
+        onChange={onChange} onKeyDown={onKeyDown}
+        spellCheck={false} autoCapitalize="off" autoCorrect="off"
+        style={{
+          width: '100%', background: 'transparent', border: 'none', outline: 'none',
+          fontSize: '13px', color: '#8A8780',
+          fontFamily: mono ? 'ui-monospace, "SF Mono", monospace' : 'inherit',
+          letterSpacing: mono ? '0.06em' : '0.01em',
+        }}
+      />
+    </div>
+  )
+}
+
+function PrimaryBtn({ children, onClick, disabled }: { children: React.ReactNode; onClick: () => void; disabled?: boolean }) {
   const [hov, setHov] = useState(false)
   return (
-    <button
-      onClick={() => onChange(!value)}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
+    <button onClick={onClick} disabled={disabled}
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       style={{
-        display: 'flex', alignItems: 'flex-start', gap: '10px', width: '100%',
-        background: 'none', border: 'none', padding: 0,
-        cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
-      }}
-    >
-      <div style={{
-        flexShrink: 0, marginTop: '1px',
-        width: '13px', height: '13px',
-        border: `1px solid ${value ? '#444' : '#2a2a2a'}`,
-        borderRadius: '2px',
-        background: value ? '#1e1e1e' : 'transparent',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        transition: 'border-color 0.15s, background 0.15s',
+        padding: '8px 18px',
+        background: 'none',
+        border: `1px solid ${disabled ? '#1e1f1e' : hov ? '#8A8780' : '#232523'}`,
+        borderRadius: '4px', color: disabled ? '#555' : '#E6E2D8',
+        fontSize: '12px', letterSpacing: '0.03em', cursor: disabled ? 'not-allowed' : 'pointer',
+        fontFamily: 'inherit', transition: 'border-color 0.12s, color 0.12s',
       }}>
-        {value && (
-          <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="1.5,4 3,5.5 6.5,2" />
-          </svg>
-        )}
-      </div>
-      <div>
-        <div style={{ fontSize: '12px', color: hov ? '#aaa' : '#777', letterSpacing: '0.02em', transition: 'color 0.15s' }}>
-          {label}
-        </div>
-        <div style={{ fontSize: '11px', color: '#444', letterSpacing: '0.02em', marginTop: '2px', lineHeight: 1.5 }}>
-          {helper}
-        </div>
-      </div>
+      {children}
     </button>
   )
 }
 
-function ManageRow({ onClick }: { onClick: () => void }) {
+function DangerRow({ label, armed, onArm, onConfirm, borderBottom }: {
+  label: string; armed: boolean; onArm: () => void; onConfirm: () => void; borderBottom?: boolean
+}) {
   const [hov, setHov] = useState(false)
   return (
     <button
-      onClick={onClick}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
+      onClick={armed ? onConfirm : onArm}
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       style={{
-        display: 'flex', width: '100%', padding: '12px 18px',
-        background: 'none', border: 'none', cursor: 'pointer',
-        fontSize: '11px', color: hov ? '#999' : '#555', letterSpacing: '0.04em',
-        fontFamily: 'inherit', textAlign: 'left',
-        transition: 'color 0.15s',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        width: '100%', padding: '12px 16px',
+        background: armed ? 'rgba(196,107,90,0.06)' : hov ? '#151615' : 'none',
+        border: 'none', borderBottom: borderBottom ? '1px solid #1e1f1e' : 'none',
+        cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
+        transition: 'background 0.12s',
+        boxSizing: 'border-box',
       }}
     >
-      Manage subscription →
+      <span style={{ fontSize: '12px', color: armed ? '#c46b5a' : '#8A8780', transition: 'color 0.12s' }}>
+        {armed ? `Confirm?` : label}
+      </span>
+      <span style={{ fontSize: '11px', color: armed ? '#c46b5a' : '#8A8780', transition: 'color 0.12s' }}>
+        {armed ? 'Confirm' : '→'}
+      </span>
     </button>
   )
 }
 
-function ModalButton({ children, onClick, disabled, destructive, accent }: {
-  children: React.ReactNode
-  onClick: () => void
-  disabled?: boolean
-  destructive?: boolean
-  accent?: boolean
+function Lnk({ children, onClick, disabled }: {
+  children: React.ReactNode; onClick?: () => void; disabled?: boolean
 }) {
-  const [hover, setHover] = useState(false)
-
-  const idleBorder  = destructive ? '#2a1515' : accent ? '#2a2a2a' : '#252525'
-  const hoverBorder = destructive ? '#3a1515' : accent ? '#444'    : '#333'
-  const idleColor   = destructive ? '#c44'    : accent ? '#888'    : '#666'
-  const hoverColor  = destructive ? '#e55'    : accent ? '#ddd'    : '#aaa'
-
+  const [hov, setHov] = useState(false)
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+    <button onClick={onClick} disabled={disabled}
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       style={{
-        background: '#111',
-        border: `1px solid ${hover && !disabled ? hoverBorder : idleBorder}`,
-        borderRadius: '3px',
-        padding: '7px 14px',
-        fontSize: '11px', fontFamily: 'inherit',
-        color: hover && !disabled ? hoverColor : idleColor,
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        transition: 'color 0.15s, border-color 0.15s',
-        opacity: disabled && !destructive ? 0.5 : 1,
-      }}
-    >
+        background: 'none', border: 'none', padding: 0,
+        fontSize: '12px', color: disabled ? '#444' : hov ? '#E6E2D8' : '#8A8780',
+        letterSpacing: '0.02em', cursor: disabled ? 'not-allowed' : 'pointer',
+        fontFamily: 'inherit', transition: 'color 0.1s',
+      }}>
       {children}
     </button>
   )

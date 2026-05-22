@@ -13,17 +13,17 @@ export function NavBtn({ children, onClick, disabled, title }: {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'none', border: 'none', borderRadius: '4px',
         cursor: disabled ? 'default' : 'pointer',
-        color: disabled ? '#2e2e2e' : '#666',
-        fontSize: '17px', fontFamily: 'inherit', padding: 0, outline: 'none',
+        color: disabled ? '#8A8780' : '#8A8780',
+        fontFamily: 'inherit', padding: 0, outline: 'none', lineHeight: 0,
         transition: 'color 0.15s',
       }}
-      onMouseEnter={e => { if (!disabled) e.currentTarget.style.color = '#aaa' }}
-      onMouseLeave={e => { if (!disabled) e.currentTarget.style.color = '#666' }}
+      onMouseEnter={e => { if (!disabled) e.currentTarget.style.color = '#8A8780' }}
+      onMouseLeave={e => { if (!disabled) e.currentTarget.style.color = '#8A8780' }}
     >{children}</button>
   )
 }
 
-function ToolbarIconBtn({ children, title, onClick, disabled, active }: {
+function ActionBtn({ children, title, onClick, disabled, active }: {
   children: React.ReactNode
   title: string
   onClick: () => void
@@ -37,16 +37,15 @@ function ToolbarIconBtn({ children, title, onClick, disabled, active }: {
       onMouseEnter={() => { if (!disabled) setHov(true) }}
       onMouseLeave={() => setHov(false)}
       style={{
-        width: '32px', height: '30px', flexShrink: 0,
+        width: '28px', height: '26px', flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: active ? '#1c1c1c' : hov && !disabled ? '#141414' : 'none',
-        border: `1px solid ${active ? '#333' : hov && !disabled ? '#2a2a2a' : disabled ? '#181818' : '#222'}`,
+        background: active ? '#171817' : hov && !disabled ? '#171817' : 'none',
+        border: `1px solid ${active ? '#9b9892' : hov && !disabled ? '#232523' : 'transparent'}`,
         borderRadius: '4px',
-        color: disabled ? '#2a2a2a' : active ? '#c8c8c8' : hov ? '#999' : '#555',
         cursor: disabled ? 'default' : 'pointer',
+        color: disabled ? '#8A8780' : active ? '#8A8780' : hov ? '#8A8780' : '#8A8780',
         padding: 0, outline: 'none', lineHeight: 0,
-        fontFamily: 'inherit',
-        transition: 'color 0.15s, background 0.15s, border-color 0.15s',
+        fontFamily: 'inherit', transition: 'color 0.15s, background 0.15s, border-color 0.15s',
       }}
     >
       {children}
@@ -54,13 +53,13 @@ function ToolbarIconBtn({ children, title, onClick, disabled, active }: {
   )
 }
 
-export default function WebToolbar({ active, panelId, urlInput, urlInputRef, homeMode, actionFeedback, onUrlChange, onUrlFocus, onUrlBlur, onUrlSubmit, onGoBack, onGoForward, onReload, onHome, onPin, onSave }: {
+export default function WebToolbar({ active, panelId, urlInput, urlInputRef, homeMode, actionFeedback, onUrlChange, onUrlFocus, onUrlBlur, onUrlSubmit, onGoBack, onGoForward, onReload, onHome, onSave }: {
   active: TabState | undefined
   panelId: string
   urlInput: string
   urlInputRef: React.RefObject<HTMLInputElement | null>
   homeMode: boolean
-  actionFeedback: null | 'view1' | 'view2' | 'saved' | 'duplicate'
+  actionFeedback: null | 'saved' | 'duplicate'
   onUrlChange: (val: string) => void
   onUrlFocus: (e: React.FocusEvent<HTMLInputElement>) => void
   onUrlBlur: () => void
@@ -69,79 +68,82 @@ export default function WebToolbar({ active, panelId, urlInput, urlInputRef, hom
   onGoForward: () => void
   onReload: () => void
   onHome: () => void
-  onPin: (view: 1 | 2) => void
   onSave: () => void
 }) {
   const hasUrl = !!active?.url
   return (
     <div style={{
       height: '44px', flexShrink: 0, display: 'flex', alignItems: 'center',
-      gap: '6px', padding: '0 16px 0 12px', borderBottom: '1px solid #1e1e1e', background: '#060606',
+      gap: '6px', padding: '0 16px 0 12px', borderBottom: '1px solid #232523', background: '#080909',
       WebkitAppRegion: 'no-drag',
     } as React.CSSProperties}>
-      <NavBtn disabled={!active?.canGoBack}    onClick={onGoBack}    title="Back">‹</NavBtn>
-      <NavBtn disabled={!active?.canGoForward} onClick={onGoForward} title="Forward">›</NavBtn>
-      <NavBtn onClick={onReload} title={active?.loading ? 'Stop' : 'Reload'}>
-        {active?.loading ? '×' : '↺'}
+      <NavBtn disabled={!active?.canGoBack}    onClick={onGoBack}    title="Go back">
+        <svg width="7" height="12" viewBox="0 0 7 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="6,1 1,6 6,11" />
+        </svg>
       </NavBtn>
-      <NavBtn onClick={onHome} title="Home">
+      <NavBtn disabled={!active?.canGoForward} onClick={onGoForward} title="Go forward">
+        <svg width="7" height="12" viewBox="0 0 7 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="1,1 6,6 1,11" />
+        </svg>
+      </NavBtn>
+      <NavBtn onClick={onReload} title={active?.loading ? 'Stop' : 'Reload'}>
+        {active?.loading ? (
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+            <line x1="2" y1="2" x2="8" y2="8" /><line x1="8" y1="2" x2="2" y2="8" />
+          </svg>
+        ) : (
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 6.5A4.5 4.5 0 1 1 8 2.2" />
+            <polyline points="7.5,0.5 9,2 7.5,3.5" />
+          </svg>
+        )}
+      </NavBtn>
+      <NavBtn onClick={onHome} title="New tab">
         <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
           <path d="M1.5 6.5L7 1.5l5.5 5M3 8v4.5h3V9.5h2v3h3V8" />
         </svg>
       </NavBtn>
       <div style={{ width: '4px', flexShrink: 0 }} />
-      <input
-        ref={urlInputRef}
-        value={urlInput}
-        onChange={e => onUrlChange(e.target.value)}
-        onFocus={onUrlFocus}
-        onBlur={onUrlBlur}
-        onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); onUrlSubmit() } }}
-        placeholder="Search or enter URL"
-        style={{
-          flex: 1, height: '28px', background: '#111', border: '1px solid #252525',
-          borderRadius: '4px', color: '#bbb', fontSize: '12px', padding: '0 10px',
-          outline: 'none', fontFamily: 'inherit', letterSpacing: '0.02em',
-          transition: 'border-color 0.15s',
-        }}
-        onFocusCapture={e => { e.currentTarget.style.borderColor = '#444' }}
-        onBlurCapture={e  => { e.currentTarget.style.borderColor = '#252525' }}
-      />
-      <div style={{ width: '6px', flexShrink: 0 }} />
-
-      {/* Open in View 1 */}
-      <ToolbarIconBtn
-        title={hasUrl ? 'Open in View 1' : 'Open a page first'}
-        onClick={() => onPin(1)}
-        disabled={!hasUrl}
-        active={actionFeedback === 'view1'}
-      >
-        <span style={{ fontSize: '11px', letterSpacing: '0.02em', lineHeight: 1 }}>1</span>
-      </ToolbarIconBtn>
-
-      {/* Open in View 2 */}
-      <ToolbarIconBtn
-        title={hasUrl ? 'Open in View 2' : 'Open a page first'}
-        onClick={() => onPin(2)}
-        disabled={!hasUrl}
-        active={actionFeedback === 'view2'}
-      >
-        <span style={{ fontSize: '11px', letterSpacing: '0.02em', lineHeight: 1 }}>2</span>
-      </ToolbarIconBtn>
-
-      {/* Save page to session */}
-      <ToolbarIconBtn
-        title={hasUrl ? 'Save page to session' : 'Open a page first'}
-        onClick={onSave}
-        disabled={!hasUrl}
-        active={actionFeedback === 'saved' || actionFeedback === 'duplicate'}
-      >
-        <svg width="10" height="13" viewBox="0 0 10 13"
-          fill={actionFeedback === 'saved' || actionFeedback === 'duplicate' ? 'currentColor' : 'none'}
-          stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M1.5 1.5h7v10l-3.5-2-3.5 2V1.5z" />
+      <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
+        <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"
+          style={{ position: 'absolute', left: '9px', color: '#8A8780', pointerEvents: 'none', flexShrink: 0 }}>
+          <circle cx="6" cy="6" r="4.5" />
+          <line x1="9.5" y1="9.5" x2="13" y2="13" />
         </svg>
-      </ToolbarIconBtn>
+        <input
+          ref={urlInputRef}
+          value={urlInput}
+          onChange={e => onUrlChange(e.target.value)}
+          onFocus={onUrlFocus}
+          onBlur={onUrlBlur}
+          onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); onUrlSubmit() } }}
+          placeholder="Search or enter URL"
+          style={{
+            flex: 1, width: '100%', height: '28px', background: '#171817', border: '1px solid #232523',
+            borderRadius: '4px', color: '#E6E2D8', fontSize: '12px', padding: '0 10px 0 28px',
+            outline: 'none', fontFamily: 'inherit', letterSpacing: '0.02em',
+            transition: 'border-color 0.15s',
+          }}
+          onFocusCapture={e => { e.currentTarget.style.borderColor = '#8A8780' }}
+          onBlurCapture={e  => { e.currentTarget.style.borderColor = '#232523' }}
+        />
+      </div>
+      {/* Save page to session */}
+      <ActionBtn
+        title={actionFeedback === 'duplicate' ? 'Already saved' : hasUrl ? 'Save page' : 'Open a page first'}
+        onClick={onSave} disabled={!hasUrl} active={actionFeedback === 'saved' || actionFeedback === 'duplicate'}
+      >
+        {actionFeedback === 'saved' ? (
+          <svg width="10" height="8" viewBox="0 0 10 8" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="1,4 3.5,6.5 9,1" />
+          </svg>
+        ) : (
+          <svg width="9" height="12" viewBox="0 0 9 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M1 1h7v10l-3.5-2L1 11V1z" />
+          </svg>
+        )}
+      </ActionBtn>
     </div>
   )
 }
