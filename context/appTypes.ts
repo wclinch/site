@@ -21,9 +21,6 @@ export interface AppState {
   selectedSource2: QueuedSource | null
   stackIds: string[]
   stackSources: QueuedSource[]
-  stackLimit: number
-  atStackLimit: boolean
-  inStack: (id: string) => boolean
   // center view panes
   view1Page: ViewPage | null
   view2Page: ViewPage | null
@@ -58,17 +55,19 @@ export interface AppState {
   retrySource: (srcId: string) => Promise<void>
   removeSource: (srcId: string) => void
   removeSelected: () => void
+  addSourceToSession: (srcId: string, toProjectId: string) => string | null
+  addUrlToSession: (projectId: string, url: string, title: string) => string | null
   restoreArchivedSource: (srcId: string, projectId: string) => void
   permanentlyDeleteArchived: (srcId: string, projectId: string) => void
-  createNote: (targetProjId?: string) => void
   addUrl: (url: string, targetProjId?: string, label?: string) => Promise<void>
   // Workspace actions
   switchWorkspace: (id: string) => void
   newWorkspace: () => void
-  duplicateWorkspace: (id: string) => void
-  pinWorkspace: (id: string) => void
   saveWorkspace: (name?: string) => void
   removeWorkspace: (targetId?: string) => void
+  removeWorkspaceSoft: (targetId: string) => void
+  commitWorkspaceRemoval: (proj: Project) => void
+  restoreWorkspace: (proj: Project, insertIdx: number) => void
   // Stack actions
   addToStack: (id: string) => void
   removeFromStack: (id: string) => void

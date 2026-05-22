@@ -15,27 +15,28 @@ export default function Nav() {
     <nav style={{
       padding: '0 20px', height: '44px',
       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      borderBottom: '1px solid #1e1e1e', flexShrink: 0,
+      borderBottom: '1px solid #252725', flexShrink: 0,
       WebkitAppRegion: 'drag',
     } as React.CSSProperties}>
-      <Link href="/app" aria-label="Site"
+      <Link href="/" aria-label="Site"
         style={{
           display: 'flex', alignItems: 'center', lineHeight: 1,
           WebkitAppRegion: 'no-drag',
         } as React.CSSProperties}
       >
         <svg width="22" height="22" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-          <text x="16" y="26" fontFamily="Georgia, serif" fontSize="30" fontWeight="500" fill="#e8e8e8" textAnchor="middle">{'{'}</text>
+          <text x="16" y="26" fontFamily="Georgia, serif" fontSize="30" fontWeight="500" fill="#E6E2D8" textAnchor="middle">{'{'}</text>
         </svg>
       </Link>
       <div style={{
-        display: 'flex', gap: '20px', alignItems: 'center',
+        display: 'flex', gap: '8px', alignItems: 'center',
         WebkitAppRegion: 'no-drag',
       } as React.CSSProperties}>
+        <div style={{ width: '1px', height: '14px', background: '#252725', marginRight: '2px', flexShrink: 0 }} />
         <Link href="/about"   className="nav-link">About</Link>
+        <span style={{ color: '#252725', fontSize: '14px', lineHeight: 1, userSelect: 'none' }}>·</span>
         <Link href="/privacy" className="nav-link">Privacy</Link>
-        {/* mailto: link — opens the user's default mail client. No
-            tracking, no contact form, no server. */}
+        <span style={{ color: '#252725', fontSize: '14px', lineHeight: 1, userSelect: 'none' }}>·</span>
         <a href="mailto:Official_Site_Support@protonmail.com?subject=Site%20support"
            className="nav-link">Support</a>
       </div>

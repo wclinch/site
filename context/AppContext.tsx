@@ -3,7 +3,7 @@ import { createContext, useContext, useState, useEffect, useRef, ReactNode } fro
 import type { Project, QueuedSource, SavedResearchTab, ViewPage } from '@/lib/types'
 import {
   ACTIVE_KEY, SELECTED_KEY, SELECTED_KEY_2, STACK_KEY, STACK_LIMIT,
-  newProject, newSource, newNote, newUrlSource,
+  newProject, newSource, newUrlSource,
   loadProjects, saveProjects,
   uid,
 } from '@/lib/storage'
@@ -107,9 +107,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ordering — switching projects swaps the stack instantly.
   const stackSources: QueuedSource[] = sources
   const stackIds   : string[]        = sources.map(s => s.id)
-  const atStackLimit                 = sources.length >= STACK_LIMIT
-  const inStack    = (id: string)    => sources.some(s => s.id === id)
-
   // ─── Effects: UI events ─────────────────────────────────────────────────
 
   // Close context menu on Escape or any click outside.
@@ -428,98 +425,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadResearchTabs([], p.id)
   }
 
-  function duplicateWorkspace(id: string) {
-    const limits = isProRef.current ? PRO_LIMITS : FREE_LIMITS
-    if (!isProRef.current && projectsRef.current.length >= limits.workspaces) {
-      needUpgrade('Free includes 1 workspace. Upgrade to Pro for unlimited workspaces.')
-      return
-    }
 
-    const src = projectsRef.current.find(p => p.id === id)
-    if (!src) return
-
-    // Save active workspace state before we touch projects
-    const curId = activeId
-    const curSel1 = selectedId
-    const curSel2 = selectedId2
-    const curTabs = readResearchTabs()
-    if (curId) {
-      setProjects(ps => ps.map(p => p.id === curId
-        ? { ...p, sel1: curSel1, sel2: curSel2, view1Page, view2Page, splitView, researchTabs: curTabs }
-        : p))
-    }
-
-    // Build unique copy name
-    const usedNames = new Set(projectsRef.current.map(w => w.name))
-    const baseName = src.name || 'Untitled'
-    let copyName = `${baseName} copy`
-    let n = 2
-    while (usedNames.has(copyName)) { copyName = `${baseName} copy ${n++}` }
-
-    // Resolve view state: if duplicating the active workspace, use live state
-    const srcView1   = id === activeId ? view1Page   : (src.view1Page   ?? null)
-    const srcView2   = id === activeId ? view2Page   : (src.view2Page   ?? null)
-    const srcSplit   = id === activeId ? splitView   : (src.splitView   ?? false)
-    const srcTabs    = id === activeId ? curTabs     : (src.researchTabs ?? [])
-
-    const dup: import('@/lib/types').Project = {
-      id: uid(),
-      name: copyName,
-      sources: [],
-      view1Page: srcView1,
-      view2Page: srcView2,
-      splitView: srcSplit,
-      researchTabs: srcTabs,
-    }
-
-    setProjects(ps => {
-      const idx = ps.findIndex(p => p.id === id)
-      const next = [...ps]
-      next.splice(idx + 1, 0, dup)
-      return next
-    })
-    setActiveId(dup.id)
-    setSelectedId(null)
-    setSelectedId2(null)
-    setSelectedIds(new Set())
-    setAnchorId(null)
-    setView1Page(srcView1)
-    setView2Page(srcView2)
-    setSplitView(srcSplit)
-    if (typeof window !== 'undefined') {
-      if (!srcView1) (window as any).electronAPI?.view?.clear?.('1')
-      if (!srcView2) (window as any).electronAPI?.view?.clear?.('2')
-    }
-    loadResearchTabs(srcTabs, dup.id)
-  }
-
-  function pinWorkspace(id: string) {
-    setProjects(ps => ps.map(p => p.id === id ? { ...p, pinned: !p.pinned } : p))
-  }
-
-  function removeWorkspace(targetId?: string) {
-    const id = targetId ?? activeId
-    if (!id) return
+  function _removeWorkspaceCore(id: string, reap: boolean) {
     if (projects.length <= 1) return
     const proj = projects.find(p => p.id === id)
     if (!proj) return
 
     const sourceIds = proj.sources.map(s => s.id)
     function reapSources() {
-      if (sourceIds.length) {
+      if (reap && sourceIds.length) {
         Promise.allSettled(sourceIds.flatMap(sid => [deleteFile(sid), deleteContent(sid)]))
           .then(notifyStorageChanged)
       }
     }
 
-    // Non-active workspace — just remove it.
     if (id !== activeId) {
       setProjects(ps => ps.filter(p => p.id !== id))
       reapSources()
       return
     }
 
-    // Active workspace — delete it and switch to the adjacent workspace.
     const remaining = projects.filter(p => p.id !== id)
     const idx       = projects.findIndex(p => p.id === id)
 
@@ -543,7 +468,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setView1Page(rv1)
       setView2Page(rv2)
       setSplitView(restoreSplit(nextProj))
-      // Clear immediately when no page; navigate handled by ViewPane useEffect when page is set.
       if (typeof window !== 'undefined') {
         if (!rv1) (window as any).electronAPI?.view?.clear?.('1')
         if (!rv2) (window as any).electronAPI?.view?.clear?.('2')
@@ -552,6 +476,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     reapSources()
+  }
+
+  function removeWorkspace(targetId?: string) {
+    const id = targetId ?? activeId
+    if (!id) return
+    _removeWorkspaceCore(id, true)
+  }
+
+  function removeWorkspaceSoft(targetId: string) {
+    _removeWorkspaceCore(targetId, false)
+  }
+
+  function commitWorkspaceRemoval(proj: import('@/lib/types').Project) {
+    const sourceIds = proj.sources.map(s => s.id)
+    if (sourceIds.length) {
+      Promise.allSettled(sourceIds.flatMap(sid => [deleteFile(sid), deleteContent(sid)]))
+        .then(notifyStorageChanged)
+    }
+  }
+
+  function restoreWorkspace(proj: import('@/lib/types').Project, insertIdx: number) {
+    setProjects(ps => {
+      const next = [...ps]
+      next.splice(insertIdx, 0, proj)
+      return next
+    })
+    setActiveId(proj.id)
+    setSelectedId(proj.sel1 ?? null)
+    setSelectedId2(proj.sel2 ?? null)
+    setView1Page(proj.view1Page ?? null)
+    setView2Page(proj.view2Page ?? null)
+    setSplitView(restoreSplit(proj))
+    loadResearchTabs(proj.researchTabs ?? [], proj.id)
   }
 
   // ─── Project / source helpers ───────────────────────────────────────────
@@ -791,18 +748,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAnchorId(null)
   }
 
-  function createNote(targetProjId?: string) {
-    const projId = targetProjId ?? activeIdRef.current
-    if (!projId) { newWorkspace(); return }
-    const projNow = projectsRef.current.find(p => p.id === projId)
-    if (projNow && projNow.sources.length >= STACK_LIMIT) {
-      warn(`Document limit reached (${STACK_LIMIT}). Remove Documents to add more.`)
-      return
+  // Adds a source reference to another session — same ID, shared IDB data, stays in origin too.
+  function addSourceToSession(srcId: string, toProjectId: string): string | null {
+    let src: QueuedSource | undefined
+    for (const p of projectsRef.current) {
+      const found = p.sources.find(s => s.id === srcId)
+      if (found) { src = found; break }
     }
-    const note = newNote()
+    if (!src) return null
+    const toProj = projectsRef.current.find(p => p.id === toProjectId)
+    if (!toProj) return null
+    // Skip if already in destination
+    if (toProj.sources.some(s => s.id === srcId)) return toProj.name || 'Session'
+    const captured = src
     setProjects(ps => ps.map(p =>
-      p.id !== projId ? p : { ...p, sources: [...p.sources, note] }
+      p.id !== toProjectId ? p : { ...p, sources: [...p.sources, captured] }
     ))
+    return toProj.name || 'Session'
+  }
+
+  function addUrlToSession(projectId: string, url: string, title: string): string | null {
+    const toProj = projectsRef.current.find(p => p.id === projectId)
+    if (!toProj) return null
+    const src = newUrlSource(url, title)
+    setProjects(ps => ps.map(p =>
+      p.id !== projectId ? p : { ...p, sources: [...p.sources, src] }
+    ))
+    return toProj.name || 'Session'
   }
 
   async function addUrl(url: string, targetProjId?: string, label?: string) {
@@ -1001,7 +973,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     mounted, projects, activeId, selectedId, selectedId2, selectedIds, anchorId,
     contextMenu,
     activeProject, sources, allSources, selectedSource, selectedSource2,
-    stackIds, stackSources, stackLimit: STACK_LIMIT, atStackLimit, inStack,
+    stackIds, stackSources,
     view1Page, view2Page, splitView, setSplitView, pinPageToView, pinUrlToView, clearView, openDocInPane,
     user, isPro, limits,
     signIn: signInFn, signOut, refreshEntitlement: refreshEntitlementFn, openBilling,
@@ -1009,11 +981,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setContextMenu,
     setProjects, updateProject, patchSource, moveSource, moveSourceToProject, moveProject,
     uploadFiles, retrySource,
-    removeSource, removeSelected,
+    removeSource, removeSelected, addSourceToSession, addUrlToSession,
     restoreArchivedSource, permanentlyDeleteArchived,
-    createNote, addUrl,
+    addUrl,
     addToStack, removeFromStack, clearStack, reorderStack, openInPane,
-    switchWorkspace, newWorkspace, duplicateWorkspace, pinWorkspace, saveWorkspace, removeWorkspace,
+    switchWorkspace, newWorkspace, saveWorkspace, removeWorkspace, removeWorkspaceSoft, commitWorkspaceRemoval, restoreWorkspace,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

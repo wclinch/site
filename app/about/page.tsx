@@ -1,86 +1,80 @@
 import Nav from '@/components/Nav'
 import BackButton from '@/components/BackButton'
 
-const P: React.CSSProperties = { fontSize: '14px', color: '#999', lineHeight: 1.8, margin: 0 }
-const Label: React.CSSProperties = { fontSize: '10px', color: '#777', letterSpacing: '0.12em', textTransform: 'uppercase' as const }
-const Section: React.CSSProperties = { padding: '24px 0', borderBottom: '1px solid #232523', display: 'flex', flexDirection: 'column' as const, gap: '12px' }
+const P: React.CSSProperties = { fontSize: '14px', color: '#8C887F', lineHeight: 1.8, margin: 0 }
+const Label: React.CSSProperties = { fontSize: '10px', color: '#8C887F', letterSpacing: '0.12em', textTransform: 'uppercase' as const }
+const Section: React.CSSProperties = { padding: '24px 0', borderBottom: '1px solid #252725', display: 'flex', flexDirection: 'column' as const, gap: '12px' }
 
 export default function About() {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: '#080808' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: '#070807' }}>
       <Nav />
 
       <main style={{ flex: 1, maxWidth: '560px', width: '100%', margin: '0 auto', padding: '64px 24px', display: 'flex', flexDirection: 'column' }}>
 
-        <span style={{ fontSize: '10px', color: '#777', letterSpacing: '0.12em', textTransform: 'uppercase', paddingBottom: '16px', borderBottom: '1px solid #232523' }}>
+        <span style={{ fontSize: '10px', color: '#8C887F', letterSpacing: '0.12em', textTransform: 'uppercase', paddingBottom: '16px', borderBottom: '1px solid #252725' }}>
           About Site
         </span>
 
         <div style={Section}>
           <p style={P}>
-            Site holds the materials for a task in one session — documents, saved pages, and the live web — so you can pick up exactly where you stopped.
+            Site keeps your documents, saved pages, and the web together in a session — so you can leave and come back without rebuilding your setup.
           </p>
           <p style={P}>
-            A desktop app for macOS.
+            macOS, desktop app.
           </p>
         </div>
 
         <div style={Section}>
-          <span style={Label}>Why Site exists</span>
+          <span style={Label}>Why it exists</span>
           <p style={P}>
-            Focused work involves a cluster of things: a paper to read, a handful of tabs open for reference, pages saved along the way. Keeping that cluster together while you work is easy. Reassembling it the next day is not.
+            Focused work means juggling a document, open tabs, and pages saved along the way. Keeping that together while you work isn't the problem. Starting over the next day is.
           </p>
           <p style={P}>
-            Site holds it together for the duration of a task. Leave and come back — everything is where you left it.
+            Site holds it together for the life of a task. Leave and come back — everything is where you left it.
           </p>
         </div>
 
         <div style={Section}>
           <span style={Label}>Sessions</span>
           <p style={P}>
-            A session is a named context. It holds the documents you've added, the pages you've saved, the web tabs you had open, and what was pinned to each view.
+            A session holds the documents you've added, the pages you've saved, the web tabs you had open, and what was pinned to each view.
           </p>
           <p style={P}>
-            Sessions restore fully when you return. Switch between them the same way — each one comes back intact.
+            Sessions restore fully when you return. Switch between them freely — each one comes back intact.
           </p>
         </div>
 
         <div style={Section}>
           <span style={Label}>Who it's for</span>
           <p style={P}>
-            People whose work involves reading, referencing, and the web at the same time. Researchers, writers, analysts, students — anyone who returns to the same cluster of files and pages for a recurring task.
-          </p>
-          <p style={P}>
-            It works best when you have distinct tasks you return to, each with its own materials.
+            Anyone whose work involves reading, referencing, and the web at the same time — especially if you return to the same task repeatedly. Researchers, writers, analysts, students.
           </p>
         </div>
 
         <div style={Section}>
-          <span style={Label}>What Site is not</span>
+          <span style={Label}>What it's not</span>
           <p style={P}>
-            Not a note-taking app, a document editor, or a permanent filing system. Site holds materials open while you work — it doesn't organize them for you.
-          </p>
-          <p style={P}>
-            Not a replacement for your daily browser. The web pane is for browsing as part of a task, not for managing bookmarks or history across everything you do.
+            Not a note editor, a filing system, or a browser replacement. Site holds materials open while you work. It doesn't organize them.
           </p>
         </div>
 
         <div style={Section}>
           <span style={Label}>Storage</span>
           <p style={P}>
-            <span style={{ color: '#bbb' }}>Free: 150 MB</span> for documents.{' '}
-            <span style={{ color: '#bbb' }}>Pro: 5 GB.</span>{' '}
-            Saved pages store metadata only (title, URL, timestamp) and do not count toward storage.
+            <span style={{ color: '#8C887F' }}>Free: 150 MB.</span>{' '}
+            <span style={{ color: '#8C887F' }}>Pro: 5 GB.</span>{' '}
+            Saved pages store title, URL, and timestamp only — they don't count toward storage.
           </p>
           <p style={P}>
-            <span style={{ color: '#bbb' }}>Site → Reset Site Data…</span> in the desktop menu clears all local state. This cannot be undone.
+            <span style={{ color: '#8C887F' }}>Site → Reset Site Data…</span> in the menu clears all local data. This cannot be undone.
           </p>
         </div>
 
         <div style={Section}>
           <span style={Label}>Support</span>
           <p style={P}>
-            <a href="mailto:Official_Site_Support@protonmail.com?subject=Site%20support" style={{ color: '#aaa', textDecoration: 'underline', textDecorationColor: '#444', textUnderlineOffset: '3px' }}>
+            <a href="mailto:Official_Site_Support@protonmail.com?subject=Site%20support" style={{ color: '#8C887F', textDecoration: 'underline', textDecorationColor: '#5E5A54', textUnderlineOffset: '3px' }}>
               Official_Site_Support@protonmail.com
             </a>
           </p>

@@ -226,28 +226,32 @@ function labelFromUrl(url) {
 }
 
 function showActiveView(win, pid) {
+  if (modalOpen) return
   const panel = panels[pid]
   if (!panel.activeTabId) return
   const view = panel.tabViews.get(panel.activeTabId)
   if (!wcAlive(view)) return
   try { win.contentView.removeChildView(view) } catch {}
-  win.contentView.addChildView(view)
-  if (panel.lastBounds && !modalOpen) view.setBounds(panel.lastBounds)
+  try { win.contentView.addChildView(view) } catch {}
+  try { view.setVisible(true) } catch {}
+  if (panel.lastBounds) try { view.setBounds(panel.lastBounds) } catch {}
   try { view.webContents.focus() } catch {}
 }
 
 function hideAllViews() {
   for (const pid of Object.keys(panels)) {
     const panel = panels[pid]
-    if (!panel.activeTabId) continue
-    const view = panel.tabViews.get(panel.activeTabId)
-    if (wcAlive(view)) {
-      try { view.setBounds({ x: 0, y: 0, width: 0, height: 0 }) } catch {}
+    for (const [, view] of panel.tabViews) {
+      if (wcAlive(view)) {
+        try { view.setVisible(false) } catch {}
+        try { view.setBounds({ x: 0, y: 0, width: 0, height: 0 }) } catch {}
+      }
     }
   }
   for (const pid of Object.keys(viewPanes)) {
     const pane = viewPanes[pid]
     if (wcAlive(pane.view)) {
+      try { pane.view.setVisible(false) } catch {}
       try { pane.view.setBounds({ x: 0, y: 0, width: 0, height: 0 }) } catch {}
     }
   }
@@ -259,12 +263,14 @@ function restoreAllViews() {
     if (!panel.activeTabId || !panel.lastBounds) continue
     const view = panel.tabViews.get(panel.activeTabId)
     if (wcAlive(view)) {
+      try { view.setVisible(true) } catch {}
       try { view.setBounds(panel.lastBounds) } catch {}
     }
   }
   for (const pid of Object.keys(viewPanes)) {
     const pane = viewPanes[pid]
     if (pane.lastBounds && wcAlive(pane.view)) {
+      try { pane.view.setVisible(true) } catch {}
       try { pane.view.setBounds(pane.lastBounds) } catch {}
     }
   }
@@ -1040,6 +1046,14 @@ function createWindow() {
       const panel = panels['A']
       for (const [, view] of panel.tabViews) {
         try { view.setBounds({ x: 0, y: 0, width: 0, height: 0 }) } catch {}
+        try { mainWindow.contentView.removeChildView(view) } catch {}
+      }
+      for (const paneId of Object.keys(viewPanes)) {
+        const pane = viewPanes[paneId]
+        if (pane.view) {
+          try { pane.view.setBounds({ x: 0, y: 0, width: 0, height: 0 }) } catch {}
+          try { mainWindow.contentView.removeChildView(pane.view) } catch {}
+        }
       }
     }
   })

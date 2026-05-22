@@ -1,23 +1,54 @@
 'use client'
 import React, { useState, useRef, useEffect } from 'react'
 import { useApp } from '@/context/AppContext'
+import type { Project } from '@/lib/types'
+import NotificationsBtn, { notify } from './NotificationsPanel'
 
 export default function ProjectBar() {
   const {
     projects, activeId,
     switchWorkspace, newWorkspace, removeWorkspace,
+    removeWorkspaceSoft, addSourceToSession, addUrlToSession,
     updateProject, setProjects,
   } = useApp()
 
-  const [editingProjId, setEditingProjId] = useState<string | null>(null)
-  const [nameInput,     setNameInput]     = useState('')
-  const [pendingRmId,   setPendingRmId]   = useState<string | null>(null)
-  const [draggedId,     setDraggedId]     = useState<string | null>(null)
-  const [dragOverId,    setDragOverId]    = useState<string | null>(null)
+  const [editingProjId,  setEditingProjId]  = useState<string | null>(null)
+  const [nameInput,      setNameInput]      = useState('')
+  const [pendingRmId,    setPendingRmId]    = useState<string | null>(null)
+  const [draggedId,      setDraggedId]      = useState<string | null>(null)
+  const [dragOverId,     setDragOverId]     = useState<string | null>(null)
+  const [transferTarget, setTransferTarget] = useState<string | null>(null)
 
   const rmTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
   const tabStripRef   = useRef<HTMLDivElement>(null)
   const cancelEditRef = useRef(false)
+
+  function handleSessionDrop(e: React.DragEvent, toProjectId: string) {
+    e.preventDefault()
+    setTransferTarget(null)
+    if (toProjectId === activeId) return
+
+    const srcId = e.dataTransfer.getData('application/x-proof-source-id')
+    if (srcId) {
+      const name = addSourceToSession(srcId, toProjectId)
+      if (name) notify(`Added to ${name}`)
+      return
+    }
+
+    const webRaw = e.dataTransfer.getData('application/x-proof-web-url')
+    if (webRaw) {
+      try {
+        const { url, title } = JSON.parse(webRaw)
+        const name = addUrlToSession(toProjectId, url, title)
+        if (name) notify(`Added to ${name}`)
+      } catch {}
+    }
+  }
+
+  function isTransferDrag(e: React.DragEvent) {
+    return e.dataTransfer.types.includes('application/x-proof-source-id') ||
+           e.dataTransfer.types.includes('application/x-proof-web-url')
+  }
 
   // Scroll active tab into view on workspace switch
   useEffect(() => {
@@ -93,15 +124,20 @@ export default function ProjectBar() {
     } else {
       if (rmTimerRef.current) { clearTimeout(rmTimerRef.current); rmTimerRef.current = null }
       setPendingRmId(null)
-      removeWorkspace(projId)
+      const proj = projects.find(p => p.id === projId)
+      const insertIdx = projects.findIndex(p => p.id === projId)
+      if (!proj) return
+      removeWorkspaceSoft(projId)
+      window.dispatchEvent(new CustomEvent('proof:session-removed', { detail: { proj, insertIdx } }))
     }
   }
+
 
   return (
     <div style={{
       display: 'flex', alignItems: 'center',
       height: '52px', flexShrink: 0,
-      borderBottom: '1px solid #1e1e1e',
+      borderBottom: '1px solid #252725',
       WebkitAppRegion: 'drag',
       overflow: 'hidden',
     } as React.CSSProperties}>
@@ -146,10 +182,10 @@ export default function ProjectBar() {
                   placeholder="Session name"
                   style={{
                     height: '26px', padding: '0 10px', flexShrink: 0,
-                    background: '#171817', border: '1px solid #232523',
-                    borderRadius: '4px', color: '#8A8780',
+                    background: '#111211', border: '1px solid #252725',
+                    borderRadius: '4px', color: '#8C887F',
                     fontSize: '11px', letterSpacing: '0.03em',
-                    fontFamily: 'inherit', outline: 'none', minWidth: '140px',
+                    fontFamily: 'inherit', outline: 'none', width: '120px',
                   }}
                 />
               )
@@ -163,13 +199,22 @@ export default function ProjectBar() {
                 rmArmed={rmArmed}
                 canRemove={projects.length > 1}
                 dragOver={dragOverId === p.id && draggedId !== p.id}
+                transferTarget={transferTarget === p.id}
                 onClick={() => { if (!isActive) switchWorkspace(p.id) }}
                 onDoubleClick={() => startEditing(p.id, p.name || '')}
                 onRemoveClick={e => handleRemoveClick(e, p.id)}
                 onDragStart={() => setDraggedId(p.id)}
-                onDragOver={() => setDragOverId(p.id)}
-                onDrop={() => { if (draggedId) reorderProjects(draggedId, p.id) }}
-                onDragEnd={() => { setDraggedId(null); setDragOverId(null) }}
+                onDragOver={e => {
+                  if (isTransferDrag(e) && !isActive) { e.preventDefault(); setTransferTarget(p.id) }
+                  else setDragOverId(p.id)
+                }}
+                onDragLeave={() => setTransferTarget(null)}
+                onDrop={e => {
+                  if (isTransferDrag(e)) { handleSessionDrop(e, p.id) }
+                  else if (draggedId) { reorderProjects(draggedId, p.id) }
+                  setDragOverId(null)
+                }}
+                onDragEnd={() => { setDraggedId(null); setDragOverId(null); setTransferTarget(null) }}
               />
             )
           })}
@@ -181,12 +226,12 @@ export default function ProjectBar() {
               width: '24px', height: '24px', flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               background: 'none', border: 'none',
-              color: '#8A8780', cursor: 'pointer', padding: 0, outline: 'none',
+              color: '#8C887F', cursor: 'pointer', padding: 0, outline: 'none',
               transition: 'color 0.15s', marginLeft: '2px',
               WebkitAppRegion: 'no-drag',
             } as React.CSSProperties}
-            onMouseEnter={e => { e.currentTarget.style.color = '#8A8780' }}
-            onMouseLeave={e => { e.currentTarget.style.color = '#8A8780' }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#8C887F' }}
+            onMouseLeave={e => { e.currentTarget.style.color = '#8C887F' }}
           >
             <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
               <line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" />
@@ -195,13 +240,15 @@ export default function ProjectBar() {
         </div>
       </div>
 
-      {/* ── Right: account ── */}
+      {/* ── Right: notifications + account ── */}
       <div style={{
         display: 'flex', alignItems: 'center',
         padding: '0 14px 0 8px', gap: '0', flexShrink: 0,
         WebkitAppRegion: 'no-drag',
       } as React.CSSProperties}>
-        <div style={{ width: '1px', height: '14px', background: '#232523', marginRight: '2px', flexShrink: 0 }} />
+        <div style={{ width: '1px', height: '14px', background: '#252725', marginRight: '2px', flexShrink: 0 }} />
+        <NotificationsBtn />
+        <span style={{ color: '#252725', fontSize: '14px', lineHeight: 1, margin: '0 2px', flexShrink: 0, userSelect: 'none' }}>·</span>
         <RightBtn onClick={() => window.dispatchEvent(new Event('proof:show-account'))}>
           Account
         </RightBtn>
@@ -212,24 +259,26 @@ export default function ProjectBar() {
 
 // ─── Workspace tab ────────────────────────────────────────────────────────────
 
-function WorkspaceTab({ name, active, rmArmed, canRemove, dragOver, onClick, onDoubleClick, onRemoveClick, onDragStart, onDragOver, onDrop, onDragEnd }: {
+function WorkspaceTab({ name, active, rmArmed, canRemove, dragOver, transferTarget, onClick, onDoubleClick, onRemoveClick, onDragStart, onDragOver, onDragLeave, onDrop, onDragEnd }: {
   name: string
   active: boolean
   rmArmed: boolean
   canRemove: boolean
   dragOver: boolean
+  transferTarget?: boolean
   onClick: () => void
   onDoubleClick: () => void
   onRemoveClick: (e: React.MouseEvent) => void
   onDragStart: () => void
-  onDragOver: () => void
-  onDrop: () => void
+  onDragOver: (e: React.DragEvent) => void
+  onDragLeave?: () => void
+  onDrop: (e: React.DragEvent) => void
   onDragEnd: () => void
 }) {
   const [hovered,  setHovered]  = useState(false)
   const [xHovered, setXHovered] = useState(false)
 
-  const xColor = rmArmed ? (xHovered ? '#d27b6a' : '#c46b5a') : xHovered ? '#8A8780' : '#8A8780'
+  const xColor = rmArmed ? '#E6E2D8' : xHovered ? '#E6E2D8' : '#8C887F'
 
   return (
     <div
@@ -240,16 +289,17 @@ function WorkspaceTab({ name, active, rmArmed, canRemove, dragOver, onClick, onD
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; onDragStart() }}
-      onDragOver={e => { e.preventDefault(); onDragOver() }}
-      onDrop={e => { e.preventDefault(); onDrop() }}
+      onDragOver={e => { e.preventDefault(); onDragOver(e) }}
+      onDragLeave={onDragLeave}
+      onDrop={e => { e.preventDefault(); onDrop(e) }}
       onDragEnd={onDragEnd}
       style={{
         display: 'flex', alignItems: 'center',
         height: '30px',
         padding: '0 6px 0 10px',
         flexShrink: 0, gap: '4px',
-        background: rmArmed ? 'rgba(196,107,90,0.05)' : active ? '#171817' : hovered ? '#171817' : 'transparent',
-        border: `1px solid ${rmArmed ? 'rgba(196,107,90,0.18)' : dragOver ? '#8A8780' : active ? '#9b9892' : 'transparent'}`,
+        background: active ? '#111211' : hovered ? '#111211' : 'transparent',
+        border: `1px solid ${transferTarget ? '#8C887F' : dragOver ? '#8C887F' : active ? '#353735' : hovered ? '#353735' : '#252725'}`,
         borderRadius: '4px',
         cursor: 'grab',
         userSelect: 'none',
@@ -260,10 +310,12 @@ function WorkspaceTab({ name, active, rmArmed, canRemove, dragOver, onClick, onD
     >
       <span style={{
         fontSize: '11px', letterSpacing: '0.03em',
-        color: active ? '#E6E2D8' : hovered ? '#E6E2D8' : '#8A8780',
+        color: active ? '#E6E2D8' : hovered ? '#E6E2D8' : '#8C887F',
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         flex: 1, minWidth: 0,
-        transition: 'color 0.1s',
+        opacity: rmArmed ? 0.45 : 1,
+        textDecoration: rmArmed ? 'line-through' : 'none',
+        transition: 'color 0.1s, opacity 0.15s',
       }}>
         {name}
       </span>
@@ -305,7 +357,7 @@ function RightBtn({ children, onClick }: { children: React.ReactNode; onClick: (
       style={{
         height: '28px', padding: '0 7px',
         background: 'none', border: 'none', borderRadius: '3px',
-        color: hov ? '#E6E2D8' : '#8A8780',
+        color: hov ? '#E6E2D8' : '#8C887F',
         fontSize: '11px', letterSpacing: '0.04em',
         cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
         transition: 'color 0.12s',

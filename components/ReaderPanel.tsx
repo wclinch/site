@@ -147,8 +147,6 @@ function ViewPane({
   onFocusToggle?: () => void
 }) {
   const [dragOver,     setDragOver]     = useState(false)
-  const [dropFeedback, setDropFeedback] = useState<string | null>(null)
-  const feedbackTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
   const viewportRef    = useRef<HTMLDivElement>(null)
   const navigatedUrl   = useRef<string | null>(null)
 
@@ -202,7 +200,7 @@ function ViewPane({
     <div
       style={{
         flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
-        border: `1px solid ${dragOver ? '#333' : isFocused ? '#333' : '#232523'}`, borderRadius: '4px',
+        border: `1px solid ${dragOver ? '#252725' : isFocused ? '#252725' : '#252725'}`, borderRadius: '4px',
         overflow: 'hidden',
         background: dragOver ? 'rgba(255,255,255,0.015)' : 'transparent',
         transition: 'border-color 0.15s ease, background 0.15s',
@@ -225,29 +223,17 @@ function ViewPane({
       onDrop={e => {
         e.preventDefault(); setDragOver(false)
         const srcId = e.dataTransfer.getData('application/x-proof-source-id')
-        if (srcId) {
-          onSelectId(srcId)
-          setDropFeedback(`Opened in ${label}`)
-          if (feedbackTimer.current) clearTimeout(feedbackTimer.current)
-          feedbackTimer.current = setTimeout(() => setDropFeedback(null), 1600)
-          return
-        }
+        if (srcId) { onSelectId(srcId); return }
         const webRaw = e.dataTransfer.getData('application/x-proof-web-url')
         if (webRaw && onDropUrl) {
-          try {
-            const { url, title } = JSON.parse(webRaw)
-            onDropUrl(url, title)
-            setDropFeedback(`Opened in ${label}`)
-            if (feedbackTimer.current) clearTimeout(feedbackTimer.current)
-            feedbackTimer.current = setTimeout(() => setDropFeedback(null), 1600)
-          } catch {}
+          try { const { url, title } = JSON.parse(webRaw); onDropUrl(url, title) } catch {}
           return
         }
         if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files)
       }}
     >
       <PaneHeader
-        label={dropFeedback ?? label}
+        label={label}
         onClose={showClose ? onClose : undefined}
         onToggleSplit={onToggleSplit}
         splitActive={splitActive}
@@ -260,7 +246,7 @@ function ViewPane({
       {viewPage
         ? (
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '0 1px 1px' }}>
-            <div ref={viewportRef} style={{ flex: 1, minHeight: 0, background: '#080909', WebkitAppRegion: 'no-drag' } as React.CSSProperties} />
+            <div ref={viewportRef} style={{ flex: 1, minHeight: 0, background: '#070807', WebkitAppRegion: 'no-drag' } as React.CSSProperties} />
           </div>
         )
         : source
@@ -283,7 +269,7 @@ function SourceContent({
   if (source.fileType === 'pdf')   return <PdfViewer   source={source} />
   if (source.fileType === 'image') return <ImageViewer source={source} />
   return (
-    <div style={{ flex: 1, background: '#080909', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ flex: 1, background: '#070807', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <Empty label="Unsupported file type" />
     </div>
   )
@@ -307,7 +293,7 @@ function EmptySource({ viewId, uploadFiles }: { viewId: 1 | 2; uploadFiles: (fil
     <div
       style={{
         flex: 1,
-        background: fileDragOver ? '#171817' : '#080909',
+        background: fileDragOver ? '#111211' : '#070807',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
         padding: '32px', gap: '8px',
@@ -325,15 +311,15 @@ function EmptySource({ viewId, uploadFiles }: { viewId: 1 | 2; uploadFiles: (fil
       }}
     >
       <span style={{
-        fontSize: '12px', color: fileDragOver ? '#8A8780' : '#8A8780',
+        fontSize: '12px', color: fileDragOver ? '#8C887F' : '#8C887F',
         letterSpacing: '0.03em', textAlign: 'center', transition: 'color 0.15s',
         userSelect: 'none',
       }}>
-        {fileDragOver ? 'Drop to open.' : viewId === 2 ? 'Nothing open here.' : 'Nothing open here.'}
+        {fileDragOver ? 'Drop to open.' : 'Nothing open.'}
       </span>
       {!fileDragOver && (
-        <span style={{ fontSize: '11px', color: '#9b9892', letterSpacing: '0.02em', textAlign: 'center', userSelect: 'none' }}>
-          {viewId === 2 ? 'Select a source, or drop a file.' : 'Select a source, or drop a file.'}
+        <span style={{ fontSize: '11px', color: '#8C887F', letterSpacing: '0.02em', textAlign: 'center', userSelect: 'none' }}>
+          {viewId === 2 ? 'Open a second source from the shelf.' : 'Select a source from the shelf, or drop a file.'}
         </span>
       )}
 
@@ -365,11 +351,12 @@ function PaneHeader({ label, onClose, onToggleSplit, splitActive, isFocused, isE
       height: '32px', flexShrink: 0,
       display: 'flex', alignItems: 'center',
       padding: '0 6px 0 6px',
-      borderBottom: '1px solid #232523',
+      borderBottom: '1px solid #252725',
       gap: '2px',
       WebkitAppRegion: 'no-drag',
     } as React.CSSProperties}>
       {showSidebarToggle && <SidebarToggleBtn />}
+      {/* Label chip — draggable when a page is pinned */}
       <span
         draggable={!!dragUrl}
         onDragStart={dragUrl ? e => {
@@ -377,9 +364,22 @@ function PaneHeader({ label, onClose, onToggleSplit, splitActive, isFocused, isE
           e.dataTransfer.effectAllowed = 'copy'
         } : undefined}
         title={dragUrl ? `Drag to Web to open in a new tab` : undefined}
-        style={{ flex: 1, fontSize: '10px', color: '#E6E2D8', letterSpacing: '0.04em', userSelect: 'none', cursor: dragUrl ? 'grab' : 'default', paddingLeft: showSidebarToggle ? '4px' : '10px' }}>
+        style={{
+          display: 'inline-flex', alignItems: 'center',
+          height: '22px', padding: '0 8px',
+          borderRadius: '4px',
+          background: '#111211',
+          border: '1px solid #252725',
+          fontSize: '10px', color: '#E6E2D8', letterSpacing: '0.04em',
+          userSelect: 'none', cursor: dragUrl ? 'grab' : 'default',
+          marginLeft: showSidebarToggle ? '2px' : '4px',
+          maxWidth: '160px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+          flexShrink: 0,
+        }}>
         {label}
       </span>
+      {/* Spacer so buttons stay right-aligned */}
+      <div style={{ flex: 1 }} />
       {onToggleSplit && <SplitBtn active={!!splitActive} onClick={onToggleSplit} />}
       {onFocusToggle && <FocusBtn active={!!isExpanded} onClick={onFocusToggle} />}
       {onClose && <IconBtn onClick={onClose} title="Close"><CloseIcon /></IconBtn>}
@@ -399,7 +399,7 @@ function SidebarToggleBtn() {
         width: '26px', height: '26px', flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'none', border: 'none', borderRadius: '3px',
-        color: hov ? '#8A8780' : '#8A8780',
+        color: hov ? '#8C887F' : '#8C887F',
         cursor: 'pointer', padding: 0, outline: 'none', lineHeight: 0,
         transition: 'color 0.12s',
       }}
@@ -435,7 +435,7 @@ function NoteEditor({
   }
 
   return (
-    <div style={{ flex: 1, overflow: 'auto', background: '#080909', display: 'flex', flexDirection: 'column', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+    <div style={{ flex: 1, overflow: 'auto', background: '#070807', display: 'flex', flexDirection: 'column', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
       <textarea
         value={text}
         onChange={e => handleChange(e.target.value)}
@@ -444,7 +444,7 @@ function NoteEditor({
           flex: 1, width: '100%', minHeight: '100%',
           background: 'transparent', border: 'none', outline: 'none',
           resize: 'none', padding: '20px 24px',
-          fontSize: '13px', lineHeight: 1.8, color: '#8A8780',
+          fontSize: '13px', lineHeight: 1.8, color: '#8C887F',
           fontFamily: 'Georgia, "Times New Roman", serif',
           boxSizing: 'border-box',
         }}
@@ -526,9 +526,9 @@ function ImageViewer({ source }: { source: QueuedSource }) {
   }
 
   return (
-    <div style={{ flex: 1, background: '#080909', display: 'flex', flexDirection: 'column', overflow: 'hidden', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-      {source.status !== 'done' && <Msg>Loading…</Msg>}
-      {source.status === 'done' && !imgUrl && <Msg>Could not load image.</Msg>}
+    <div style={{ flex: 1, background: '#070807', display: 'flex', flexDirection: 'column', overflow: 'hidden', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+      {source.status !== 'done' && <Msg>Opening…</Msg>}
+      {source.status === 'done' && !imgUrl && <Msg>Image failed to load.</Msg>}
       {source.status === 'done' && imgUrl && (
         <div
           ref={containerRef}
@@ -604,19 +604,19 @@ function PdfViewer({ source }: { source: QueuedSource }) {
   }, [])
 
   return (
-    <div ref={containerRef} style={{ flex: 1, overflow: 'auto', background: '#080909', display: 'flex', flexDirection: 'column', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-      {source.status === 'queued'           && <Msg>Queued…</Msg>}
-      {source.status === 'extracting'       && <Msg>Reading…</Msg>}
-      {source.status === 'done' && !fileUrl && <Msg>Loading…</Msg>}
-      {source.status === 'error'            && <Msg>{source.error ?? 'Could not load document.'}</Msg>}
-      {source.status === 'done' && loadError && <Msg>Could not parse this PDF.</Msg>}
+    <div ref={containerRef} style={{ flex: 1, overflow: 'auto', background: '#070807', display: 'flex', flexDirection: 'column', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+      {source.status === 'queued'           && <Msg>Waiting…</Msg>}
+      {source.status === 'extracting'       && <Msg>Opening…</Msg>}
+      {source.status === 'done' && !fileUrl && <Msg>Opening…</Msg>}
+      {source.status === 'error'            && <Msg>{source.error ?? 'Failed to open.'}</Msg>}
+      {source.status === 'done' && loadError && <Msg>Could not read this file.</Msg>}
       {source.status === 'done' && fileUrl && !loadError && (
         <div>
           <Document
             file={fileUrl}
             onLoadSuccess={({ numPages }) => { setNumPages(numPages); setLoadError(false) }}
             onLoadError={() => setLoadError(true)}
-            loading={<Msg>Loading...</Msg>}
+            loading={<Msg>Opening…</Msg>}
             error={null}
           >
             {Array.from({ length: numPages }, (_, i) => (
@@ -652,7 +652,7 @@ function PaneIconBtn({ title, active, faint, onClick, children }: {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'none', border: 'none', cursor: 'pointer',
         padding: 0, lineHeight: 0, flexShrink: 0,
-        color: active ? '#8A8780' : hov ? '#8A8780' : '#8A8780',
+        color: active ? '#8C887F' : hov ? '#8C887F' : '#8C887F',
         borderRadius: '3px',
         transition: 'color 0.12s',
       }}
@@ -738,7 +738,7 @@ function Msg({ children }: { children: React.ReactNode }) {
     <div style={{
       flex: 1, minHeight: '40px',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: '11px', color: '#8A8780', letterSpacing: '0.02em',
+      fontSize: '11px', color: '#8C887F', letterSpacing: '0.02em',
     }}>
       {children}
     </div>
@@ -752,7 +752,7 @@ function Empty({ label }: { label: string }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: '32px 24px',
     }}>
-      <span style={{ fontSize: '13px', color: '#8A8780', letterSpacing: '0.02em' }}>{label}</span>
+      <span style={{ fontSize: '13px', color: '#8C887F', letterSpacing: '0.02em' }}>{label}</span>
     </div>
   )
 }

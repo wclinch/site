@@ -1,18 +1,18 @@
 import Nav from '@/components/Nav'
 import BackButton from '@/components/BackButton'
 
-const P: React.CSSProperties = { fontSize: '14px', color: '#999', lineHeight: 1.8, margin: 0 }
-const Label: React.CSSProperties = { fontSize: '10px', color: '#777', letterSpacing: '0.12em', textTransform: 'uppercase' as const }
-const Section: React.CSSProperties = { padding: '24px 0', borderBottom: '1px solid #232523', display: 'flex', flexDirection: 'column' as const, gap: '12px' }
+const P: React.CSSProperties = { fontSize: '14px', color: '#8C887F', lineHeight: 1.8, margin: 0 }
+const Label: React.CSSProperties = { fontSize: '10px', color: '#8C887F', letterSpacing: '0.12em', textTransform: 'uppercase' as const }
+const Section: React.CSSProperties = { padding: '24px 0', borderBottom: '1px solid #252725', display: 'flex', flexDirection: 'column' as const, gap: '12px' }
 
 export default function Privacy() {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: '#080808' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: '#070807' }}>
       <Nav />
 
       <main style={{ flex: 1, maxWidth: '560px', width: '100%', margin: '0 auto', padding: '64px 24px', display: 'flex', flexDirection: 'column' }}>
 
-        <span style={{ fontSize: '10px', color: '#777', letterSpacing: '0.12em', textTransform: 'uppercase', paddingBottom: '16px', borderBottom: '1px solid #232523' }}>
+        <span style={{ fontSize: '10px', color: '#8C887F', letterSpacing: '0.12em', textTransform: 'uppercase', paddingBottom: '16px', borderBottom: '1px solid #252725' }}>
           Privacy
         </span>
 
@@ -64,7 +64,7 @@ export default function Privacy() {
         <div style={Section}>
           <span style={Label}>Your data and deletion</span>
           <p style={P}>
-            Documents and saved pages can be removed individually from within the app. To remove all local data at once, use <span style={{ color: '#bbb' }}>Site → Reset Site Data…</span> in the desktop menu. This clears all local files and state and cannot be undone.
+            Documents and saved pages can be removed individually from within the app. To remove all local data at once, use <span style={{ color: '#8C887F' }}>Site → Reset Site Data…</span> in the desktop menu. This clears all local files and state and cannot be undone.
           </p>
           <p style={P}>
             To close your account or request deletion of any account-level data, contact us at the address below.
@@ -81,7 +81,7 @@ export default function Privacy() {
         <div style={Section}>
           <span style={Label}>Contact</span>
           <p style={P}>
-            <a href="mailto:Official_Site_Support@protonmail.com?subject=Site%20privacy" style={{ color: '#aaa', textDecoration: 'underline', textDecorationColor: '#444', textUnderlineOffset: '3px' }}>
+            <a href="mailto:Official_Site_Support@protonmail.com?subject=Site%20privacy" style={{ color: '#8C887F', textDecoration: 'underline', textDecorationColor: '#5E5A54', textUnderlineOffset: '3px' }}>
               Official_Site_Support@protonmail.com
             </a>
           </p>

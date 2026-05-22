@@ -1,23 +1,84 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from '@/context/AppContext'
-import type { QueuedSource } from '@/lib/types'
+import type { QueuedSource, Project } from '@/lib/types'
+import { notify } from './NotificationsPanel'
 
 // ─── SourceStack ──────────────────────────────────────────────────────────────
 
 type Filter = 'all' | 'docs' | 'pages'
 
+type UndoEntry =
+  | { kind: 'source'; srcId: string; projectId: string; timerId: ReturnType<typeof setTimeout> }
+  | { kind: 'session'; proj: Project; insertIdx: number; timerId: ReturnType<typeof setTimeout> }
+
 export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
   const {
     stackSources, selectedId, selectedId2, patchSource, uploadFiles,
     openDocInPane, pinPageToView, view1Page, view2Page, removeSource,
-    setSelectedId, setSelectedId2, clearView,
+    restoreArchivedSource, commitWorkspaceRemoval, restoreWorkspace, activeId,
+    setSelectedId, setSelectedId2, clearView, setProjects,
   } = useApp()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [filter, setFilter] = useState<Filter>('all')
+  const [undo, setUndo] = useState<UndoEntry | null>(null)
+  const [dragSrcId,    setDragSrcId]    = useState<string | null>(null)
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null)
+
+  function handleSourceReorder(fromId: string, toId: string) {
+    if (fromId === toId || !activeId) return
+    setProjects(ps => ps.map(p => {
+      if (p.id !== activeId) return p
+      const sources = [...p.sources]
+      const from = sources.findIndex(s => s.id === fromId)
+      const to   = sources.findIndex(s => s.id === toId)
+      if (from === -1 || to === -1) return p
+      sources.splice(to, 0, sources.splice(from, 1)[0])
+      return { ...p, sources }
+    }))
+  }
 
   const [renameId,    setRenameId]    = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+
+  function setUndoEntry(entry: UndoEntry) {
+    setUndo(prev => { if (prev) clearTimeout(prev.timerId); return entry })
+  }
+
+  function handleRemove(src: QueuedSource) {
+    removeSource(src.id)
+    const label = src.label || src.raw || 'Source'
+    const timerId = setTimeout(() => setUndo(null), 4000)
+    const entry: UndoEntry = { kind: 'source', srcId: src.id, projectId: activeId ?? '', timerId }
+    setUndoEntry(entry)
+    notify(`Removed "${label}"`, () => {
+      clearTimeout(timerId); restoreArchivedSource(entry.srcId, entry.projectId); setUndo(null)
+    })
+  }
+
+  function handleUndo() {
+    if (!undo) return
+    clearTimeout(undo.timerId)
+    if (undo.kind === 'source') restoreArchivedSource(undo.srcId, undo.projectId)
+    if (undo.kind === 'session') restoreWorkspace(undo.proj, undo.insertIdx)
+    setUndo(null)
+  }
+
+  useEffect(() => {
+    function onSessionRemoved(e: Event) {
+      const { proj, insertIdx } = (e as CustomEvent).detail
+      const timerId = setTimeout(() => { setUndo(null); commitWorkspaceRemoval(proj) }, 4000)
+      const entry: UndoEntry = { kind: 'session', proj, insertIdx, timerId }
+      setUndoEntry(entry)
+      notify(`Removed session "${proj.name || 'Session'}"`, () => {
+        clearTimeout(timerId); restoreWorkspace(proj, insertIdx); setUndo(null)
+      })
+    }
+    window.addEventListener('proof:session-removed', onSessionRemoved)
+    return () => window.removeEventListener('proof:session-removed', onSessionRemoved)
+  }, [])
+
+  useEffect(() => () => { if (undo) clearTimeout(undo.timerId) }, [])
   function commitRename() {
     if (!renameId) return
     const trimmed = renameValue.trim()
@@ -48,14 +109,14 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
   return (
     <div style={{
       flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden',
-      border: '1px solid #232523', borderRadius: '4px', background: '#080909',
+      border: '1px solid #252725', borderRadius: '4px', background: '#070807', position: 'relative',
     }}>
       {/* ── Header: filter tabs + add button ── */}
       <div style={{
         height: '44px', flexShrink: 0,
         display: 'flex', alignItems: 'center',
         padding: '0 8px 0 10px', gap: '0',
-        background: '#080909', borderBottom: '1px solid #232523',
+        background: '#070807', borderBottom: '1px solid #252725',
         userSelect: 'none',
       }}>
         {/* Filter tabs */}
@@ -64,15 +125,15 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
             <button key={f} onClick={() => setFilter(f)}
               style={{
                 height: '26px', padding: '0 10px',
-                background: filter === f ? '#171817' : 'none',
-                border: `1px solid ${filter === f ? '#232523' : 'transparent'}`,
+                background: filter === f ? '#111211' : 'none',
+                border: `1px solid ${filter === f ? '#252725' : 'transparent'}`,
                 borderRadius: '4px', cursor: 'pointer', outline: 'none',
                 fontSize: '11px', letterSpacing: '0.03em',
-                color: filter === f ? '#E6E2D8' : '#8A8780',
+                color: filter === f ? '#E6E2D8' : '#8C887F',
                 fontFamily: 'inherit', transition: 'color 0.1s, background 0.1s',
               }}
               onMouseEnter={e => { if (filter !== f) e.currentTarget.style.color = '#E6E2D8' }}
-              onMouseLeave={e => { if (filter !== f) e.currentTarget.style.color = '#8A8780' }}
+              onMouseLeave={e => { if (filter !== f) e.currentTarget.style.color = '#8C887F' }}
             >
               {f === 'all' ? 'All' : f === 'docs' ? 'Documents' : 'Pages'}
             </button>
@@ -82,9 +143,9 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
         {(filter === 'all' || filter === 'docs') && (
           <>
             <button onClick={() => fileInputRef.current?.click()} title="Add Document"
-              style={{ background: 'none', border: 'none', padding: '4px 2px', cursor: 'pointer', color: '#8A8780', lineHeight: 0, display: 'flex', alignItems: 'center' }}
-              onMouseEnter={e => { e.currentTarget.style.color = '#8A8780' }}
-              onMouseLeave={e => { e.currentTarget.style.color = '#8A8780' }}>
+              style={{ background: 'none', border: 'none', padding: '4px 2px', cursor: 'pointer', color: '#8C887F', lineHeight: 0, display: 'flex', alignItems: 'center' }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#8C887F' }}
+              onMouseLeave={e => { e.currentTarget.style.color = '#8C887F' }}>
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
                 <line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" />
               </svg>
@@ -99,15 +160,20 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
       {/* ── List ── */}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '2px 0 4px', display: 'flex', flexDirection: 'column' }}>
         {isEmpty ? (
-          <EmptyRow text={filter === 'docs' ? 'No documents in this session.' : filter === 'pages' ? 'No saved pages.' : 'No sources yet.'} />
+          <EmptyRow text={filter === 'docs' ? 'No documents.' : filter === 'pages' ? 'No saved pages.' : 'Nothing here yet.'} />
         ) : (
           <>
             {showDocs && fileSources.map(src => (
               <StackRow key={src.id} src={src} isActive={src.id === selectedId || src.id === selectedId2}
                 {...sharedRename} renaming={renameId === src.id}
+                dropBefore={dropTargetId === src.id && dragSrcId !== src.id}
                 onClick={() => {}}
                 onRename={() => { setRenameId(src.id); setRenameValue(src.label || src.raw || '') }}
-                onRemove={() => removeSource(src.id)}
+                onRemove={() => handleRemove(src)}
+                onDragStart={() => setDragSrcId(src.id)}
+                onDragOver={() => setDropTargetId(src.id)}
+                onDragEnd={() => { setDragSrcId(null); setDropTargetId(null) }}
+                onDrop={() => { if (dragSrcId) handleSourceReorder(dragSrcId, src.id); setDragSrcId(null); setDropTargetId(null) }}
                 paneButtons={{
                   active1: selectedId  === src.id,
                   active2: selectedId2 === src.id,
@@ -118,14 +184,19 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
             ))}
             {/* Divider between docs and pages in "All" view */}
             {filter === 'all' && fileSources.length > 0 && siteSources.length > 0 && (
-              <div style={{ height: '1px', background: '#171817', margin: '4px 0', flexShrink: 0 }} />
+              <div style={{ height: '1px', background: '#111211', margin: '4px 0', flexShrink: 0 }} />
             )}
             {showPages && siteSources.map(src => (
               <StackRow key={src.id} src={src} isActive={view1Page?.srcId === src.id || view2Page?.srcId === src.id}
                 {...sharedRename} renaming={renameId === src.id}
+                dropBefore={dropTargetId === src.id && dragSrcId !== src.id}
                 onClick={() => src.raw && window.dispatchEvent(new CustomEvent('proof:browser-navigate', { detail: src.raw }))}
                 onRename={() => { setRenameId(src.id); setRenameValue(src.label || src.raw || '') }}
-                onRemove={() => removeSource(src.id)}
+                onRemove={() => handleRemove(src)}
+                onDragStart={() => setDragSrcId(src.id)}
+                onDragOver={() => setDropTargetId(src.id)}
+                onDragEnd={() => { setDragSrcId(null); setDropTargetId(null) }}
+                onDrop={() => { if (dragSrcId) handleSourceReorder(dragSrcId, src.id); setDragSrcId(null); setDropTargetId(null) }}
                 pinButtons={{
                   active1: view1Page?.srcId === src.id,
                   active2: view2Page?.srcId === src.id,
@@ -137,6 +208,32 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
           </>
         )}
       </div>
+
+      {/* ── Undo toast ── */}
+      {undo && (
+        <div style={{
+          position: 'absolute', bottom: '10px', left: '8px', right: '8px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: '#111211', border: '1px solid #252725', borderRadius: '4px',
+          padding: '8px 10px', gap: '8px', zIndex: 10,
+        }}>
+          <span style={{ fontSize: '11px', color: '#8C887F', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+            Removed
+          </span>
+          <button
+            onClick={handleUndo}
+            style={{
+              flexShrink: 0, background: 'none', border: 'none', padding: 0,
+              fontSize: '11px', color: '#E6E2D8', cursor: 'pointer',
+              fontFamily: 'inherit', letterSpacing: '0.02em', transition: 'color 0.1s',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#E6E2D8')}
+          >
+            Undo
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -162,7 +259,7 @@ function EmptyRow({ text }: { text: string }) {
   return (
     <div style={{
       flex: 1, background: 'transparent',
-      padding: '12px 14px', fontSize: '11px', color: '#8A8780',
+      padding: '12px 14px', fontSize: '11px', color: '#8C887F',
       letterSpacing: '0.02em', lineHeight: 1.55, userSelect: 'none',
     }}>
       {text}
@@ -173,12 +270,13 @@ function EmptyRow({ text }: { text: string }) {
 // ─── Source row ───────────────────────────────────────────────────────────────
 
 function StackRow({
-  src, isActive,
+  src, isActive, dropBefore,
   renaming, renameValue, onRenameChange, onRenameCommit, onRenameCancel,
-  onClick, onRename, onRemove, paneButtons, pinButtons,
+  onClick, onRename, onRemove, onDragStart, onDragOver, onDragEnd, onDrop, paneButtons, pinButtons,
 }: {
   src: QueuedSource
   isActive: boolean
+  dropBefore?: boolean
   renaming: boolean
   renameValue: string
   onRenameChange: (v: string) => void
@@ -187,6 +285,10 @@ function StackRow({
   onClick: () => void
   onRename: () => void
   onRemove: () => void
+  onDragStart?: () => void
+  onDragOver?: () => void
+  onDragEnd?: () => void
+  onDrop?: () => void
   paneButtons?: { active1: boolean; active2: boolean; onSet1: (e: React.MouseEvent) => void; onSet2: (e: React.MouseEvent) => void }
   pinButtons?: { active1?: boolean; active2?: boolean; onPin1: () => void; onPin2: () => void }
 }) {
@@ -210,19 +312,36 @@ function StackRow({
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => { setHov(false); setArmed(false) }}
       draggable={!renaming}
-      onDragStart={e => { e.dataTransfer.setData('application/x-proof-source-id', src.id); e.dataTransfer.effectAllowed = 'move' }}
+      onDragStart={e => {
+        e.dataTransfer.setData('application/x-proof-source-id', src.id)
+        e.dataTransfer.effectAllowed = 'copy'
+        onDragStart?.()
+      }}
+      onDragOver={e => {
+        if (e.dataTransfer.types.includes('application/x-proof-source-id')) {
+          e.preventDefault(); e.stopPropagation(); onDragOver?.()
+        }
+      }}
+      onDragEnd={onDragEnd}
+      onDrop={e => {
+        if (e.dataTransfer.types.includes('application/x-proof-source-id')) {
+          e.preventDefault(); e.stopPropagation(); onDrop?.()
+        }
+      }}
       style={{
         display: 'flex', alignItems: 'center',
-        padding: '8px 10px 8px 14px',
+        padding: '8px 8px 8px 14px',
         cursor: renaming ? 'text' : 'pointer', userSelect: 'none',
-        background: armed ? 'rgba(196,107,90,0.05)' : isActive ? '#171817' : hov ? '#171817' : 'transparent',
-        borderLeft: `2px solid ${armed ? 'rgba(196,107,90,0.18)' : isActive ? '#9b9892' : hov ? '#232523' : 'transparent'}`,
+        background: isActive ? '#111211' : hov ? '#111211' : 'transparent',
+        borderTop: dropBefore ? '1px solid #8C887F' : '1px solid transparent',
+        borderRight: '1px solid transparent',
+        borderBottom: '1px solid transparent',
+        borderLeft: `2px solid ${dropBefore ? '#8C887F' : isActive ? '#8C887F' : hov ? '#252725' : 'transparent'}`,
         transition: 'background 0.1s, border-color 0.1s',
       }}
     >
+      {/* Title */}
       <div style={{ flex: 1, minWidth: 0 }}>
-
-        {/* Title — wraps freely */}
         {renaming ? (
           <textarea autoFocus spellCheck={false}
             value={renameValue}
@@ -238,7 +357,7 @@ function StackRow({
               width: '100%', boxSizing: 'border-box',
               background: 'transparent', border: 'none', outline: 'none',
               margin: 0, padding: 0, resize: 'none', overflow: 'hidden',
-              fontSize: '12px', lineHeight: '1.45', color: '#8A8780',
+              fontSize: '12px', lineHeight: '1.45', color: '#8C887F',
               fontFamily: 'inherit', letterSpacing: '0.01em',
               WebkitAppearance: 'none',
             } as React.CSSProperties}
@@ -246,50 +365,45 @@ function StackRow({
         ) : (
           <div style={{
             fontSize: '12px', lineHeight: '1.45', letterSpacing: '0.01em',
-            color: isActive ? '#8A8780' : hov ? '#8A8780' : '#8A8780',
-            wordBreak: 'break-word', transition: 'color 0.1s',
+            color: '#E6E2D8',
+            wordBreak: 'break-word',
+            opacity: armed ? 0.4 : 1,
+            textDecoration: armed ? 'line-through' : 'none',
+            transition: 'opacity 0.15s',
             display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
           } as React.CSSProperties}>
             {label}
           </div>
         )}
+      </div>
 
-        {/* Bottom row — 1/2 or confirm + × */}
-        <div style={{ display: 'flex', alignItems: 'center', marginTop: '5px', minHeight: '18px', gap: '3px' }}>
-          {armed ? (
-            <span style={{ fontSize: '10px', color: '#c46b5a', letterSpacing: '0.02em', flexShrink: 0 }}>Remove?</span>
-          ) : (
-            <div
-              onDoubleClick={e => e.stopPropagation()}
-              style={{ display: 'flex', alignItems: 'center', gap: '3px', opacity: show || isActive || renaming ? 1 : 0, pointerEvents: show || isActive || renaming ? 'auto' : 'none', transition: 'opacity 0.12s' }}>
-              {paneButtons && (
-                <>
-                  <ActionBtn label={<MonoNum n={1} />} title="View 1" active={paneButtons.active1} onClick={paneButtons.onSet1} />
-                  <ActionBtn label={<MonoNum n={2} />} title="View 2" active={paneButtons.active2} onClick={paneButtons.onSet2} />
-                </>
-              )}
-              {pinButtons && (
-                <>
-                  <ActionBtn label={<MonoNum n={1} />} title="View 1" active={!!pinButtons.active1} onClick={e => { e.stopPropagation(); pinButtons.onPin1() }} />
-                  <ActionBtn label={<MonoNum n={2} />} title="View 2" active={!!pinButtons.active2} onClick={e => { e.stopPropagation(); pinButtons.onPin2() }} />
-                </>
-              )}
-            </div>
-          )}
-          <div style={{ flex: 1 }} />
-          <button
-            title="Remove"
-            onClick={handleRemoveClick}
-            onDoubleClick={e => e.stopPropagation()}
-            style={{ flexShrink: 0, width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', padding: 0, cursor: 'pointer', outline: 'none', lineHeight: 0, color: armed ? '#c46b5a' : '#8A8780', opacity: armed || show || isActive || renaming ? 1 : 0, pointerEvents: armed || show || isActive || renaming ? 'auto' : 'none', transition: 'opacity 0.12s, color 0.1s' }}
-            onMouseEnter={e => (e.currentTarget.style.color = armed ? '#d27b6a' : '#8A8780')}
-            onMouseLeave={e => (e.currentTarget.style.color = armed ? '#c46b5a' : '#8A8780')}>
-            <svg width="8" height="8" viewBox="0 0 9 9" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-              <path d="M1 1L8 8M8 1L1 8" />
-            </svg>
-          </button>
-        </div>
-
+      {/* Inline actions — right side */}
+      <div
+        onDoubleClick={e => e.stopPropagation()}
+        style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0, marginLeft: '6px', opacity: armed || show || isActive || renaming ? 1 : 0, pointerEvents: armed || show || isActive || renaming ? 'auto' : 'none', transition: 'opacity 0.12s' }}>
+        {paneButtons && (
+          <>
+            <ActionBtn label={<MonoNum n={1} />} title="View 1" active={paneButtons.active1} onClick={paneButtons.onSet1} />
+            <ActionBtn label={<MonoNum n={2} />} title="View 2" active={paneButtons.active2} onClick={paneButtons.onSet2} />
+          </>
+        )}
+        {pinButtons && (
+          <>
+            <ActionBtn label={<MonoNum n={1} />} title="View 1" active={!!pinButtons.active1} onClick={e => { e.stopPropagation(); pinButtons.onPin1() }} />
+            <ActionBtn label={<MonoNum n={2} />} title="View 2" active={!!pinButtons.active2} onClick={e => { e.stopPropagation(); pinButtons.onPin2() }} />
+          </>
+        )}
+        <button
+          title="Remove"
+          onClick={handleRemoveClick}
+          onDoubleClick={e => e.stopPropagation()}
+          style={{ flexShrink: 0, width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', padding: 0, cursor: 'pointer', outline: 'none', lineHeight: 0, color: armed ? '#E6E2D8' : '#8C887F', transition: 'color 0.1s' }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#E6E2D8')}
+          onMouseLeave={e => (e.currentTarget.style.color = armed ? '#E6E2D8' : '#8C887F')}>
+          <svg width="8" height="8" viewBox="0 0 9 9" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+            <path d="M1 1L8 8M8 1L1 8" />
+          </svg>
+        </button>
       </div>
     </div>
   )
@@ -313,10 +427,10 @@ function ActionBtn({ label, title, active, onClick }: {
       style={{
         flexShrink: 0, width: '22px', height: '18px',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: active ? '#232523' : hov ? '#232523' : 'none',
-        border: `1px solid ${active ? '#8A8780' : hov ? '#9b9892' : '#232523'}`,
+        background: active ? '#252725' : 'none',
+        border: `1px solid ${active ? '#8C887F' : hov ? '#252725' : '#111211'}`,
         borderRadius: '3px', padding: 0, outline: 'none',
-        color: active ? '#8A8780' : hov ? '#8A8780' : '#8A8780',
+        color: active ? '#E6E2D8' : hov ? '#8C887F' : '#5E5A54',
         fontSize: '10px', cursor: 'pointer',
         transition: 'color 0.1s, background 0.1s, border-color 0.1s',
         fontFamily: 'inherit',
