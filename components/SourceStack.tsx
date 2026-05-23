@@ -293,13 +293,38 @@ function getMetaLine(src: QueuedSource): string {
 
 
 function EmptyRow({ text }: { text: string }) {
+  const isAll   = text === 'Nothing here yet.'
+  const isPages = text === 'No saved pages.'
+
+  type Line = { t: string; dim?: boolean }
+  const lines: Line[] = isAll ? [
+    { t: 'PDFs, images, notes, saved pages.' },
+    { t: 'Add with + or drop onto the View.', dim: true },
+    { t: 'Bookmark pages from the browser.', dim: true },
+  ] : isPages ? [
+    { t: 'No saved pages yet.', dim: true },
+    { t: 'Bookmark pages from the browser.', dim: true },
+  ] : [
+    { t: text, dim: true },
+  ]
+
   return (
     <div style={{
       flex: 1, background: 'transparent',
-      padding: '14px 14px', fontSize: '12px', color: 'rgba(230,226,216,0.65)',
-      letterSpacing: '0.02em', lineHeight: 1.55, userSelect: 'none',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'flex-start', justifyContent: 'flex-start',
+      padding: '16px 14px 24px',
+      userSelect: 'none', gap: '5px',
     }}>
-      {text}
+      {lines.map(({ t, dim }, i) => (
+        <span key={i} style={{
+          fontSize: '11px',
+          color: dim ? 'rgba(230,226,216,0.22)' : 'rgba(230,226,216,0.38)',
+          letterSpacing: '0.01em', lineHeight: 1.65,
+        }}>
+          {t}
+        </span>
+      ))}
     </div>
   )
 }

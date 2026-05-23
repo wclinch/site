@@ -385,7 +385,7 @@ function AppShell() {
     <>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#070807', WebkitAppRegion: 'drag' } as React.CSSProperties}>
         <ProjectBar askSiteOpen={askSiteOpen} />
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: '0 7px 7px 7px' }}>
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: '0 7px 7px 7px', background: '#090b09' }}>
           <SourcePanel width={DEF_SOURCE} hidden={viewFocused || sidebarCollapsed} />
           <ReaderPanel
             isFocused={viewFocused} onFocusToggle={() => setViewFocused(f => !f)}

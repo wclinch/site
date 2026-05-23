@@ -195,7 +195,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle, askS
     const unTabUpdated = api.onTabUpdated(panelId, (id, state) => {
       setTabs(ts => ts.map(t => {
         if (t.id !== id) return t
-        return { ...t, ...state, title: state.title || t.title }
+        return { ...t, ...state, title: state.title || (t.url ? t.title : '') }
       }))
       if (state.title && isAuthBlockedTitle(state.title)) {
         setTabStatuses(prev => ({ ...prev, [id]: { ...prev[id], authBlocked: true } }))
@@ -205,7 +205,8 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle, askS
     const unTabsChanged = api.onTabsChanged(panelId, (newTabs, newActiveId) => {
       setTabs(prevTabs => newTabs.map(nt => {
         const prev = prevTabs.find(t => t.id === nt.id)
-        return (prev?.title && !nt.title) ? { ...nt, title: prev.title } : nt
+        // Only preserve title while a URL tab is still loading its title — never for blank tabs
+        return (prev?.title && !nt.title && !!nt.url) ? { ...nt, title: prev.title } : nt
       }))
       setActiveTabId(newActiveId ?? '')
       activeTabIdRef.current = newActiveId ?? ''

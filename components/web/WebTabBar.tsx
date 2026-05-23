@@ -145,6 +145,7 @@ export function TabChip({ tab, active, onSelect, onClose, onDragOver, onDragStar
 
 function AskSiteBtn({ active, onClick }: { active: boolean; onClick: () => void }) {
   const [hov, setHov] = useState(false)
+  const on = active || hov
   return (
     <button
       onClick={onClick}
@@ -152,20 +153,17 @@ function AskSiteBtn({ active, onClick }: { active: boolean; onClick: () => void 
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        height: '44px', padding: '0 14px', flexShrink: 0,
-        display: 'flex', alignItems: 'center', gap: '6px',
-        background: active ? '#151615' : 'none',
-        border: 'none',
-        borderLeft: '1px solid rgba(230,226,216,0.1)',
-        color: active || hov ? '#E6E2D8' : 'rgba(230,226,216,0.5)',
-        fontSize: '12px', letterSpacing: '0.04em',
+        height: '34px', padding: '0 13px', flexShrink: 0, marginRight: '8px',
+        display: 'flex', alignItems: 'center',
+        background: on ? '#151615' : 'transparent',
+        border: `1px solid ${on ? 'rgba(230,226,216,0.1)' : 'transparent'}`,
+        borderRadius: '4px',
+        color: on ? '#E6E2D8' : 'rgba(230,226,216,0.65)',
+        fontSize: '13px', letterSpacing: '0.02em',
         cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
-        transition: 'color 0.15s, background 0.15s',
+        transition: 'color 0.1s, background 0.1s, border-color 0.1s',
       }}
     >
-      {active && (
-        <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#8fb87a', flexShrink: 0 }} />
-      )}
       Ask Site
     </button>
   )

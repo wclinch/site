@@ -401,6 +401,9 @@ function createTabView(win, pid, id) {
 function switchToTab(win, pid, id) {
   const panel = panels[pid]
   if (!panel.tabViews.has(id)) return
+  // Cancel any pending URL from the previous tab — it re-queues when that tab is re-activated.
+  panel.pendingUrl = null
+  if (panel.pendingTimer) { clearTimeout(panel.pendingTimer); panel.pendingTimer = null }
   // Hide the previously active tab.
   if (panel.activeTabId && panel.activeTabId !== id && panel.tabViews.has(panel.activeTabId)) {
     panel.tabViews.get(panel.activeTabId).setBounds({ x: 0, y: 0, width: 0, height: 0 })
@@ -1059,7 +1062,7 @@ function createWindow() {
   })
 
   if (isDev) {
-    mainWindow.loadURL('http://localhost:3000/')
+    mainWindow.loadURL('http://localhost:3000/app')
   } else {
     mainWindow.loadURL('site://localhost/')
   }

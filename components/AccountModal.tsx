@@ -275,17 +275,6 @@ export default function AccountModal({ onClose }: { onClose: () => void }) {
             </div>
           </>
         )}
-        {/* ── Footer: link to landing ── */}
-        <div style={{ padding: '12px 28px', borderTop: '1px solid rgba(230,226,216,0.1)', display: 'flex', justifyContent: 'center' }}>
-          <a
-            href="/"
-            style={{ fontSize: '11px', color: 'rgba(230,226,216,0.45)', textDecoration: 'none', letterSpacing: '0.03em', transition: 'color 0.12s' }}
-            onMouseEnter={e => (e.currentTarget.style.color = 'rgba(230,226,216,0.65)')}
-            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(230,226,216,0.45)')}
-          >
-            site.app
-          </a>
-        </div>
       </div>
     </div>
   )

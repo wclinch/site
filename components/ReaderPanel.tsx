@@ -151,7 +151,7 @@ function ViewPane({
         flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
         border: `1px solid ${dragOver ? 'rgba(230,226,216,0.45)' : 'rgba(230,226,216,0.1)'}`, borderRadius: '4px',
         overflow: 'hidden',
-        background: 'transparent',
+        background: '#070807',
         position: 'relative',
         transition: 'border-color 0.15s ease',
         WebkitAppRegion: 'no-drag',
@@ -245,11 +245,12 @@ function EmptySource({ uploadFiles }: { uploadFiles: (files: FileList | File[]) 
     <div
       style={{
         flex: 1,
-        background: fileDragOver ? '#151615' : '#070807',
+        background: fileDragOver ? '#0c0e0c' : '#070807',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
-        padding: '32px', gap: '8px',
+        padding: '40px', gap: '0',
         transition: 'background 0.15s',
+        cursor: 'default',
       }}
       onDragOver={e => {
         if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setFileDragOver(true) }
@@ -262,17 +263,36 @@ function EmptySource({ uploadFiles }: { uploadFiles: (files: FileList | File[]) 
         if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files)
       }}
     >
-      <span style={{
-        fontSize: '12px', color: fileDragOver ? 'rgba(230,226,216,0.65)' : 'rgba(230,226,216,0.65)',
-        letterSpacing: '0.03em', textAlign: 'center', transition: 'color 0.15s',
-        userSelect: 'none',
-      }}>
-        {fileDragOver ? 'Drop to open.' : 'Nothing open.'}
-      </span>
-      {!fileDragOver && (
-        <span style={{ fontSize: '11px', color: 'rgba(230,226,216,0.65)', letterSpacing: '0.02em', textAlign: 'center', userSelect: 'none' }}>
-          Select a source from the shelf, or drop a file.
+      {fileDragOver ? (
+        <span style={{ fontSize: '12px', color: 'rgba(230,226,216,0.65)', letterSpacing: '0.03em', userSelect: 'none' }}>
+          Drop to open.
         </span>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: '360px', userSelect: 'none' }}>
+          <span style={{ fontSize: '12px', color: 'rgba(230,226,216,0.35)', letterSpacing: '0.01em', textAlign: 'center', lineHeight: 1.7, marginBottom: '6px', whiteSpace: 'nowrap' }}>
+            Select a source from the shelf to open it here.
+          </span>
+          <span style={{ fontSize: '11px', color: 'rgba(230,226,216,0.2)', letterSpacing: '0.01em', textAlign: 'center', lineHeight: 1.7, marginBottom: '24px', whiteSpace: 'nowrap' }}>
+            Sources stack as tabs — switch between them at the top.
+          </span>
+          <button
+            onClick={() => fileRef.current?.click()}
+            style={{
+              height: '26px', padding: '0 14px',
+              background: 'none',
+              border: '1px solid rgba(230,226,216,0.1)',
+              borderRadius: '4px',
+              color: 'rgba(230,226,216,0.3)',
+              fontSize: '11px', letterSpacing: '0.02em',
+              cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
+              transition: 'color 0.12s, border-color 0.12s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(230,226,216,0.6)'; e.currentTarget.style.borderColor = 'rgba(230,226,216,0.22)' }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(230,226,216,0.3)'; e.currentTarget.style.borderColor = 'rgba(230,226,216,0.1)' }}
+          >
+            Open file…
+          </button>
+        </div>
       )}
 
       <input
