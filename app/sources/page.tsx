@@ -14,19 +14,19 @@ export default function Sources() {
 
         <div style={{ padding: '20px 0', borderBottom: '1px solid rgba(230,226,216,0.1)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <p style={{ fontSize: '14px', color: 'rgba(230,226,216,0.65)', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#E6E2D8' }}>Documents</span> — PDFs and images. Open in View 1 or View 2 to hold them while you browse.
+            <span style={{ color: '#E6E2D8' }}>Documents</span> — PDFs and images saved to the session shelf.
           </p>
           <p style={{ fontSize: '14px', color: 'rgba(230,226,216,0.65)', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#E6E2D8' }}>Pages</span> — Web pages saved to the session. Click to reopen in Web, or use 1 / 2 to open in a view.
+            <span style={{ color: '#E6E2D8' }}>Pages</span> — Web pages saved to the session. Click to reopen in the browser.
           </p>
           <p style={{ fontSize: '14px', color: 'rgba(230,226,216,0.65)', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#E6E2D8' }}>View</span> — A reading pane that stays open. Use 1 or 2 to hold a document or page alongside everything else.
+            <span style={{ color: '#E6E2D8' }}>View</span> — The center reading stack. Open sources into it as tabs.
           </p>
           <p style={{ fontSize: '14px', color: 'rgba(230,226,216,0.65)', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#E6E2D8' }}>Web</span> — Browse with tabs. Press 1 or 2 to send the current page to a view. Press Save to add it to Pages.
+            <span style={{ color: '#E6E2D8' }}>Web</span> — Built-in browser with tabs. Bookmark a page to save it to the session.
           </p>
           <p style={{ fontSize: '14px', color: 'rgba(230,226,216,0.65)', lineHeight: 1.75, margin: 0 }}>
-            <span style={{ color: '#E6E2D8' }}>Session</span> — Everything comes back when you return. Double-click a session tab to rename it.
+            <span style={{ color: '#E6E2D8' }}>Session</span> — Everything restores when you return. Double-click a session tab to rename it.
           </p>
         </div>
 
