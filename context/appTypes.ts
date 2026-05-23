@@ -1,4 +1,4 @@
-import type { Project, QueuedSource, ViewPage } from '@/lib/types'
+import type { Project, QueuedSource, ViewTab } from '@/lib/types'
 import type { Limits } from '@/lib/entitlement'
 import type { AuthUser, SignInResult } from '@/lib/auth'
 
@@ -8,8 +8,7 @@ export interface AppState {
   mounted: boolean
   projects: Project[]
   activeId: string | null
-  selectedId: string | null
-  selectedId2: string | null
+  selectedId: string | null   // derived: active tab's srcId
   selectedIds: Set<string>
   anchorId: string | null
   contextMenu: ContextMenu | null
@@ -18,18 +17,16 @@ export interface AppState {
   sources: QueuedSource[]
   allSources: QueuedSource[]
   selectedSource: QueuedSource | null
-  selectedSource2: QueuedSource | null
   stackIds: string[]
   stackSources: QueuedSource[]
-  // center view panes
-  view1Page: ViewPage | null
-  view2Page: ViewPage | null
-  splitView: boolean
-  setSplitView: (v: boolean) => void
-  pinPageToView: (pane: 1 | 2, src: QueuedSource) => void
-  pinUrlToView:  (pane: 1 | 2, url: string, title: string) => void
-  clearView: (pane: 1 | 2) => void
-  openDocInPane: (pane: 1 | 2, srcId: string) => void
+  // center view tabs
+  viewTabs: ViewTab[]
+  activeViewTabId: string | null
+  openInView: (srcId: string) => void
+  openUrlInView: (url: string, title: string, srcId?: string) => void
+  closeViewTab: (tabId: string) => void
+  switchViewTab: (tabId: string) => void
+  reorderViewTabs: (fromId: string, toId: string) => void
   // auth + entitlement
   user:              AuthUser | null
   isPro:             boolean
@@ -39,8 +36,6 @@ export interface AppState {
   refreshEntitlement: () => Promise<void>
   openBilling:       () => Promise<void>
   // setters
-  setSelectedId: (id: string | null) => void
-  setSelectedId2: (id: string | null) => void
   setSelectedIds: (ids: Set<string>) => void
   setAnchorId: (id: string | null) => void
   setContextMenu: (m: ContextMenu | null) => void
@@ -56,7 +51,8 @@ export interface AppState {
   removeSource: (srcId: string) => void
   removeSelected: () => void
   addSourceToSession: (srcId: string, toProjectId: string) => string | null
-  addUrlToSession: (projectId: string, url: string, title: string) => string | null
+  addUrlToSession: (projectId: string, url: string, title: string) => { name: string | null; srcId: string } | null
+  removeSourceFromProject: (srcId: string, projId: string) => void
   restoreArchivedSource: (srcId: string, projectId: string) => void
   permanentlyDeleteArchived: (srcId: string, projectId: string) => void
   addUrl: (url: string, targetProjId?: string, label?: string) => Promise<void>

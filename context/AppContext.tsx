@@ -1,6 +1,6 @@
 'use client'
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
-import type { Project, QueuedSource, SavedResearchTab, ViewPage } from '@/lib/types'
+import type { Project, QueuedSource, SavedResearchTab, ViewTab } from '@/lib/types'
 import {
   ACTIVE_KEY, SELECTED_KEY, SELECTED_KEY_2, STACK_KEY, STACK_LIMIT,
   newProject, newSource, newUrlSource,
@@ -42,6 +42,37 @@ function notifyStorageChanged() {
   window.dispatchEvent(new Event('proof-storage-changed'))
 }
 
+// ─── Migration helper ────────────────────────────────────────────────────────
+
+function migrateToViewTabs(
+  proj: Project | undefined,
+  allSrcs: QueuedSource[] = [],
+): { viewTabs: ViewTab[]; activeViewTabId: string | null } {
+  if (!proj) return { viewTabs: [], activeViewTabId: null }
+  // Already on the new model
+  if (proj.viewTabs !== undefined) {
+    return {
+      viewTabs: proj.viewTabs ?? [],
+      activeViewTabId: proj.activeViewTabId ?? proj.viewTabs?.[0]?.id ?? null,
+    }
+  }
+  // Migrate from legacy sel1/sel2/view1Page/view2Page
+  const tabs: ViewTab[] = []
+  let firstId: string | null = null
+  function add(tab: ViewTab) { tabs.push(tab); if (!firstId) firstId = tab.id }
+  if (proj.view1Page) {
+    add({ id: uid(), url: proj.view1Page.url, title: proj.view1Page.title, srcId: proj.view1Page.srcId })
+  } else if (proj.sel1 && allSrcs.find(s => s.id === proj.sel1)) {
+    add({ id: uid(), srcId: proj.sel1 })
+  }
+  if (proj.view2Page) {
+    add({ id: uid(), url: proj.view2Page.url, title: proj.view2Page.title, srcId: proj.view2Page.srcId })
+  } else if (proj.sel2 && allSrcs.find(s => s.id === proj.sel2)) {
+    add({ id: uid(), srcId: proj.sel2 })
+  }
+  return { viewTabs: tabs, activeViewTabId: firstId }
+}
+
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -51,8 +82,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [mounted, setMounted]         = useState(false)
   const [projects, setProjects]       = useState<Project[]>([])
   const [activeId, setActiveId]       = useState<string | null>(null)
-  const [selectedId, setSelectedId]   = useState<string | null>(null)
-  const [selectedId2, setSelectedId2] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [anchorId, setAnchorId]       = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
@@ -64,10 +93,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try { return localStorage.getItem(ACTIVE_KEY) } catch { return null }
   })
 
-  // View panes
-  const [view1Page, setView1Page] = useState<ViewPage | null>(null)
-  const [view2Page, setView2Page] = useState<ViewPage | null>(null)
-  const [splitView, setSplitView] = useState(false)
+  // Center view tabs
+  const [viewTabs, setViewTabs]               = useState<ViewTab[]>([])
+  const [activeViewTabId, setActiveViewTabId] = useState<string | null>(null)
 
   // Auth / entitlement
   const [isPro, setIsPro] = useState(false)
@@ -75,33 +103,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ─── Refs ───────────────────────────────────────────────────────────────
 
-  const projectsRef    = useRef<Project[]>([])
-  const activeIdRef    = useRef(activeId)
-  const selectedIdRef  = useRef<string | null>(null)
-  const selectedId2Ref = useRef<string | null>(null)
-  const view1PageRef   = useRef<ViewPage | null>(null)
-  const view2PageRef   = useRef<ViewPage | null>(null)
-  const splitViewRef   = useRef(false)
-  const isProRef       = useRef(false)
-  const autoSaveTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const projectsRef        = useRef<Project[]>([])
+  const activeIdRef        = useRef(activeId)
+  const viewTabsRef        = useRef<ViewTab[]>([])
+  const activeViewTabIdRef = useRef<string | null>(null)
+  const isProRef           = useRef(false)
+  const autoSaveTimer      = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Sync refs on every render so async callbacks always see the latest values.
-  useEffect(() => { activeIdRef.current = activeId },    [activeId])
-  useEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
-  useEffect(() => { selectedId2Ref.current = selectedId2 }, [selectedId2])
-  useEffect(() => { view1PageRef.current = view1Page },  [view1Page])
-  useEffect(() => { view2PageRef.current = view2Page },  [view2Page])
-  useEffect(() => { splitViewRef.current = splitView },  [splitView])
-  useEffect(() => { isProRef.current = isPro },          [isPro])
+  useEffect(() => { activeIdRef.current = activeId },              [activeId])
+  useEffect(() => { viewTabsRef.current = viewTabs },              [viewTabs])
+  useEffect(() => { activeViewTabIdRef.current = activeViewTabId }, [activeViewTabId])
+  useEffect(() => { isProRef.current = isPro },                    [isPro])
 
   // ─── Derived ────────────────────────────────────────────────────────────
 
-  const activeProject       = projects.find(p => p.id === activeId) ?? null
-  const sources             = activeProject?.sources ?? []
-  const allSources          = projects.flatMap(p => p.sources)
-  const selectedSource      = allSources.find(s => s.id === selectedId)  ?? null
-  const selectedSource2     = allSources.find(s => s.id === selectedId2) ?? null
-  const namedProjectCount   = projects.length
+  const activeProject     = projects.find(p => p.id === activeId) ?? null
+  const sources           = activeProject?.sources ?? []
+  const allSources        = projects.flatMap(p => p.sources)
+  const activeViewTab     = viewTabs.find(t => t.id === activeViewTabId) ?? null
+  const selectedId        = activeViewTab?.srcId ?? null
+  const selectedSource    = allSources.find(s => s.id === selectedId) ?? null
+  const namedProjectCount = projects.length
 
   // Stack = active project's sources. No separate storage, no separate
   // ordering — switching projects swaps the stack instantly.
@@ -174,29 +197,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try { localStorage.removeItem('proof-v3-selected-image') } catch {}
 
       // Auto-restore the last active project (or fall back to the first one)
-      // and its saved source selection.
+      // and its saved view tabs.
       const restoredId   = fixed.find(p => p.id === lastActiveId)?.id ?? fixed[0].id
       const restoredProj = fixed.find(p => p.id === restoredId)
       setActiveId(restoredId)
-      try {
-        const restoredSources = restoredProj?.sources ?? []
-        // Prefer per-project sel1/sel2; fall back to global localStorage for migration.
-        const savedSel  = restoredProj?.sel1  ?? localStorage.getItem(SELECTED_KEY)
-        const savedSel2 = restoredProj?.sel2  ?? localStorage.getItem(SELECTED_KEY_2)
-        if (savedSel  && restoredSources.find(s => s.id === savedSel))  setSelectedId(savedSel)
-        if (savedSel2 && restoredSources.find(s => s.id === savedSel2)) setSelectedId2(savedSel2)
-      } catch {}
+
+      // Migrate legacy sel1/sel2/view1Page/view2Page to tab model.
+      const { viewTabs: initTabs, activeViewTabId: initActiveId } =
+        migrateToViewTabs(restoredProj, fixed.flatMap(p => p.sources))
+      setViewTabs(initTabs)
+      setActiveViewTabId(initActiveId)
+
+      // Clean up legacy localStorage keys.
+      try { localStorage.removeItem(SELECTED_KEY) }   catch {}
+      try { localStorage.removeItem(SELECTED_KEY_2) } catch {}
 
       // Restore research tabs for the active workspace on startup.
       loadResearchTabs(restoredProj?.researchTabs ?? [], restoredId)
-
-      // Restore view page pins for the active workspace on startup.
-      // Navigation is handled by ViewPane's useEffect after bounds are set.
-      const v1 = restoredProj?.view1Page ?? null
-      const v2 = restoredProj?.view2Page ?? null
-      if (v1) setView1Page(v1)
-      if (v2) setView2Page(v2)
-      if (restoredProj) setSplitView(restoreSplit(restoredProj))
 
       // Re-extract PDF content for any source that's `done` but missing
       // its parsed body in IDB (e.g. interrupted extraction in a prior
@@ -269,46 +286,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch {}
       const curId = activeIdRef.current
       const snap  = projectsRef.current.map(p => p.id !== curId ? p : {
-        ...p, sel1: selectedIdRef.current, sel2: selectedId2Ref.current,
-        view1Page: view1PageRef.current, view2Page: view2PageRef.current,
-        splitView: splitViewRef.current,
+        ...p,
+        viewTabs: viewTabsRef.current,
+        activeViewTabId: activeViewTabIdRef.current,
         researchTabs,
       })
       saveProjects(snap)
-
     }
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [])
 
-  // Keep individual keys in sync so other tabs / the Electron layer can read them.
+  // Keep active workspace key in sync so other tabs / the Electron layer can read it.
   useEffect(() => {
     if (activeId) localStorage.setItem(ACTIVE_KEY, activeId)
     else          localStorage.removeItem(ACTIVE_KEY)
   }, [activeId])
-  useEffect(() => {
-    if (selectedId) localStorage.setItem(SELECTED_KEY, selectedId)
-    else            localStorage.removeItem(SELECTED_KEY)
-  }, [selectedId])
-  useEffect(() => {
-    if (selectedId2) localStorage.setItem(SELECTED_KEY_2, selectedId2)
-    else             localStorage.removeItem(SELECTED_KEY_2)
-  }, [selectedId2])
 
-  // Auto-save workspace state whenever key selection or view state changes.
+  // Auto-save workspace state whenever tab state changes.
   useEffect(() => {
     if (!mounted || !activeId) return
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
     autoSaveTimer.current = setTimeout(() => { saveWorkspace() }, 400)
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, selectedId2, view1Page, view2Page, splitView, activeId, mounted])
+  }, [viewTabs, activeViewTabId, activeId, mounted])
 
   // ─── Workspace helpers ──────────────────────────────────────────────────
-
-  function restoreSplit(proj: Project): boolean {
-    return proj.splitView === true
-  }
 
   function readResearchTabs(): SavedResearchTab[] {
     try {
@@ -343,38 +347,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const researchTabs = readResearchTabs()
     setProjects(ps => ps.map(p => {
       if (p.id !== activeId) return p
-      return { ...p, sel1: selectedId, sel2: selectedId2, view1Page, view2Page, splitView, researchTabs, ...(name !== undefined ? { name } : {}) }
+      return { ...p, viewTabs, activeViewTabId, researchTabs, ...(name !== undefined ? { name } : {}) }
     }))
   }
 
   function switchWorkspace(id: string) {
     if (id === activeId) return
-    const curId   = activeId
-    const curSel1 = selectedId
-    const curSel2 = selectedId2
+    const curId        = activeId
+    const curTabs      = viewTabsRef.current
+    const curActiveTab = curTabs.find(t => t.id === activeViewTabIdRef.current)
     const researchTabs = readResearchTabs()
 
     // Persist state of the workspace we're leaving.
     setProjects(ps => ps.map(p => p.id === curId
-      ? { ...p, sel1: curSel1, sel2: curSel2, view1Page, view2Page, splitView, researchTabs }
+      ? { ...p, viewTabs: curTabs, activeViewTabId: activeViewTabIdRef.current, researchTabs }
       : p))
 
     const newProj = projects.find(p => p.id === id)
     setActiveId(id)
-    setSelectedId(newProj?.sel1 ?? null)
-    setSelectedId2(newProj?.sel2 ?? null)
     setSelectedIds(new Set())
     setAnchorId(null)
 
-    const nv1 = newProj?.view1Page ?? null
-    const nv2 = newProj?.view2Page ?? null
-    setView1Page(nv1)
-    setView2Page(nv2)
-    setSplitView(newProj ? restoreSplit(newProj) : false)
-    // Clear immediately when no page; navigate handled by ViewPane useEffect when page is set.
+    // Clear electron view when leaving a URL tab or when new workspace has no tabs.
+    const { viewTabs: newTabs, activeViewTabId: newActiveId } =
+      migrateToViewTabs(newProj, projects.flatMap(p => p.sources))
+    setViewTabs(newTabs)
+    setActiveViewTabId(newActiveId)
+
     if (typeof window !== 'undefined') {
-      if (!nv1) (window as any).electronAPI?.view?.clear?.('1')
-      if (!nv2) (window as any).electronAPI?.view?.clear?.('2')
+      const newActiveTab = newTabs.find(t => t.id === newActiveId)
+      if (curActiveTab?.url || !newActiveTab?.url) {
+        ;(window as any).electronAPI?.view?.clear?.('1')
+      }
     }
 
     loadResearchTabs(newProj?.researchTabs ?? [], id)
@@ -383,18 +387,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   function newWorkspace() {
     const limits = isProRef.current ? PRO_LIMITS : FREE_LIMITS
     if (!isProRef.current && projectsRef.current.length >= limits.workspaces) {
-      needUpgrade('Free includes 1 workspace. Upgrade to Pro for unlimited workspaces.')
+      needUpgrade('Free includes 2 sessions. Upgrade to Pro for unlimited sessions.')
       return
     }
 
-    const curId   = activeId
-    const curSel1 = selectedId
-    const curSel2 = selectedId2
+    const curId        = activeId
+    const curTabs      = viewTabsRef.current
     const researchTabs = readResearchTabs()
 
     if (curId) {
       setProjects(ps => ps.map(p => p.id === curId
-        ? { ...p, sel1: curSel1, sel2: curSel2, view1Page, view2Page, splitView, researchTabs }
+        ? { ...p, viewTabs: curTabs, activeViewTabId: activeViewTabIdRef.current, researchTabs }
         : p))
     }
 
@@ -410,16 +413,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     p.name = sessionName
     setProjects(ps => [...ps, p])
     setActiveId(p.id)
-    setSelectedId(null)
-    setSelectedId2(null)
+    setViewTabs([])
+    setActiveViewTabId(null)
     setSelectedIds(new Set())
     setAnchorId(null)
-    setView1Page(null)
-    setView2Page(null)
-    setSplitView(false)
     if (typeof window !== 'undefined') {
       ;(window as any).electronAPI?.view?.clear?.('1')
-      ;(window as any).electronAPI?.view?.clear?.('2')
     }
 
     loadResearchTabs([], p.id)
@@ -454,23 +453,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     if (remaining.length === 0) {
       setActiveId(null)
-      setSelectedId(null)
-      setSelectedId2(null)
-      setSplitView(false)
+      setViewTabs([])
+      setActiveViewTabId(null)
+      if (typeof window !== 'undefined') (window as any).electronAPI?.view?.clear?.('1')
       loadResearchTabs([])
     } else {
       const nextProj = remaining[Math.max(0, idx - 1)]
       setActiveId(nextProj.id)
-      setSelectedId(nextProj.sel1 ?? null)
-      setSelectedId2(nextProj.sel2 ?? null)
-      const rv1 = nextProj.view1Page ?? null
-      const rv2 = nextProj.view2Page ?? null
-      setView1Page(rv1)
-      setView2Page(rv2)
-      setSplitView(restoreSplit(nextProj))
+      const { viewTabs: nTabs, activeViewTabId: nActiveId } =
+        migrateToViewTabs(nextProj, projectsRef.current.flatMap(p => p.sources))
+      setViewTabs(nTabs)
+      setActiveViewTabId(nActiveId)
       if (typeof window !== 'undefined') {
-        if (!rv1) (window as any).electronAPI?.view?.clear?.('1')
-        if (!rv2) (window as any).electronAPI?.view?.clear?.('2')
+        const newActiveTab = nTabs.find(t => t.id === nActiveId)
+        if (!newActiveTab?.url) (window as any).electronAPI?.view?.clear?.('1')
       }
       loadResearchTabs(nextProj.researchTabs ?? [], nextProj.id)
     }
@@ -503,11 +499,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return next
     })
     setActiveId(proj.id)
-    setSelectedId(proj.sel1 ?? null)
-    setSelectedId2(proj.sel2 ?? null)
-    setView1Page(proj.view1Page ?? null)
-    setView2Page(proj.view2Page ?? null)
-    setSplitView(restoreSplit(proj))
+    const { viewTabs: rTabs, activeViewTabId: rActiveId } =
+      migrateToViewTabs(proj, projectsRef.current.flatMap(p => p.sources))
+    setViewTabs(rTabs)
+    setActiveViewTabId(rActiveId)
     loadResearchTabs(proj.researchTabs ?? [], proj.id)
   }
 
@@ -700,8 +695,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...p,
       sources: p.sources.filter(s => s.id !== srcId),
     })))
-    if (selectedId  === srcId) setSelectedId(null)
-    if (selectedId2 === srcId) setSelectedId2(null)
+    // Close any view tab that was showing the removed source.
+    const removedTab = viewTabsRef.current.find(t => t.srcId === srcId)
+    if (removedTab) closeViewTab(removedTab.id)
     setSelectedIds(new Set())
     setAnchorId(null)
     // File data kept in IDB — needed for restore. Only cleaned up on permanent delete.
@@ -739,8 +735,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...p,
       sources: p.sources.filter(s => !selectedIds.has(s.id)),
     })))
-    if (selectedId  && selectedIds.has(selectedId))  setSelectedId(null)
-    if (selectedId2 && selectedIds.has(selectedId2)) setSelectedId2(null)
+    // Close any view tabs showing removed sources.
+    const removedTabs = viewTabsRef.current.filter(t => t.srcId && selectedIds.has(t.srcId))
+    removedTabs.forEach(t => closeViewTab(t.id))
     const ids = Array.from(selectedIds)
     Promise.allSettled(ids.flatMap(id => [deleteFile(id), deleteContent(id)]))
       .then(notifyStorageChanged)
@@ -767,14 +764,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return toProj.name || 'Session'
   }
 
-  function addUrlToSession(projectId: string, url: string, title: string): string | null {
+  function addUrlToSession(projectId: string, url: string, title: string): { name: string | null; srcId: string } | null {
     const toProj = projectsRef.current.find(p => p.id === projectId)
     if (!toProj) return null
     const src = newUrlSource(url, title)
     setProjects(ps => ps.map(p =>
       p.id !== projectId ? p : { ...p, sources: [...p.sources, src] }
     ))
-    return toProj.name || 'Session'
+    return { name: toProj.name || 'Session', srcId: src.id }
+  }
+
+  function removeSourceFromProject(srcId: string, projId: string) {
+    setProjects(ps => ps.map(p =>
+      p.id !== projId ? p : { ...p, sources: p.sources.filter(s => s.id !== srcId) }
+    ))
   }
 
   async function addUrl(url: string, targetProjId?: string, label?: string) {
@@ -816,7 +819,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!proj || proj.sources.length === 0) return
     const ids = proj.sources.map(s => s.id)
     setProjects(ps => ps.map(p => p.id === proj.id ? { ...p, sources: [] } : p))
-    setSelectedId(null)
+    // Close all tabs that were showing sources from this stack.
+    setViewTabs(ts => ts.filter(t => !t.srcId || !ids.includes(t.srcId)))
+    setActiveViewTabId(prev => {
+      const tab = viewTabsRef.current.find(t => t.id === prev)
+      if (tab?.srcId && ids.includes(tab.srcId)) return null
+      return prev
+    })
     setSelectedIds(new Set())
     setAnchorId(null)
     Promise.allSettled(ids.flatMap(sid => [deleteFile(sid), deleteContent(sid)]))
@@ -838,94 +847,104 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }))
   }
 
-  // ─── View actions ───────────────────────────────────────────────────────
+  // ─── View tab actions ───────────────────────────────────────────────────
 
+  // Routes URL sources to the research browser; opens docs in the tab view.
   function openInPane(id: string) {
     const src = allSources.find(s => s.id === id)
     if (!src) return
-    // URL/web sources belong to the right Browser, not the center
-    // Source pane. Hand them off to the research view if Electron
-    // exposes one; in the web build, fall back to opening externally.
-    // Documents (PDF/note/image) load into the center Source pane.
     if (src.fileType === 'url') {
       const url = src.url ?? src.raw
       if (typeof window === 'undefined') return
       if (window.electronAPI?.research?.navigate) {
-        // Hand off to RightPanel so the single navigateUrl pipeline runs:
-        // pre-positions the WebContentsView before the navigate IPC, avoiding
-        // the "loads only on Ctrl-R" race from calling research.navigate directly.
         window.dispatchEvent(new CustomEvent('proof:browser-navigate', { detail: url }))
         return
       }
       window.open(url, '_blank', 'noopener,noreferrer')
       return
     }
-    // Single mode: always route to pane 1.
-    if (!splitViewRef.current) {
-      if (view1Page) { setView1Page(null); ;(window as any).electronAPI?.view?.clear?.('1') }
-      setSelectedId(id)
+    openInView(id)
+  }
+
+  function openInView(srcId: string) {
+    const tabs = viewTabsRef.current
+    const existing = tabs.find(t => t.srcId === srcId)
+    if (existing) {
+      setActiveViewTabId(existing.id)
       return
     }
-    // Split mode: smart routing — fill first empty pane, otherwise replace View 1.
-    // Clearing view pages ensures doc and live page don't occupy the same pane.
-    if (!selectedId || selectedId === id) {
-      if (view1Page) { setView1Page(null); ;(window as any).electronAPI?.view?.clear?.('1') }
-      setSelectedId(id)
-    } else if (!selectedId2 || selectedId2 === id) {
-      if (view2Page) { setView2Page(null); ;(window as any).electronAPI?.view?.clear?.('2') }
-      setSelectedId2(id)
-    } else {
-      if (view1Page) { setView1Page(null); ;(window as any).electronAPI?.view?.clear?.('1') }
-      setSelectedId(id)
+    const activeTab = tabs.find(t => t.id === activeViewTabIdRef.current)
+    if (activeTab && !activeTab.srcId && !activeTab.url) {
+      // Reuse empty active tab
+      setViewTabs(ts => ts.map(t => t.id === activeTab.id
+        ? { id: t.id, srcId }
+        : t))
+      return
+    }
+    const tabId = uid()
+    setViewTabs(ts => [...ts, { id: tabId, srcId }])
+    setActiveViewTabId(tabId)
+    // Clear any live URL view so the doc pane is visible
+    ;(window as any).electronAPI?.view?.clear?.('1')
+  }
+
+  function openUrlInView(url: string, title: string, srcId?: string) {
+    const tabs = viewTabsRef.current
+    const existing = tabs.find(t => t.url === url)
+    if (existing) {
+      setActiveViewTabId(existing.id)
+      return
+    }
+    const activeTab = tabs.find(t => t.id === activeViewTabIdRef.current)
+    if (activeTab && !activeTab.srcId && !activeTab.url) {
+      setViewTabs(ts => ts.map(t => t.id === activeTab.id
+        ? { id: t.id, url, title, srcId }
+        : t))
+      return
+    }
+    const tabId = uid()
+    setViewTabs(ts => [...ts, { id: tabId, url, title, srcId }])
+    setActiveViewTabId(tabId)
+  }
+
+  function closeViewTab(tabId: string) {
+    const tabs = viewTabsRef.current
+    const idx = tabs.findIndex(t => t.id === tabId)
+    if (idx === -1) return
+    const closedTab = tabs[idx]
+    const newTabs = tabs.filter(t => t.id !== tabId)
+    setViewTabs(newTabs)
+    if (activeViewTabIdRef.current === tabId) {
+      const newActiveId = newTabs[Math.max(0, idx - 1)]?.id ?? null
+      setActiveViewTabId(newActiveId)
+      const newActiveTab = newTabs.find(t => t.id === newActiveId)
+      if (closedTab.url && !newActiveTab?.url) {
+        ;(window as any).electronAPI?.view?.clear?.('1')
+      }
     }
   }
 
-  function openDocInPane(pane: 1 | 2, srcId: string) {
-    if (pane === 2) {
-      setSplitView(true)
-      if (view2PageRef.current) { setView2Page(null); ;(window as any).electronAPI?.view?.clear?.('2') }
-      setSelectedId2(srcId)
-    } else {
-      if (view1PageRef.current) { setView1Page(null); ;(window as any).electronAPI?.view?.clear?.('1') }
-      setSelectedId(srcId)
-    }
+  function reorderViewTabs(fromId: string, toId: string) {
+    setViewTabs(tabs => {
+      const from = tabs.findIndex(t => t.id === fromId)
+      const to   = tabs.findIndex(t => t.id === toId)
+      if (from === -1 || to === -1 || from === to) return tabs
+      const next = [...tabs]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
   }
 
-  function pinPageToView(pane: 1 | 2, src: QueuedSource) {
-    const url   = src.url ?? src.raw
-    const title = src.label ?? url
-    const page: ViewPage = { url, title, srcId: src.id }
-    // Navigation is handled by ViewPane's useEffect after bounds are set — not here.
-    if (pane === 1) {
-      setView1Page(page)
-      setSelectedId(null)
-    } else {
-      setSplitView(true)
-      setView2Page(page)
-      setSelectedId2(null)
-    }
-  }
-
-  function pinUrlToView(pane: 1 | 2, url: string, title: string) {
-    const page: ViewPage = { url, title }
-    if (pane === 1) {
-      setView1Page(page)
-      setSelectedId(null)
-    } else {
-      setSplitView(true)
-      setView2Page(page)
-      setSelectedId2(null)
-    }
-  }
-
-  function clearView(pane: 1 | 2) {
-    if (pane === 1) {
-      setView1Page(null)
+  function switchViewTab(tabId: string) {
+    const tabs = viewTabsRef.current
+    const target = tabs.find(t => t.id === tabId)
+    if (!target) return
+    const current = tabs.find(t => t.id === activeViewTabIdRef.current)
+    if (current?.url && !target.url) {
       ;(window as any).electronAPI?.view?.clear?.('1')
-    } else {
-      setView2Page(null)
-      ;(window as any).electronAPI?.view?.clear?.('2')
     }
+    setActiveViewTabId(tabId)
   }
 
   // ─── Auth / entitlement ─────────────────────────────────────────────────
@@ -970,18 +989,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const limits: Limits = isPro ? PRO_LIMITS : FREE_LIMITS
 
   const value: AppState = {
-    mounted, projects, activeId, selectedId, selectedId2, selectedIds, anchorId,
+    mounted, projects, activeId, selectedId, selectedIds, anchorId,
     contextMenu,
-    activeProject, sources, allSources, selectedSource, selectedSource2,
+    activeProject, sources, allSources, selectedSource,
     stackIds, stackSources,
-    view1Page, view2Page, splitView, setSplitView, pinPageToView, pinUrlToView, clearView, openDocInPane,
+    viewTabs, activeViewTabId, openInView, openUrlInView, closeViewTab, switchViewTab, reorderViewTabs,
     user, isPro, limits,
     signIn: signInFn, signOut, refreshEntitlement: refreshEntitlementFn, openBilling,
-    setSelectedId, setSelectedId2, setSelectedIds, setAnchorId,
+    setSelectedIds, setAnchorId,
     setContextMenu,
     setProjects, updateProject, patchSource, moveSource, moveSourceToProject, moveProject,
     uploadFiles, retrySource,
-    removeSource, removeSelected, addSourceToSession, addUrlToSession,
+    removeSource, removeSelected, addSourceToSession, addUrlToSession, removeSourceFromProject,
     restoreArchivedSource, permanentlyDeleteArchived,
     addUrl,
     addToStack, removeFromStack, clearStack, reorderStack, openInPane,

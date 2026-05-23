@@ -5,6 +5,7 @@ export type TabState = {
   loading: boolean
   canGoBack: boolean
   canGoForward: boolean
+  pinned?: boolean
 }
 
 export type TabStatus = { failedLoad?: boolean; authBlocked?: boolean }

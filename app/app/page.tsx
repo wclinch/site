@@ -6,6 +6,7 @@ import SourcePanel       from '@/components/SourcePanel'
 import RightPanel        from '@/components/RightPanel'
 import SourceContextMenu from '@/components/SourceContextMenu'
 import AccountModal      from '@/components/AccountModal'
+import NotificationToast from '@/components/NotificationToast'
 import { useApp }        from '@/context/AppContext'
 import { getCheckoutUrl } from '@/lib/auth'
 import { useState, useEffect, useRef } from 'react'
@@ -19,7 +20,11 @@ const DEF_SOURCE = '20%'
 const PRO_FEATURES = [
   'Unlimited sessions',
   'Unlimited documents',
-  '5 GB document storage',
+  '2GB storage',
+  'Full session transfer',
+  'Pinned sessions',
+  'Extended activity history',
+  'Ask Site — 40 messages/day',
 ]
 
 function UpgradeModal({ onClose }: { onClose: () => void }) {
@@ -79,40 +84,40 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
         onClick={e => e.stopPropagation()}
         style={{
           width: '440px', maxWidth: 'calc(100vw - 48px)',
-          background: '#111211', border: '1px solid #252725',
+          background: '#151615', border: '1px solid rgba(230,226,216,0.1)',
           borderRadius: '6px', boxShadow: '0 24px 60px rgba(0,0,0,0.7)',
           padding: '32px 28px 28px', fontFamily: 'inherit',
         }}
       >
-        <div style={{ fontSize: '11px', color: '#8C887F', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '16px' }}>
+        <div style={{ fontSize: '11px', color: 'rgba(230,226,216,0.65)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '16px' }}>
           Pro
         </div>
 
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', margin: '0 0 18px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 500, color: '#8C887F', margin: 0, letterSpacing: '-0.01em' }}>
-            More sessions, more documents.
+          <h2 style={{ fontSize: '18px', fontWeight: 500, color: 'rgba(230,226,216,0.65)', margin: 0, letterSpacing: '-0.01em' }}>
+            More room, full session transfer, and Ask Site.
           </h2>
-          <span style={{ fontSize: '13px', color: '#8C887F', letterSpacing: '0.01em' }}>$8.99 / mo</span>
+          <span style={{ fontSize: '13px', color: 'rgba(230,226,216,0.65)', letterSpacing: '0.01em' }}>$4.99 / mo</span>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '26px' }}>
           {PRO_FEATURES.map(f => (
             <div key={f} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '11px', color: '#8C887F' }}>—</span>
-              <span style={{ fontSize: '13px', color: '#8C887F' }}>{f}</span>
+              <span style={{ fontSize: '11px', color: 'rgba(230,226,216,0.65)' }}>—</span>
+              <span style={{ fontSize: '13px', color: 'rgba(230,226,216,0.65)' }}>{f}</span>
             </div>
           ))}
         </div>
 
-        <div style={{ height: '1px', background: '#252725', marginBottom: '22px' }} />
+        <div style={{ height: '1px', background: '#151615', marginBottom: '22px' }} />
 
         {/* Checkout button — always shown when not Pro */}
         {!isPro && (
           <button
             onClick={() => window.open(checkoutUrl || 'https://polar.sh', '_blank', 'noopener,noreferrer')}
             style={{
-              background: '#111211', border: '1px solid #252725',
-              color: '#8C887F', padding: '10px 20px',
+              background: '#151615', border: '1px solid rgba(230,226,216,0.1)',
+              color: 'rgba(230,226,216,0.65)', padding: '10px 20px',
               fontSize: '12px', fontFamily: 'inherit',
               letterSpacing: '0.06em', textTransform: 'uppercase',
               cursor: 'pointer', borderRadius: '3px',
@@ -120,8 +125,8 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
               display: 'block', width: '100%', textAlign: 'left',
               marginBottom: '20px',
             }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#8C887F'; e.currentTarget.style.color = '#8C887F' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = '#8C887F'; e.currentTarget.style.color = '#8C887F' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(230,226,216,0.25)'; e.currentTarget.style.color = '#E6E2D8' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(230,226,216,0.1)'; e.currentTarget.style.color = 'rgba(230,226,216,0.65)' }}
           >
             Upgrade to Pro →
           </button>
@@ -133,11 +138,11 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
             onClick={() => setShowSignIn(true)}
             style={{
               background: 'none', border: 'none', padding: 0,
-              fontSize: '12px', color: '#8C887F', fontFamily: 'inherit',
+              fontSize: '12px', color: 'rgba(230,226,216,0.65)', fontFamily: 'inherit',
               cursor: 'pointer', transition: 'color 0.15s',
             }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#8C887F')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#8C887F')}
+            onMouseEnter={e => (e.currentTarget.style.color = '#E6E2D8')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(230,226,216,0.65)')}
           >
             Already subscribed? Sign in →
           </button>
@@ -149,7 +154,7 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
             {!user && (
               <>
                 <div style={{
-                  background: '#111211', border: `1px solid ${error ? '#252725' : '#252725'}`,
+                  background: '#151615', border: `1px solid ${error ? '#151615' : '#151615'}`,
                   borderRadius: '4px', padding: '11px 14px', marginBottom: '8px',
                 }}>
                   <input
@@ -158,11 +163,11 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
                     onKeyDown={e => { if (e.key === 'Enter') handleSignIn() }}
                     placeholder="you@example.com"
                     spellCheck={false} autoCapitalize="off" autoCorrect="off"
-                    style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', color: '#8C887F', fontFamily: 'inherit', letterSpacing: '0.02em' }}
+                    style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', color: 'rgba(230,226,216,0.65)', fontFamily: 'inherit', letterSpacing: '0.02em' }}
                   />
                 </div>
                 <div style={{
-                  background: '#111211', border: `1px solid ${error ? '#252725' : '#252725'}`,
+                  background: '#151615', border: `1px solid ${error ? '#151615' : '#151615'}`,
                   borderRadius: '4px', padding: '11px 14px', marginBottom: error ? '8px' : '12px',
                 }}>
                   <input
@@ -171,22 +176,22 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
                     onKeyDown={e => { if (e.key === 'Enter') handleSignIn() }}
                     placeholder="XXXX-XXXX-XXXX-XXXX"
                     spellCheck={false} autoCapitalize="off" autoCorrect="off"
-                    style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', color: '#8C887F', fontFamily: 'monospace', letterSpacing: '0.06em' }}
+                    style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', color: 'rgba(230,226,216,0.65)', fontFamily: 'monospace', letterSpacing: '0.06em' }}
                   />
                 </div>
-                {error && <div style={{ fontSize: '11px', color: '#E05A5A', margin: '0 0 12px' }}>{error}</div>}
+                {error && <div style={{ fontSize: '11px', color: 'rgba(230,226,216,0.7)', margin: '0 0 12px' }}>{error}</div>}
                 <button
                   onClick={handleSignIn} disabled={busy || !email.trim() || !key.trim()}
                   style={{
-                    background: 'transparent', border: '1px solid #252725',
-                    color: busy || !email.trim() || !key.trim() ? '#5E5A54' : '#8C887F',
+                    background: 'transparent', border: '1px solid rgba(230,226,216,0.1)',
+                    color: busy || !email.trim() || !key.trim() ? 'rgba(230,226,216,0.45)' : 'rgba(230,226,216,0.65)',
                     padding: '9px 18px', fontSize: '11px', fontFamily: 'inherit',
                     letterSpacing: '0.08em', textTransform: 'uppercase',
                     cursor: busy || !email.trim() || !key.trim() ? 'not-allowed' : 'pointer',
                     borderRadius: '3px', transition: 'color 0.15s, border-color 0.15s',
                   }}
-                  onMouseEnter={e => { if (!busy && email.trim() && key.trim()) { e.currentTarget.style.borderColor = '#8C887F'; e.currentTarget.style.color = '#8C887F' } }}
-                  onMouseLeave={e => { if (!busy && email.trim() && key.trim()) { e.currentTarget.style.borderColor = '#8C887F'; e.currentTarget.style.color = '#8C887F' } }}
+                  onMouseEnter={e => { if (!busy && email.trim() && key.trim()) { e.currentTarget.style.borderColor = 'rgba(230,226,216,0.25)'; e.currentTarget.style.color = '#E6E2D8' } }}
+                  onMouseLeave={e => { if (!busy && email.trim() && key.trim()) { e.currentTarget.style.borderColor = 'rgba(230,226,216,0.1)'; e.currentTarget.style.color = 'rgba(230,226,216,0.65)' } }}
                 >
                   {busy ? 'Signing in…' : 'Sign in'}
                 </button>
@@ -198,16 +203,16 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
                   onClick={handleRefresh} disabled={busy}
                   style={{
                     background: 'none', border: 'none', padding: 0,
-                    fontSize: '12px', color: '#8C887F', fontFamily: 'inherit',
+                    fontSize: '12px', color: 'rgba(230,226,216,0.65)', fontFamily: 'inherit',
                     cursor: busy ? 'default' : 'pointer', transition: 'color 0.15s',
                   }}
-                  onMouseEnter={e => { if (!busy) e.currentTarget.style.color = '#8C887F' }}
-                  onMouseLeave={e => { e.currentTarget.style.color = '#8C887F' }}
+                  onMouseEnter={e => { if (!busy) e.currentTarget.style.color = '#E6E2D8' }}
+                  onMouseLeave={e => { e.currentTarget.style.color = 'rgba(230,226,216,0.65)' }}
                 >
                   {busy ? 'Checking…' : 'Already subscribed? Check now'}
                 </button>
                 {checked && !isPro && (
-                  <div style={{ fontSize: '11px', color: '#8C887F', marginTop: '10px' }}>
+                  <div style={{ fontSize: '11px', color: 'rgba(230,226,216,0.65)', marginTop: '10px' }}>
                     No active subscription found.
                   </div>
                 )}
@@ -220,20 +225,20 @@ function UpgradeModal({ onClose }: { onClose: () => void }) {
           onClick={onClose}
           style={{
             marginTop: '28px', background: 'none', border: 'none', padding: 0,
-            fontSize: '12px', color: '#8C887F', letterSpacing: '0.02em',
+            fontSize: '12px', color: 'rgba(230,226,216,0.65)', letterSpacing: '0.02em',
             cursor: 'pointer', fontFamily: 'inherit', transition: 'color 0.1s',
             display: 'block',
           }}
           onMouseEnter={e => (e.currentTarget.style.color = '#E6E2D8')}
-          onMouseLeave={e => (e.currentTarget.style.color = '#8C887F')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'rgba(230,226,216,0.65)')}
         >Close</button>
       </div>
     </div>
   )
 }
 
-type WorkspaceLayout = { researchFocused: boolean; viewFocused: boolean; soloPane: 1 | 2; sidebarCollapsed: boolean }
-const DEFAULT_LAYOUT: WorkspaceLayout = { researchFocused: false, viewFocused: false, soloPane: 1, sidebarCollapsed: false }
+type WorkspaceLayout = { researchFocused: boolean; viewFocused: boolean; sidebarCollapsed: boolean }
+const DEFAULT_LAYOUT: WorkspaceLayout = { researchFocused: false, viewFocused: false, sidebarCollapsed: false }
 
 const GLOBAL_UI_KEY = 'proof-global-ui'
 function loadGlobalUI() { try { return JSON.parse(localStorage.getItem(GLOBAL_UI_KEY) || '{}') } catch { return {} } }
@@ -258,15 +263,14 @@ function AppShell() {
   const [researchFocused,  setResearchFocused]  = useState(false)
   const [viewFocused,      setViewFocused]      = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [activityOpen,     setActivityOpen]     = useState(() => !!loadGlobalUI().activityOpen)
+  const [askSiteOpen,      setAskSiteOpen]      = useState(() => !!loadGlobalUI().askSiteOpen)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [showAccount, setShowAccount] = useState(false)
-  const [soloPane, setSoloPane] = useState<1 | 2>(1)
 
   const layoutMapRef    = useRef<Record<string, WorkspaceLayout>>({})
   const prevActiveRef   = useRef<string | null>(null)
   const currentLayout   = useRef<WorkspaceLayout>(DEFAULT_LAYOUT)
-  currentLayout.current = { researchFocused, viewFocused, soloPane, sidebarCollapsed }
+  currentLayout.current = { researchFocused, viewFocused, sidebarCollapsed }
 
   // Save current layout on page unload (covers hard reload)
   useEffect(() => {
@@ -291,7 +295,6 @@ function AppShell() {
       layoutMapRef.current[activeId] = saved
       setResearchFocused(saved.researchFocused)
       setViewFocused(saved.viewFocused)
-      setSoloPane(saved.soloPane)
       setSidebarCollapsed(saved.sidebarCollapsed ?? false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -348,15 +351,15 @@ function AppShell() {
     return () => window.removeEventListener('proof:toggle-sidebar', handler)
   }, [])
 
-  // Sync activityOpen with the event system
+  // Sync askSiteOpen with the event system
   useEffect(() => {
-    const toggle = () => setActivityOpen(v => { saveGlobalUI({ activityOpen: !v }); return !v })
-    const close  = () => { saveGlobalUI({ activityOpen: false }); setActivityOpen(false) }
-    window.addEventListener('proof:activity-toggle', toggle)
-    window.addEventListener('proof:activity-close',  close)
+    const toggle = () => setAskSiteOpen(v => { saveGlobalUI({ askSiteOpen: !v }); return !v })
+    const close  = () => { saveGlobalUI({ askSiteOpen: false }); setAskSiteOpen(false) }
+    window.addEventListener('proof:ask-site-toggle', toggle)
+    window.addEventListener('proof:ask-site-close',  close)
     return () => {
-      window.removeEventListener('proof:activity-toggle', toggle)
-      window.removeEventListener('proof:activity-close',  close)
+      window.removeEventListener('proof:ask-site-toggle', toggle)
+      window.removeEventListener('proof:ask-site-close',  close)
     }
   }, [])
 
@@ -368,7 +371,7 @@ function AppShell() {
       if (Date.now() - start > 500) clearInterval(id)
     }, 32)
     return () => clearInterval(id)
-  }, [researchFocused, viewFocused, sidebarCollapsed, activityOpen])
+  }, [researchFocused, viewFocused, sidebarCollapsed, askSiteOpen])
 
   if (!mounted) {
     return (
@@ -381,18 +384,17 @@ function AppShell() {
   return (
     <>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#070807', WebkitAppRegion: 'drag' } as React.CSSProperties}>
-        <ProjectBar />
+        <ProjectBar askSiteOpen={askSiteOpen} />
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: '0 7px 7px 7px' }}>
           <SourcePanel width={DEF_SOURCE} hidden={viewFocused || sidebarCollapsed} />
           <ReaderPanel
-            soloPane={soloPane} setSoloPane={setSoloPane}
             isFocused={viewFocused} onFocusToggle={() => setViewFocused(f => !f)}
             hidden={researchFocused}
           />
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <RightPanel
               isFocused={researchFocused}
-              activityOpen={activityOpen}
+              askSiteOpen={askSiteOpen}
               onFocusToggle={() => {
                 if (researchFocused) {
                   setResearchFocused(false)
@@ -406,6 +408,7 @@ function AppShell() {
         </div>
         <SourceContextMenu />
       </div>
+      <NotificationToast />
       {showUpgrade && <UpgradeModal onClose={() => { try { localStorage.removeItem('proof-modal-open') } catch {} setShowUpgrade(false) }} />}
       {showAccount && <AccountModal onClose={() => { try { localStorage.removeItem('proof-modal-open') } catch {} setShowAccount(false) }} />}
     </>

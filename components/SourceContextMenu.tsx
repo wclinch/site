@@ -47,7 +47,7 @@ export default function SourceContextMenu() {
       onClick={e => e.stopPropagation()}
       style={{
         position: 'fixed', left: contextMenu.x, top: contextMenu.y,
-        background: '#111211', border: '1px solid #252725',
+        background: '#151615', border: '1px solid rgba(230,226,216,0.1)',
         zIndex: 200, minWidth: '140px',
         overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
       }}
@@ -57,18 +57,18 @@ export default function SourceContextMenu() {
           <button
             onClick={handleRename}
             style={menuBtn}
-            onMouseEnter={e => (e.currentTarget.style.background = '#252725')}
+            onMouseEnter={e => (e.currentTarget.style.background = '#151615')}
             onMouseLeave={e => (e.currentTarget.style.background = 'none')}
           >
             Rename
           </button>
-          <div style={{ height: '1px', background: '#252725' }} />
+          <div style={{ height: '1px', background: 'rgba(230,226,216,0.15)' }} />
         </>
       )}
       <button
         onClick={handleRemove}
-        style={{ ...menuBtn, color: '#8C887F' }}
-        onMouseEnter={e => (e.currentTarget.style.background = '#252725')}
+        style={{ ...menuBtn, color: 'rgba(230,226,216,0.65)' }}
+        onMouseEnter={e => (e.currentTarget.style.background = '#151615')}
         onMouseLeave={e => (e.currentTarget.style.background = 'none')}
       >
         {confirmDeleteSrcId === src.id

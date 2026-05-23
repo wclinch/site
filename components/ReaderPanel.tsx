@@ -1,122 +1,77 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/Page/TextLayer.css'
 import { useApp } from '@/context/AppContext'
 import { getFile } from '@/lib/idb'
-import type { QueuedSource, ViewPage } from '@/lib/types'
+import type { QueuedSource } from '@/lib/types'
+import { notify } from './NotificationsPanel'
 
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 
-// Center column — single View by default, Split View optional.
-// soloPane is owned by AppShell so it survives the unmount/remount cycle when
-// the research browser toggles fullscreen.
+// Center column — single View with a tab strip.
 export default function ReaderPanel({
-  soloPane, setSoloPane, isFocused, onFocusToggle, hidden,
+  isFocused, onFocusToggle, hidden,
 }: {
-  soloPane: 1 | 2
-  setSoloPane: (p: 1 | 2) => void
   isFocused: boolean
   onFocusToggle: () => void
   hidden?: boolean
 }) {
   const {
-    selectedSource, setSelectedId,
-    selectedSource2, setSelectedId2,
+    selectedSource,
+    viewTabs, activeViewTabId,
+    openInView, openUrlInView, closeViewTab,
     uploadFiles, patchSource,
-    view1Page, view2Page, clearView, pinPageToView, pinUrlToView,
-    sources,
-    splitView, setSplitView,
+    sources, allSources, activeId, addSourceToSession, removeSourceFromProject,
   } = useApp()
 
-  function handleToggleSplitFromPane(pane: 1 | 2) {
-    if (splitView) {
-      setSoloPane(pane)
-      setSplitView(false)
-    } else {
-      setSplitView(true)
+  const activeViewTab = viewTabs.find(t => t.id === activeViewTabId) ?? null
+  const viewPage = activeViewTab?.url
+    ? { url: activeViewTab.url, title: activeViewTab.title ?? '' }
+    : null
+
+  function handleClose() {
+    if (activeViewTabId) closeViewTab(activeViewTabId)
+  }
+
+  function handleDrop(srcId: string) {
+    const src = sources.find(s => s.id === srcId)
+    if (!src) {
+      if (activeId) {
+        addSourceToSession(srcId, activeId)
+        const pid = activeId
+        const prevTabId = activeViewTabId
+        setTimeout(() => openInView(srcId), 50)
+        notify('Opened', () => {
+          if (prevTabId) closeViewTab(prevTabId)
+          removeSourceFromProject(srcId, pid)
+        })
+      }
+      return
     }
+    if (src.fileType === 'url') openUrlInView(src.url ?? src.raw, src.label ?? '', src.id)
+    else openInView(srcId)
   }
 
-  function handleClose1() {
-    if (view1Page) clearView(1)
-    else setSelectedId(null)
-  }
-
-  function handleClose2() {
-    if (view2Page) clearView(2)
-    else setSelectedId2(null)
-  }
-
-  // URL sources dragged onto a View pane get pinned as a live page.
-  function handleDrop1(srcId: string) {
-    const src = sources.find(s => s.id === srcId)
-    if (!src) return
-    if (src.fileType === 'url') { pinPageToView(1, src) }
-    else { clearView(1); setSelectedId(srcId) }
-  }
-  function handleDrop2(srcId: string) {
-    const src = sources.find(s => s.id === srcId)
-    if (!src) return
-    if (src.fileType === 'url') { pinPageToView(2, src) }
-    else { clearView(2); setSelectedId2(srcId) }
-  }
-
-  const hide1 = !splitView && soloPane !== 1
-  const hide2 = !splitView && soloPane !== 2
+  const hasContent = !!(viewPage || selectedSource)
 
   return (
     <div style={{ flexGrow: hidden ? 0 : 1, flexShrink: 1, flexBasis: 0, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'flex-grow 0.22s ease' }}>
-      <div style={{
-        flex: 1, minHeight: 0, padding: '7px',
-        display: 'flex', flexDirection: 'column',
-        gap: splitView ? '8px' : 0,
-        transition: 'gap 0.2s ease',
-      }}>
-        <div style={{
-          flex: hide1 ? 0 : 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column',
-          transition: 'flex 0.2s ease',
-        }}>
-          <ViewPane
-            viewId={1}
-            label="View 1"
-            source={view1Page ? null : selectedSource}
-            viewPage={view1Page}
-            isHidden={hide1}
-            onClose={(view1Page || selectedSource) ? handleClose1 : undefined}
-            onSelectId={handleDrop1}
-            onDropUrl={(url, title) => pinUrlToView(1, url, title)}
-            uploadFiles={uploadFiles}
-            patchSource={patchSource}
-            onToggleSplit={() => handleToggleSplitFromPane(1)}
-            splitActive={splitView}
-            isFocused={isFocused || (!splitView && soloPane === 1)}
-            isExpanded={isFocused}
-            onFocusToggle={onFocusToggle}
-          />
-        </div>
-        <div style={{
-          flex: hide2 ? 0 : 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column',
-          transition: 'flex 0.2s ease',
-        }}>
-          <ViewPane
-            viewId={2}
-            label="View 2"
-            source={view2Page ? null : selectedSource2}
-            viewPage={view2Page}
-            isHidden={hide2}
-            onClose={(view2Page || selectedSource2) ? handleClose2 : undefined}
-            onSelectId={handleDrop2}
-            onDropUrl={(url, title) => pinUrlToView(2, url, title)}
-            uploadFiles={uploadFiles}
-            patchSource={patchSource}
-            onToggleSplit={() => handleToggleSplitFromPane(2)}
-            splitActive={splitView}
-            isFocused={isFocused || (!splitView && soloPane === 2)}
-            isExpanded={isFocused}
-            onFocusToggle={onFocusToggle}
-          />
-        </div>
+      <div style={{ flex: 1, minHeight: 0, padding: '7px', display: 'flex', flexDirection: 'column' }}>
+        <ViewPane
+          viewId={1}
+          source={viewPage ? null : selectedSource}
+          viewPage={viewPage}
+          isHidden={false}
+          onClose={hasContent ? handleClose : undefined}
+          onSelectId={handleDrop}
+          onDropUrl={(url, title) => openUrlInView(url, title)}
+          uploadFiles={uploadFiles}
+          patchSource={patchSource}
+          isFocused={isFocused}
+          isExpanded={isFocused}
+          onFocusToggle={onFocusToggle}
+        />
       </div>
     </div>
   )
@@ -125,23 +80,19 @@ export default function ReaderPanel({
 // ─── View pane ───────────────────────────────────────────────────────────────
 
 function ViewPane({
-  viewId, label, source, viewPage, isHidden, alwaysShowClose,
+  viewId, source, viewPage, isHidden,
   onClose, onSelectId, onDropUrl, uploadFiles, patchSource,
-  onToggleSplit, splitActive, isFocused, isExpanded, onFocusToggle,
+  isFocused, isExpanded, onFocusToggle,
 }: {
-  viewId: 1 | 2
-  label: string
+  viewId: 1
   source: QueuedSource | null
-  viewPage: ViewPage | null
+  viewPage: { url: string; title: string } | null
   isHidden: boolean
-  alwaysShowClose?: boolean
   onClose?: () => void
   onSelectId: (id: string) => void
   onDropUrl?: (url: string, title: string) => void
   uploadFiles: (files: FileList | File[]) => Promise<void>
   patchSource: (projId: string, srcId: string, patch: Partial<QueuedSource>) => void
-  onToggleSplit?: () => void
-  splitActive?: boolean
   isFocused?: boolean
   isExpanded?: boolean
   onFocusToggle?: () => void
@@ -194,16 +145,15 @@ function ViewPane({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewPage?.url, isHidden, viewId])
 
-  const showClose = alwaysShowClose || !!(viewPage || source)
-
   return (
     <div
       style={{
         flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
-        border: `1px solid ${dragOver ? '#252725' : isFocused ? '#252725' : '#252725'}`, borderRadius: '4px',
+        border: `1px solid ${dragOver ? 'rgba(230,226,216,0.45)' : 'rgba(230,226,216,0.1)'}`, borderRadius: '4px',
         overflow: 'hidden',
-        background: dragOver ? 'rgba(255,255,255,0.015)' : 'transparent',
-        transition: 'border-color 0.15s ease, background 0.15s',
+        background: 'transparent',
+        position: 'relative',
+        transition: 'border-color 0.15s ease',
         WebkitAppRegion: 'no-drag',
       } as React.CSSProperties}
       onDragOver={e => {
@@ -232,26 +182,27 @@ function ViewPane({
         if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files)
       }}
     >
-      <PaneHeader
-        label={label}
-        onClose={showClose ? onClose : undefined}
-        onToggleSplit={onToggleSplit}
-        splitActive={splitActive}
-        isFocused={isFocused}
-        isExpanded={isExpanded}
-        onFocusToggle={onFocusToggle}
-        dragUrl={viewPage ? { url: viewPage.url, title: viewPage.title } : undefined}
-        showSidebarToggle={viewId === 1}
-      />
+      {dragOver && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 10, pointerEvents: 'none',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(7,8,7,0.55)',
+        }}>
+          <span style={{ fontSize: '12px', color: '#E6E2D8', letterSpacing: '0.03em' }}>
+            Drop to open
+          </span>
+        </div>
+      )}
+      <ViewTabStrip onClose={onClose} isFocused={!!isFocused} isExpanded={!!isExpanded} onFocusToggle={onFocusToggle} viewPage={viewPage} />
       {viewPage
         ? (
-          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '0 1px 1px' }}>
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '0 1px 1px', cursor: 'default' }}>
             <div ref={viewportRef} style={{ flex: 1, minHeight: 0, background: '#070807', WebkitAppRegion: 'no-drag' } as React.CSSProperties} />
           </div>
         )
         : source
-          ? <SourceContent source={source} patchSource={patchSource} />
-          : <EmptySource viewId={viewId} uploadFiles={uploadFiles} />
+          ? <SourceContent source={source} patchSource={patchSource} isFocused={!!isFocused} />
+          : <EmptySource uploadFiles={uploadFiles} />
       }
     </div>
   )
@@ -260,13 +211,14 @@ function ViewPane({
 // ─── Source content router ───────────────────────────────────────────────────
 
 function SourceContent({
-  source, patchSource,
+  source, patchSource, isFocused,
 }: {
   source: QueuedSource
   patchSource: (projId: string, srcId: string, patch: Partial<QueuedSource>) => void
+  isFocused?: boolean
 }) {
   if (source.fileType === 'note')  return <NoteEditor  source={source} patchSource={patchSource} />
-  if (source.fileType === 'pdf')   return <PdfViewer   source={source} />
+  if (source.fileType === 'pdf')   return <PdfViewer   source={source} isFocused={isFocused} />
   if (source.fileType === 'image') return <ImageViewer source={source} />
   return (
     <div style={{ flex: 1, background: '#070807', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -277,7 +229,7 @@ function SourceContent({
 
 // ─── Empty pane ──────────────────────────────────────────────────────────────
 
-function EmptySource({ viewId, uploadFiles }: { viewId: 1 | 2; uploadFiles: (files: FileList | File[]) => Promise<void> }) {
+function EmptySource({ uploadFiles }: { uploadFiles: (files: FileList | File[]) => Promise<void> }) {
   const [fileDragOver, setFileDragOver] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -293,7 +245,7 @@ function EmptySource({ viewId, uploadFiles }: { viewId: 1 | 2; uploadFiles: (fil
     <div
       style={{
         flex: 1,
-        background: fileDragOver ? '#111211' : '#070807',
+        background: fileDragOver ? '#151615' : '#070807',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
         padding: '32px', gap: '8px',
@@ -311,15 +263,15 @@ function EmptySource({ viewId, uploadFiles }: { viewId: 1 | 2; uploadFiles: (fil
       }}
     >
       <span style={{
-        fontSize: '12px', color: fileDragOver ? '#8C887F' : '#8C887F',
+        fontSize: '12px', color: fileDragOver ? 'rgba(230,226,216,0.65)' : 'rgba(230,226,216,0.65)',
         letterSpacing: '0.03em', textAlign: 'center', transition: 'color 0.15s',
         userSelect: 'none',
       }}>
         {fileDragOver ? 'Drop to open.' : 'Nothing open.'}
       </span>
       {!fileDragOver && (
-        <span style={{ fontSize: '11px', color: '#8C887F', letterSpacing: '0.02em', textAlign: 'center', userSelect: 'none' }}>
-          {viewId === 2 ? 'Open a second source from the shelf.' : 'Select a source from the shelf, or drop a file.'}
+        <span style={{ fontSize: '11px', color: 'rgba(230,226,216,0.65)', letterSpacing: '0.02em', textAlign: 'center', userSelect: 'none' }}>
+          Select a source from the shelf, or drop a file.
         </span>
       )}
 
@@ -333,84 +285,178 @@ function EmptySource({ viewId, uploadFiles }: { viewId: 1 | 2; uploadFiles: (fil
   )
 }
 
-// ─── Pane header ─────────────────────────────────────────────────────────────
+// ─── Tab strip (replaces PaneHeader) ─────────────────────────────────────────
 
-function PaneHeader({ label, onClose, onToggleSplit, splitActive, isFocused, isExpanded, onFocusToggle, dragUrl, showSidebarToggle }: {
-  label: string
+function ViewTabStrip({
+  onClose, isFocused, isExpanded, onFocusToggle, viewPage,
+}: {
   onClose?: () => void
-  onToggleSplit?: () => void
-  splitActive?: boolean
-  isFocused?: boolean
-  isExpanded?: boolean
+  isFocused: boolean
+  isExpanded: boolean
   onFocusToggle?: () => void
-  dragUrl?: { url: string; title: string }
-  showSidebarToggle?: boolean
+  viewPage: { url: string; title: string } | null
 }) {
+  const { viewTabs, activeViewTabId, activeId, closeViewTab, switchViewTab, reorderViewTabs, allSources } = useApp()
+  const [dropVisualId, setDropVisualId] = useState<string | null>(null)
+  const dragTabIdRef    = useRef<string | null>(null)
+  const dropTargetIdRef = useRef<string | null>(null)
+
+  function tabLabel(tab: import('@/lib/types').ViewTab): string {
+    if (tab.srcId) {
+      const src = allSources.find(s => s.id === tab.srcId)
+      return src?.label || src?.raw || 'Document'
+    }
+    if (tab.url) {
+      if (tab.title) return tab.title
+      try { return new URL(tab.url).hostname.replace(/^www\./, '') } catch { return tab.url }
+    }
+    return 'View'
+  }
+
   return (
-    <div style={{
-      height: '32px', flexShrink: 0,
-      display: 'flex', alignItems: 'center',
-      padding: '0 6px 0 6px',
-      borderBottom: '1px solid #252725',
-      gap: '2px',
-      WebkitAppRegion: 'no-drag',
-    } as React.CSSProperties}>
-      {showSidebarToggle && <SidebarToggleBtn />}
-      {/* Label chip — draggable when a page is pinned */}
-      <span
-        draggable={!!dragUrl}
-        onDragStart={dragUrl ? e => {
-          e.dataTransfer.setData('application/x-proof-web-url', JSON.stringify(dragUrl))
-          e.dataTransfer.effectAllowed = 'copy'
-        } : undefined}
-        title={dragUrl ? `Drag to Web to open in a new tab` : undefined}
-        style={{
+    <div
+      style={{
+        height: '44px', flexShrink: 0,
+        display: 'flex', alignItems: 'center',
+        padding: '0 4px 0 8px',
+        borderBottom: '1px solid rgba(230,226,216,0.1)',
+        gap: '2px',
+        WebkitAppRegion: 'no-drag',
+        overflow: 'hidden',
+      } as React.CSSProperties}
+      onDragOver={e => {
+        if (e.dataTransfer.types.includes('application/x-proof-view-tab-id')) e.preventDefault()
+      }}
+      onDragLeave={e => {
+        if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
+          dropTargetIdRef.current = null; setDropVisualId(null)
+        }
+      }}
+      onDrop={e => {
+        const fromId = e.dataTransfer.getData('application/x-proof-view-tab-id')
+        const toId   = dropTargetIdRef.current
+        if (fromId && toId && fromId !== toId) reorderViewTabs(fromId, toId)
+        dragTabIdRef.current = null; dropTargetIdRef.current = null; setDropVisualId(null)
+      }}
+    >
+      {/* Tabs */}
+      {viewTabs.map(tab => {
+        const isActive = tab.id === activeViewTabId
+        const label = tabLabel(tab)
+        const dragUrl = tab.url ? { url: tab.url, title: tab.title ?? tab.url } : undefined
+        return (
+          <TabChip
+            key={tab.id}
+            label={label}
+            active={isActive}
+            dragUrl={dragUrl}
+            srcId={tab.srcId}
+            dragBefore={dropVisualId === tab.id && dragTabIdRef.current !== tab.id}
+            onClick={() => switchViewTab(tab.id)}
+            onClose={e => { e.stopPropagation(); closeViewTab(tab.id) }}
+            onDragStart={() => {
+              dragTabIdRef.current = tab.id
+              window.dispatchEvent(new CustomEvent('proof:drag-active', { detail: { originalSessionId: activeId } }))
+            }}
+            onDragEnd={e => {
+              dragTabIdRef.current = null; setDropVisualId(null)
+              window.dispatchEvent(new CustomEvent('proof:drag-done', { detail: { canceled: e.dataTransfer.dropEffect === 'none' } }))
+            }}
+            onDragOver={e => {
+              if (!e.dataTransfer.types.includes('application/x-proof-view-tab-id')) return
+              e.preventDefault(); e.stopPropagation()
+              if (dropTargetIdRef.current !== tab.id) {
+                dropTargetIdRef.current = tab.id; setDropVisualId(tab.id)
+              }
+            }}
+            tabId={tab.id}
+          />
+        )
+      })}
+      {viewTabs.length === 0 && (
+        <span style={{
+          height: '28px', padding: '0 12px',
           display: 'inline-flex', alignItems: 'center',
-          height: '22px', padding: '0 8px',
-          borderRadius: '4px',
-          background: '#111211',
-          border: '1px solid #252725',
-          fontSize: '10px', color: '#E6E2D8', letterSpacing: '0.04em',
-          userSelect: 'none', cursor: dragUrl ? 'grab' : 'default',
-          marginLeft: showSidebarToggle ? '2px' : '4px',
-          maxWidth: '160px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
-          flexShrink: 0,
+          borderRadius: '4px', background: '#151615', border: '1px solid rgba(230,226,216,0.1)',
+          fontSize: '13px', color: '#E6E2D8', letterSpacing: '0.01em',
+          userSelect: 'none', marginLeft: '4px', flexShrink: 0,
         }}>
-        {label}
-      </span>
-      {/* Spacer so buttons stay right-aligned */}
+          View
+        </span>
+      )}
       <div style={{ flex: 1 }} />
-      {onToggleSplit && <SplitBtn active={!!splitActive} onClick={onToggleSplit} />}
-      {onFocusToggle && <FocusBtn active={!!isExpanded} onClick={onFocusToggle} />}
+      {onFocusToggle && <FocusBtn active={isExpanded} onClick={onFocusToggle} />}
       {onClose && <IconBtn onClick={onClose} title="Close"><CloseIcon /></IconBtn>}
     </div>
   )
 }
 
-function SidebarToggleBtn() {
+function TabChip({
+  label, active, dragUrl, srcId, dragBefore, onClick, onClose, onDragStart, onDragEnd, onDragOver, tabId,
+}: {
+  label: string
+  active: boolean
+  dragUrl?: { url: string; title: string }
+  srcId?: string
+  dragBefore?: boolean
+  onClick: () => void
+  onClose: (e: React.MouseEvent) => void
+  onDragStart?: () => void
+  onDragEnd?: (e: React.DragEvent) => void
+  onDragOver?: (e: React.DragEvent) => void
+  tabId: string
+}) {
   const [hov, setHov] = useState(false)
   return (
-    <button
-      onClick={() => window.dispatchEvent(new Event('proof:toggle-sidebar'))}
+    <div
+      onClick={onClick}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
-      title="Toggle sidebar"
+      draggable
+      onDragStart={e => {
+        e.dataTransfer.setData('application/x-proof-view-tab-id', tabId)
+        if (srcId) e.dataTransfer.setData('application/x-proof-source-id', srcId)
+        if (dragUrl) e.dataTransfer.setData('application/x-proof-web-url', JSON.stringify(dragUrl))
+        e.dataTransfer.effectAllowed = 'move'
+        onDragStart?.()
+      }}
+      onDragEnd={e => onDragEnd?.(e)}
+      onDragOver={onDragOver}
       style={{
-        width: '26px', height: '26px', flexShrink: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'none', border: 'none', borderRadius: '3px',
-        color: hov ? '#8C887F' : '#8C887F',
-        cursor: 'pointer', padding: 0, outline: 'none', lineHeight: 0,
-        transition: 'color 0.12s',
+        display: 'inline-flex', alignItems: 'center', gap: '4px',
+        height: '28px', padding: '0 8px 0 12px',
+        borderRadius: '4px',
+        background: active ? '#151615' : hov ? 'rgba(21,22,21,0.5)' : 'none',
+        border: `1px solid ${active ? 'rgba(230,226,216,0.1)' : 'transparent'}`,
+        borderLeft: dragBefore ? '2px solid rgba(230,226,216,0.65)' : active ? '1px solid rgba(230,226,216,0.1)' : '1px solid transparent',
+        fontSize: '13px', color: active ? '#E6E2D8' : 'rgba(230,226,216,0.65)',
+        letterSpacing: '0.01em', userSelect: 'none', cursor: 'grab', flexShrink: 0,
+        maxWidth: '160px', overflow: 'hidden',
+        transition: 'background 0.1s, color 0.1s',
       }}
     >
-      <svg width="14" height="11" viewBox="0 0 14 11" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="0.7" y="0.7" width="12.6" height="9.6" rx="1.5" />
-        <line x1="4.7" y1="0.7" x2="4.7" y2="10.3" />
-      </svg>
-    </button>
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+      <button
+        onClick={onClose}
+        style={{
+          flexShrink: 0, width: '16px', height: '16px',
+          display: hov || active ? 'flex' : 'none',
+          alignItems: 'center', justifyContent: 'center',
+          background: 'none', border: 'none', padding: 0, cursor: 'pointer', outline: 'none',
+          color: 'rgba(230,226,216,0.55)', lineHeight: 0,
+          borderRadius: '2px',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.color = '#E6E2D8')}
+        onMouseLeave={e => (e.currentTarget.style.color = 'rgba(230,226,216,0.55)')}
+      >
+        <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+          <path d="M1 1L7 7M7 1L1 7" />
+        </svg>
+      </button>
+    </div>
   )
 }
+
 
 // ─── Note editor ─────────────────────────────────────────────────────────────
 
@@ -444,7 +490,7 @@ function NoteEditor({
           flex: 1, width: '100%', minHeight: '100%',
           background: 'transparent', border: 'none', outline: 'none',
           resize: 'none', padding: '20px 24px',
-          fontSize: '13px', lineHeight: 1.8, color: '#8C887F',
+          fontSize: '13px', lineHeight: 1.8, color: 'rgba(230,226,216,0.65)',
           fontFamily: 'Georgia, "Times New Roman", serif',
           boxSizing: 'border-box',
         }}
@@ -455,15 +501,16 @@ function NoteEditor({
 
 // ─── Zoom cursors ─────────────────────────────────────────────────────────────
 
-const CURSOR_IN  = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 22 22'%3E%3Ccircle cx='9' cy='9' r='6.5' fill='none' stroke='white' stroke-width='1.4'/%3E%3Cline x1='6' y1='9' x2='12' y2='9' stroke='white' stroke-width='1.4' stroke-linecap='round'/%3E%3Cline x1='9' y1='6' x2='9' y2='12' stroke='white' stroke-width='1.4' stroke-linecap='round'/%3E%3Cline x1='14' y1='14' x2='20' y2='20' stroke='white' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") 5 5, zoom-in`
-const CURSOR_OUT = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 22 22'%3E%3Ccircle cx='9' cy='9' r='6.5' fill='none' stroke='white' stroke-width='1.4'/%3E%3Cline x1='6' y1='9' x2='12' y2='9' stroke='white' stroke-width='1.4' stroke-linecap='round'/%3E%3Cline x1='14' y1='14' x2='20' y2='20' stroke='white' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") 5 5, zoom-out`
+// Shadow layer (black, thick) drawn first, then white on top — visible on both light PDFs and dark backgrounds
+const CURSOR_IN  = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 22 22'%3E%3Ccircle cx='9' cy='9' r='6.5' fill='none' stroke='black' stroke-width='3.5' stroke-opacity='0.55'/%3E%3Cline x1='6' y1='9' x2='12' y2='9' stroke='black' stroke-width='3.5' stroke-linecap='round' stroke-opacity='0.55'/%3E%3Cline x1='9' y1='6' x2='9' y2='12' stroke='black' stroke-width='3.5' stroke-linecap='round' stroke-opacity='0.55'/%3E%3Cline x1='14' y1='14' x2='20' y2='20' stroke='black' stroke-width='3.5' stroke-linecap='round' stroke-opacity='0.55'/%3E%3Ccircle cx='9' cy='9' r='6.5' fill='none' stroke='white' stroke-width='2'/%3E%3Cline x1='6' y1='9' x2='12' y2='9' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='9' y1='6' x2='9' y2='12' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='14' y1='14' x2='20' y2='20' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") 8 8, zoom-in`
+const CURSOR_OUT = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 22 22'%3E%3Ccircle cx='9' cy='9' r='6.5' fill='none' stroke='black' stroke-width='3.5' stroke-opacity='0.55'/%3E%3Cline x1='6' y1='9' x2='12' y2='9' stroke='black' stroke-width='3.5' stroke-linecap='round' stroke-opacity='0.55'/%3E%3Cline x1='14' y1='14' x2='20' y2='20' stroke='black' stroke-width='3.5' stroke-linecap='round' stroke-opacity='0.55'/%3E%3Ccircle cx='9' cy='9' r='6.5' fill='none' stroke='white' stroke-width='2'/%3E%3Cline x1='6' y1='9' x2='12' y2='9' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='14' y1='14' x2='20' y2='20' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") 8 8, zoom-out`
 
 // ─── Image viewer ────────────────────────────────────────────────────────────
 
 function ImageViewer({ source }: { source: QueuedSource }) {
   const [imgUrl,     setImgUrl]     = useState<string | null>(null)
   const [zoomed,     setZoomed]     = useState(false)
-  const [zoomOrigin, setZoomOrigin] = useState<{ x: number; y: number } | null>(null)
+  const [zoomOrigin, setZoomOrigin] = useState<{ x: number; y: number; vx: number; vy: number } | null>(null)
   const prevUrl      = useRef<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -498,17 +545,15 @@ function ImageViewer({ source }: { source: QueuedSource }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [zoomed])
 
-  // Scroll to clicked point after zooming in
-  useEffect(() => {
+  // Scroll so clicked pixel stays under cursor after zoom
+  useLayoutEffect(() => {
     if (!zoomed || !zoomOrigin || !containerRef.current) return
     const container = containerRef.current
     const img = container.querySelector('img') as HTMLImageElement | null
     if (!img) return
     const doScroll = () => {
-      const scrollX = img.naturalWidth  * zoomOrigin.x - container.clientWidth  / 2
-      const scrollY = img.naturalHeight * zoomOrigin.y - container.clientHeight / 2
-      container.scrollLeft = Math.max(0, scrollX)
-      container.scrollTop  = Math.max(0, scrollY)
+      container.scrollLeft = Math.max(0, img.naturalWidth  * zoomOrigin.x - zoomOrigin.vx)
+      container.scrollTop  = Math.max(0, img.naturalHeight * zoomOrigin.y - zoomOrigin.vy)
     }
     if (reducedMotion) doScroll(); else requestAnimationFrame(doScroll)
   }, [zoomed, zoomOrigin, reducedMotion])
@@ -517,10 +562,13 @@ function ImageViewer({ source }: { source: QueuedSource }) {
     if (zoomed) { setZoomed(false); setZoomOrigin(null); return }
     const img = (e.currentTarget as HTMLDivElement).querySelector('img')
     if (!img) return
-    const rect = img.getBoundingClientRect()
+    const imgRect       = img.getBoundingClientRect()
+    const containerRect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
     setZoomOrigin({
-      x: Math.max(0, Math.min(1, (e.clientX - rect.left)  / rect.width)),
-      y: Math.max(0, Math.min(1, (e.clientY - rect.top)   / rect.height)),
+      x:  Math.max(0, Math.min(1, (e.clientX - imgRect.left) / imgRect.width)),
+      y:  Math.max(0, Math.min(1, (e.clientY - imgRect.top)  / imgRect.height)),
+      vx: e.clientX - containerRect.left,
+      vy: e.clientY - containerRect.top,
     })
     setZoomed(true)
   }
@@ -541,6 +589,7 @@ function ImageViewer({ source }: { source: QueuedSource }) {
             overflow: zoomed ? 'auto' : 'hidden',
             padding: zoomed ? '0' : '20px',
             cursor: zoomed ? CURSOR_OUT : CURSOR_IN,
+            userSelect: 'none',
           }}
         >
           <img
@@ -565,11 +614,13 @@ function ImageViewer({ source }: { source: QueuedSource }) {
 
 // ─── PDF viewer ──────────────────────────────────────────────────────────────
 
-function PdfViewer({ source }: { source: QueuedSource }) {
+function PdfViewer({ source, isFocused }: { source: QueuedSource; isFocused?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(640)
-  const [fileUrl, setFileUrl]     = useState<string | null>(null)
-  const [numPages, setNumPages]   = useState(0)
+  const [zoomed,    setZoomed]    = useState(false)
+  const [clickPos,  setClickPos]  = useState<{ cx: number; cy: number; vx: number; vy: number } | null>(null)
+  const [fileUrl,   setFileUrl]   = useState<string | null>(null)
+  const [numPages,  setNumPages]  = useState(0)
   const [loadError, setLoadError] = useState(false)
   const prevUrl = useRef<string | null>(null)
 
@@ -603,15 +654,64 @@ function PdfViewer({ source }: { source: QueuedSource }) {
     if (prevUrl.current) URL.revokeObjectURL(prevUrl.current)
   }, [])
 
+  useEffect(() => { setZoomed(false); setClickPos(null) }, [source.id])
+
+  useEffect(() => {
+    if (!zoomed) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setZoomed(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [zoomed])
+
+  // After zoom re-render, scroll so the clicked pixel stays under the cursor
+  useLayoutEffect(() => {
+    if (!containerRef.current || !clickPos) return
+    const el = containerRef.current
+    if (zoomed) {
+      // Just zoomed in (1x → 1.75x): cx/cy are in 1x content space
+      el.scrollLeft = Math.max(0, clickPos.cx * 1.75 - clickPos.vx)
+      el.scrollTop  = Math.max(0, clickPos.cy * 1.75 - clickPos.vy)
+    } else {
+      // Just zoomed out (1.75x → 1x): cx/cy are in 1.75x content space
+      el.scrollLeft = Math.max(0, clickPos.cx / 1.75 - clickPos.vx)
+      el.scrollTop  = Math.max(0, clickPos.cy / 1.75 - clickPos.vy)
+    }
+  }, [zoomed, clickPos])
+
+  const baseWidth = isFocused ? Math.min(containerWidth - 32, 520) : (containerWidth - 32)
+  const pageWidth = zoomed ? baseWidth * 1.75 : baseWidth
+
   return (
-    <div ref={containerRef} style={{ flex: 1, overflow: 'auto', background: '#070807', display: 'flex', flexDirection: 'column', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+    <div
+      ref={containerRef}
+      onMouseDown={e => {
+        if (e.button === 0 && fileUrl && !loadError) {
+          e.preventDefault()
+          const el = containerRef.current
+          if (el) {
+            const rect = el.getBoundingClientRect()
+            const vx = e.clientX - rect.left
+            const vy = e.clientY - rect.top
+            setClickPos({ cx: el.scrollLeft + vx, cy: el.scrollTop + vy, vx, vy })
+          }
+          setZoomed(z => !z)
+        }
+      }}
+      style={{
+        flex: 1, overflow: 'auto', background: '#070807',
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        WebkitAppRegion: 'no-drag',
+        userSelect: 'none',
+        cursor: fileUrl && !loadError ? (zoomed ? CURSOR_OUT : CURSOR_IN) : 'default',
+      } as React.CSSProperties}
+    >
       {source.status === 'queued'           && <Msg>Waiting…</Msg>}
       {source.status === 'extracting'       && <Msg>Opening…</Msg>}
       {source.status === 'done' && !fileUrl && <Msg>Opening…</Msg>}
       {source.status === 'error'            && <Msg>{source.error ?? 'Failed to open.'}</Msg>}
       {source.status === 'done' && loadError && <Msg>Could not read this file.</Msg>}
       {source.status === 'done' && fileUrl && !loadError && (
-        <div>
+        <div style={{ margin: 'auto 0', padding: '16px 0' }}>
           <Document
             file={fileUrl}
             onLoadSuccess={({ numPages }) => { setNumPages(numPages); setLoadError(false) }}
@@ -620,8 +720,8 @@ function PdfViewer({ source }: { source: QueuedSource }) {
             error={null}
           >
             {Array.from({ length: numPages }, (_, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}>
-                <Page pageNumber={i + 1} width={containerWidth} renderTextLayer renderAnnotationLayer={false} />
+              <div key={i} style={{ display: 'flex', justifyContent: 'center', marginBottom: i < numPages - 1 ? '8px' : 0 }}>
+                <Page pageNumber={i + 1} width={pageWidth} renderTextLayer={false} renderAnnotationLayer={false} />
               </div>
             ))}
           </Document>
@@ -652,7 +752,7 @@ function PaneIconBtn({ title, active, faint, onClick, children }: {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'none', border: 'none', cursor: 'pointer',
         padding: 0, lineHeight: 0, flexShrink: 0,
-        color: active ? '#8C887F' : hov ? '#8C887F' : '#8C887F',
+        color: active ? '#E6E2D8' : hov ? '#E6E2D8' : 'rgba(230,226,216,0.65)',
         borderRadius: '3px',
         transition: 'color 0.12s',
       }}
@@ -738,7 +838,7 @@ function Msg({ children }: { children: React.ReactNode }) {
     <div style={{
       flex: 1, minHeight: '40px',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: '11px', color: '#8C887F', letterSpacing: '0.02em',
+      fontSize: '11px', color: 'rgba(230,226,216,0.65)', letterSpacing: '0.02em',
     }}>
       {children}
     </div>
@@ -752,7 +852,7 @@ function Empty({ label }: { label: string }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: '32px 24px',
     }}>
-      <span style={{ fontSize: '13px', color: '#8C887F', letterSpacing: '0.02em' }}>{label}</span>
+      <span style={{ fontSize: '13px', color: 'rgba(230,226,216,0.65)', letterSpacing: '0.02em' }}>{label}</span>
     </div>
   )
 }

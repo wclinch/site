@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, shell, protocol, nativeImage, ipcMain, WebContentsView, session } = require('electron')
+const { app, BrowserWindow, Menu, dialog, shell, protocol, nativeImage, ipcMain, WebContentsView, session, desktopCapturer, systemPreferences } = require('electron')
 const path = require('path')
 const fs   = require('fs')
 
@@ -1166,6 +1166,38 @@ app.whenReady().then(() => {
   session.fromPartition('persist:site-research-A').setUserAgent(CHROME_UA)
 
   buildMenu()
+  ipcMain.handle('window:capture-page', async () => {
+    if (!mainWindow) return null
+    try {
+      // Prefer desktopCapturer — captures the full composite window including
+      // all WebContentsViews (web browser, view panes, PDFs, images).
+      // On macOS this requires Screen Recording permission; we check first.
+      const canCapture = process.platform !== 'darwin' ||
+        systemPreferences.getMediaAccessStatus('screen') === 'granted'
+
+      if (canCapture) {
+        const bounds = mainWindow.getBounds()
+        const w = Math.min(bounds.width  * 2, 2560)
+        const h = Math.min(bounds.height * 2, 1600)
+        const sources = await desktopCapturer.getSources({
+          types: ['window'],
+          thumbnailSize: { width: w, height: h },
+        })
+        const sourceId = mainWindow.getMediaSourceId()
+        const target = sources.find(s => s.id === sourceId)
+        if (target) {
+          const png = target.thumbnail.toPNG()
+          if (png.length > 0) return png.toString('base64')
+        }
+      }
+
+      // Fallback: capture main webContents only (no permission needed, but
+      // won't include WebContentsViews like the embedded browser/view panes).
+      const image = await mainWindow.webContents.capturePage()
+      return image.toPNG().toString('base64')
+    } catch { return null }
+  })
+
   ipcMain.handle('shell:open-external', (_e, url) => {
     try {
       const { protocol: p } = new URL(url)

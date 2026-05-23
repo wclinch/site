@@ -82,4 +82,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     loadWorkspace: (payload) => ipcRenderer.send('research:load-workspace', payload),
   },
+  captureWindow: () => ipcRenderer.invoke('window:capture-page'),
 })

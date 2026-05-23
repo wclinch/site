@@ -64,21 +64,21 @@ export default function NotificationsBtn() {
       style={{
         height: '28px', padding: '0 7px', position: 'relative',
         background: 'none', border: 'none', borderRadius: '3px',
-        color: active ? '#E6E2D8' : '#8C887F',
+        color: active ? '#E6E2D8' : 'rgba(230,226,216,0.65)',
         fontSize: '11px', letterSpacing: '0.04em',
         cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
         transition: 'color 0.12s',
         WebkitAppRegion: 'no-drag',
       } as React.CSSProperties}
       onMouseEnter={e => { e.currentTarget.style.color = '#E6E2D8' }}
-      onMouseLeave={e => { if (!active) e.currentTarget.style.color = '#8C887F' }}
+      onMouseLeave={e => { if (!active) e.currentTarget.style.color = 'rgba(230,226,216,0.65)' }}
     >
       Activity
       {unread > 0 && (
         <span style={{
           position: 'absolute', top: '5px', right: '1px',
           width: '5px', height: '5px', borderRadius: '50%',
-          background: '#8C887F', display: 'block',
+          background: 'rgba(230,226,216,0.65)', display: 'block',
         }} />
       )}
     </button>
@@ -146,14 +146,14 @@ export function ActivityPanel() {
   return (
     <div style={{
       flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
-      border: '1px solid #252725', borderRadius: '4px',
+      border: '1px solid rgba(230,226,216,0.1)', borderRadius: '4px',
       background: '#070807', overflow: 'hidden',
     }}>
       {/* Header */}
       <div style={{
         height: '36px', flexShrink: 0,
         display: 'flex', alignItems: 'center',
-        padding: '0 6px 0 12px', borderBottom: '1px solid #252725',
+        padding: '0 6px 0 12px', borderBottom: '1px solid rgba(230,226,216,0.1)',
         userSelect: 'none', gap: '6px',
       }}>
         <span style={{ flex: 1, fontSize: '10px', color: '#E6E2D8', letterSpacing: '0.04em' }}>Activity</span>
@@ -165,14 +165,14 @@ export function ActivityPanel() {
                 background: 'none', border: 'none', padding: 0, height: '22px',
                 fontSize: '10px', cursor: 'pointer',
                 fontFamily: 'inherit', letterSpacing: '0.02em', transition: 'color 0.1s',
-                color: clearArmed ? '#E6E2D8' : '#5E5A54',
+                color: clearArmed ? '#E6E2D8' : 'rgba(230,226,216,0.45)',
               }}
-              onMouseEnter={e => { if (!clearArmed) e.currentTarget.style.color = '#8C887F' }}
-              onMouseLeave={e => { if (!clearArmed) e.currentTarget.style.color = '#5E5A54' }}
+              onMouseEnter={e => { if (!clearArmed) e.currentTarget.style.color = '#E6E2D8' }}
+              onMouseLeave={e => { if (!clearArmed) e.currentTarget.style.color = 'rgba(230,226,216,0.45)' }}
             >
               {clearArmed ? 'Confirm?' : 'Clear all'}
             </button>
-            <div style={{ width: '1px', height: '10px', background: '#252725', flexShrink: 0 }} />
+            <div style={{ width: '1px', height: '10px', background: 'rgba(230,226,216,0.2)', flexShrink: 0 }} />
           </>
         )}
         <button
@@ -181,11 +181,11 @@ export function ActivityPanel() {
             width: '22px', height: '22px', flexShrink: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             background: 'none', border: 'none', borderRadius: '3px',
-            cursor: 'pointer', color: '#5E5A54', lineHeight: 0,
+            cursor: 'pointer', color: 'rgba(230,226,216,0.45)', lineHeight: 0,
             transition: 'color 0.1s',
           }}
-          onMouseEnter={e => (e.currentTarget.style.color = '#8C887F')}
-          onMouseLeave={e => (e.currentTarget.style.color = '#5E5A54')}
+          onMouseEnter={e => (e.currentTarget.style.color = '#E6E2D8')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'rgba(230,226,216,0.45)')}
         >
           <svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
             <path d="M1 1L8 8M8 1L1 8" />
@@ -197,22 +197,23 @@ export function ActivityPanel() {
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {notifs.length === 0 ? (
           <div style={{
-            padding: '28px 14px', fontSize: '11px',
-            color: '#5E5A54', textAlign: 'center', letterSpacing: '0.02em',
+            height: '100%', padding: '0 14px', textAlign: 'center', letterSpacing: '0.02em',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px',
           }}>
-            No recent activity.
+            <span style={{ fontSize: '12px', color: 'rgba(230,226,216,0.65)' }}>No activity yet.</span>
+            <span style={{ fontSize: '11px', color: 'rgba(230,226,216,0.45)' }}>Removals and actions appear here with undo.</span>
           </div>
         ) : notifs.map((n, i) => (
           <div key={n.id} style={{
             display: 'flex', alignItems: 'flex-start', gap: '8px',
             padding: '9px 10px 9px 12px',
-            borderBottom: i < notifs.length - 1 ? '1px solid #1a1b1a' : 'none',
+            borderBottom: i < notifs.length - 1 ? '1px solid rgba(230,226,216,0.1)' : 'none',
           }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '11px', color: '#8C887F', lineHeight: 1.45, wordBreak: 'break-word' }}>
+              <div style={{ fontSize: '12px', color: 'rgba(230,226,216,0.65)', lineHeight: 1.45, wordBreak: 'break-word' }}>
                 {n.message}
               </div>
-              <div style={{ fontSize: '10px', color: '#5E5A54', marginTop: '2px', letterSpacing: '0.02em' }}>
+              <div style={{ fontSize: '11px', color: 'rgba(230,226,216,0.45)', marginTop: '2px', letterSpacing: '0.02em' }}>
                 {timeAgo(n.ts)}
               </div>
             </div>
@@ -221,13 +222,13 @@ export function ActivityPanel() {
                 <button
                   onClick={() => handleUndo(n)}
                   style={{
-                    background: 'none', border: '1px solid #252725', borderRadius: '3px',
+                    background: 'none', border: '1px solid rgba(230,226,216,0.1)', borderRadius: '3px',
                     padding: '2px 8px', cursor: 'pointer',
                     fontSize: '10px', color: '#E6E2D8', fontFamily: 'inherit',
                     letterSpacing: '0.03em', transition: 'border-color 0.1s',
                   }}
-                  onMouseEnter={e => (e.currentTarget.style.borderColor = '#8C887F')}
-                  onMouseLeave={e => (e.currentTarget.style.borderColor = '#252725')}
+                  onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(230,226,216,0.25)')}
+                  onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(230,226,216,0.1)')}
                 >
                   Undo
                 </button>

@@ -42,12 +42,22 @@ export interface ViewPage {
   srcId?: string
 }
 
+export interface ViewTab {
+  id: string
+  srcId?: string
+  url?: string
+  title?: string
+}
+
 export interface Project {
   id: string
   name: string
   sources: QueuedSource[]
   pinned?: boolean
-  // Per-workspace state — saved on switch/explicit save
+  // Per-workspace view tabs (current model)
+  viewTabs?: ViewTab[]
+  activeViewTabId?: string | null
+  // Legacy — read-only for migration, no longer written
   sel1?: string | null
   sel2?: string | null
   view1Page?: ViewPage | null

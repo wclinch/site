@@ -15,7 +15,7 @@ export default function Nav() {
     <nav style={{
       padding: '0 20px', height: '44px',
       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      borderBottom: '1px solid #252725', flexShrink: 0,
+      borderBottom: '1px solid rgba(230,226,216,0.1)', flexShrink: 0,
       WebkitAppRegion: 'drag',
     } as React.CSSProperties}>
       <Link href="/" aria-label="Site"
@@ -32,11 +32,7 @@ export default function Nav() {
         display: 'flex', gap: '8px', alignItems: 'center',
         WebkitAppRegion: 'no-drag',
       } as React.CSSProperties}>
-        <div style={{ width: '1px', height: '14px', background: '#252725', marginRight: '2px', flexShrink: 0 }} />
-        <Link href="/about"   className="nav-link">About</Link>
-        <span style={{ color: '#252725', fontSize: '14px', lineHeight: 1, userSelect: 'none' }}>·</span>
-        <Link href="/privacy" className="nav-link">Privacy</Link>
-        <span style={{ color: '#252725', fontSize: '14px', lineHeight: 1, userSelect: 'none' }}>·</span>
+        <div style={{ width: '1px', height: '14px', background: '#151615', marginRight: '2px', flexShrink: 0 }} />
         <a href="mailto:Official_Site_Support@protonmail.com?subject=Site%20support"
            className="nav-link">Support</a>
       </div>

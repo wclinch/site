@@ -7,6 +7,7 @@ import { isAuthUrl, isAuthBlockedTitle } from './web/webTypes'
 import WebTabBar from './web/WebTabBar'
 import WebToolbar from './web/WebToolbar'
 import WebHomePage, { type WebHomePageHandle } from './web/WebHomePage'
+import { notify } from './NotificationsPanel'
 
 const MAX_TABS = 20
 
@@ -24,9 +25,9 @@ function FallbackBtn({ children, onClick }: { children: React.ReactNode; onClick
       style={{
         height: '26px', padding: '0 12px', flexShrink: 0,
         background: 'none',
-        border: `1px solid ${hov ? '#5E5A54' : '#252725'}`,
+        border: `1px solid ${hov ? 'rgba(230,226,216,0.45)' : '#151615'}`,
         borderRadius: '3px',
-        color: hov ? '#8C887F' : '#8C887F',
+        color: hov ? 'rgba(230,226,216,0.65)' : 'rgba(230,226,216,0.65)',
         fontSize: '11px', letterSpacing: '0.03em',
         cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
         transition: 'color 0.12s, border-color 0.12s',
@@ -35,9 +36,10 @@ function FallbackBtn({ children, onClick }: { children: React.ReactNode; onClick
   )
 }
 
-export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
+export default function ResearchBrowser({ isFocused = false, onFocusToggle, askSiteOpen }: {
   isFocused?: boolean
   onFocusToggle?: () => void
+  askSiteOpen?: boolean
 }) {
   const panelId = 'A'
   const { addUrl, sources, activeId } = useApp()
@@ -71,6 +73,14 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
   useEffect(() => { activeTabIdRef.current = activeTabId }, [activeTabId])
   useEffect(() => { tabsRef.current = tabs }, [tabs])
   useEffect(() => { setIsElectron(!!window.electronAPI) }, [])
+
+  // Broadcast current web state for Ask Site context
+  useEffect(() => {
+    const active = tabs.find(t => t.id === activeTabId)
+    window.dispatchEvent(new CustomEvent('proof:web-state', {
+      detail: { url: homeMode ? '' : (active?.url || ''), title: active?.title || '' },
+    }))
+  }, [tabs, activeTabId, homeMode])
 
   useEffect(() => {
     const st = tabStatuses[activeTabId]
@@ -392,7 +402,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
     }}>
       <div style={{
         flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
-        border: '1px solid #252725', borderRadius: '4px', overflow: 'hidden',
+        border: '1px solid rgba(230,226,216,0.1)', borderRadius: '4px', overflow: 'hidden',
       }}>
 
         <WebTabBar
@@ -401,6 +411,10 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
           panelId={panelId}
           isFocused={isFocused}
           onFocusToggle={onFocusToggle}
+          askSiteOpen={askSiteOpen}
+          onTabDragStart={() => {
+            window.dispatchEvent(new CustomEvent('proof:drag-active', { detail: { originalSessionId: activeId } }))
+          }}
           onReorderTabs={(fromId, toId) => {
             setTabs(ts => {
               const from = ts.findIndex(t => t.id === fromId)
@@ -440,8 +454,8 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
             height: '22px', flexShrink: 0,
             display: 'flex', alignItems: 'center',
             padding: '0 12px',
-            background: '#070807', borderBottom: '1px solid #111211',
-            fontSize: '10px', color: '#8C887F', letterSpacing: '0.03em',
+            background: '#070807', borderBottom: '1px solid #151615',
+            fontSize: '10px', color: 'rgba(230,226,216,0.65)', letterSpacing: '0.03em',
             userSelect: 'none',
           }}>
             {getShortcutHint(urlInput)}
@@ -465,10 +479,10 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                 gap: '8px', padding: '32px', userSelect: 'none',
               }}>
-                <p style={{ fontSize: '13px', color: '#8C887F', margin: 0, fontWeight: 500, textAlign: 'center' }}>
+                <p style={{ fontSize: '13px', color: 'rgba(230,226,216,0.65)', margin: 0, fontWeight: 500, textAlign: 'center' }}>
                   {isBlocked ? 'Sign-in blocked.' : "Page didn't load."}
                 </p>
-                <p style={{ fontSize: '11px', color: '#8C887F', margin: '4px 0 12px', lineHeight: 1.65, textAlign: 'center', maxWidth: '300px' }}>
+                <p style={{ fontSize: '11px', color: 'rgba(230,226,216,0.65)', margin: '4px 0 12px', lineHeight: 1.65, textAlign: 'center', maxWidth: '300px' }}>
                   {isBlocked
                     ? 'Some sites block sign-in here. Try your default browser.'
                     : 'Check the connection or try again.'}
@@ -489,7 +503,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
           {!isElectron && !homeMode && (
             <div style={{
               position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-              justifyContent: 'center', color: '#8C887F', fontSize: '11px',
+              justifyContent: 'center', color: 'rgba(230,226,216,0.65)', fontSize: '11px',
               letterSpacing: '0.08em', userSelect: 'none',
             }}>Web is only available in the desktop app.</div>
           )}

@@ -22,28 +22,28 @@ export default function Image() {
       }}
     >
       {/* Top accent line */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: '#252725', display: 'flex' }} />
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: '#151615', display: 'flex' }} />
 
       {/* Logo mark */}
-      <div style={{ position: 'absolute', top: '72px', left: '80px', fontSize: '36px', color: '#252725', display: 'flex' }}>
+      <div style={{ position: 'absolute', top: '72px', left: '80px', fontSize: '36px', color: '#151615', display: 'flex' }}>
         {'{'}
       </div>
 
       {/* Main text */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        <div style={{ fontSize: '72px', fontWeight: 300, color: '#8C887F', letterSpacing: '-1px', display: 'flex', lineHeight: 1 }}>
+        <div style={{ fontSize: '72px', fontWeight: 300, color: 'rgba(230,226,216,0.65)', letterSpacing: '-1px', display: 'flex', lineHeight: 1 }}>
           Site
         </div>
-        <div style={{ fontSize: '28px', color: '#5E5A54', fontWeight: 300, display: 'flex', lineHeight: 1.4 }}>
+        <div style={{ fontSize: '28px', color: 'rgba(230,226,216,0.45)', fontWeight: 300, display: 'flex', lineHeight: 1.4 }}>
           Files and the live web. One window.
         </div>
-        <div style={{ fontSize: '18px', color: '#252725', display: 'flex', marginTop: '4px' }}>
+        <div style={{ fontSize: '18px', color: '#151615', display: 'flex', marginTop: '4px' }}>
           A local workspace beside a live browser. No account.
         </div>
       </div>
 
       {/* Bottom line */}
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '1px', background: '#252725', display: 'flex' }} />
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '1px', background: '#151615', display: 'flex' }} />
     </div>,
     size,
   )

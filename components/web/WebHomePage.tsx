@@ -70,7 +70,7 @@ function SpinningGlobe() {
       const theta = reduced ? 0 : (ts - start) * SPEED
 
       ctx.clearRect(0, 0, SIZE, SIZE)
-      ctx.strokeStyle = '#8C887F'
+      ctx.strokeStyle = 'rgba(230,226,216,0.65)'
       ctx.lineWidth   = 0.65
 
       const N = 64
@@ -127,7 +127,7 @@ function WebHomePage({ navigate }, ref) {
       display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
     }}>
-      <style>{`.wb-search::placeholder { color: #5E5A54; }`}</style>
+      <style>{`.wb-search::placeholder { color: rgba(230,226,216,0.45); }`}</style>
 
       {/* Globe */}
       <div draggable={false} style={{ marginBottom: '22px', lineHeight: 0, pointerEvents: 'none', userSelect: 'none' }}>
@@ -137,7 +137,7 @@ function WebHomePage({ navigate }, ref) {
       {/* Search input */}
       <div style={{ position: 'relative', width: '400px' }}>
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"
-          style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)', color: '#8C887F', pointerEvents: 'none' }}>
+          style={{ position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(230,226,216,0.65)', pointerEvents: 'none' }}>
           <circle cx="6" cy="6" r="4.5" />
           <line x1="9.5" y1="9.5" x2="13" y2="13" />
         </svg>
@@ -152,14 +152,14 @@ function WebHomePage({ navigate }, ref) {
           spellCheck={false}
           style={{
             width: '100%', height: '42px',
-            background: '#111211', border: '1px solid #252725',
-            borderRadius: '6px', color: '#8C887F',
+            background: '#151615', border: '1px solid rgba(230,226,216,0.1)',
+            borderRadius: '6px', color: 'rgba(230,226,216,0.65)',
             fontSize: '13px', padding: '0 16px 0 36px',
             outline: 'none', fontFamily: 'inherit', letterSpacing: '0.01em',
             transition: 'border-color 0.15s, background 0.15s',
           }}
-          onFocus={e => { e.currentTarget.style.borderColor = '#252725'; e.currentTarget.style.background = '#111211' }}
-          onBlur={e  => { e.currentTarget.style.borderColor = '#252725'; e.currentTarget.style.background = '#111211' }}
+          onFocus={e => { e.currentTarget.style.borderColor = 'rgba(230,226,216,0.25)' }}
+          onBlur={e  => { e.currentTarget.style.borderColor = 'rgba(230,226,216,0.1)' }}
         />
       </div>
 
@@ -171,8 +171,8 @@ function WebHomePage({ navigate }, ref) {
       </div>
 
       {/* Hint */}
-      <span style={{ marginTop: '20px', fontSize: '10px', color: '#8C887F', letterSpacing: '0.03em' }}>
-        <span style={{ fontFamily: 'monospace', color: '#8C887F' }}>? query</span>
+      <span style={{ marginTop: '20px', fontSize: '10px', color: 'rgba(230,226,216,0.65)', letterSpacing: '0.03em' }}>
+        <span style={{ fontFamily: 'monospace', color: 'rgba(230,226,216,0.65)' }}>? query</span>
         {' '}→ Google
       </span>
     </div>
@@ -190,10 +190,10 @@ function StarterChip({ label, onClick }: { label: string; onClick: () => void })
       onMouseLeave={() => setHov(false)}
       style={{
         height: '28px', padding: '0 14px',
-        background: hov ? '#111211' : '#070807',
-        border: `1px solid ${hov ? '#8C887F' : '#252725'}`,
+        background: hov ? '#151615' : '#070807',
+        border: `1px solid ${hov ? 'rgba(230,226,216,0.65)' : '#151615'}`,
         borderRadius: '5px',
-        color: hov ? '#8C887F' : '#8C887F',
+        color: hov ? 'rgba(230,226,216,0.65)' : 'rgba(230,226,216,0.65)',
         fontSize: '11px', letterSpacing: '0.03em',
         cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
         transition: 'color 0.12s, border-color 0.12s, background 0.12s',

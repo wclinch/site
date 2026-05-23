@@ -5,7 +5,7 @@ html { color-scheme: dark; }
 :root {
   --site-bg:      #070807;
   --site-text:    #E6E2D8;
-  --site-surface: #111211;
+  --site-surface: #151615;
 }
 
 body {
@@ -17,14 +17,22 @@ body {
 input, button, textarea, select { font-family: inherit; }
 button, nav, label { user-select: none; }
 
+/* Universal interactive transitions */
+button { cursor: pointer; transition: color 0.12s, opacity 0.12s, background-color 0.12s, border-color 0.12s; }
+button:disabled { cursor: not-allowed; }
+a { cursor: pointer; }
+input { cursor: text; }
+[draggable="true"] { cursor: grab; }
+[draggable="true"]:active { cursor: grabbing; }
+
 /* Scrollbars */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #252725; border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: #353735; }
-* { scrollbar-width: thin; scrollbar-color: #252725 transparent; }
+::-webkit-scrollbar-thumb { background: #151615; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #151615; }
+* { scrollbar-width: thin; scrollbar-color: #151615 transparent; }
 
-::selection { background: #252725; color: #E6E2D8; }
+::selection { background: rgba(230,226,216,0.22); }
 
 .nav-logo {
   text-decoration: none;
@@ -37,7 +45,7 @@ button, nav, label { user-select: none; }
 
 .nav-link {
   font-size: 11px;
-  color: rgba(230,226,216,0.55);
+  color: rgba(230,226,216,0.65);
   text-decoration: none;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -47,7 +55,7 @@ button, nav, label { user-select: none; }
 
 .footer-link {
   font-size: 11px;
-  color: rgba(230,226,216,0.55);
+  color: rgba(230,226,216,0.65);
   text-decoration: none;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -56,7 +64,7 @@ button, nav, label { user-select: none; }
 .footer-link:hover { color: #E6E2D8; }
 
 .inline-link {
-  color: rgba(230,226,216,0.55);
+  color: rgba(230,226,216,0.65);
   text-decoration: none;
   transition: color 0.15s;
 }
@@ -87,7 +95,7 @@ button, nav, label { user-select: none; }
   align-items: center;
   padding: 10px 22px;
   background: transparent;
-  border: 1px solid #252725;
+  border: 1px solid rgba(230,226,216,0.1);
   border-radius: 4px;
   font-size: 12px;
   color: #E6E2D8;
@@ -101,9 +109,9 @@ button, nav, label { user-select: none; }
 .feature-card {
   flex: 1;
   padding: 30px 26px;
-  border: 1px solid #252725;
+  border: 1px solid rgba(230,226,216,0.1);
   border-radius: 6px;
-  background: #111211;
+  background: #151615;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -112,7 +120,7 @@ button, nav, label { user-select: none; }
 
 .pricing-card {
   flex: 1;
-  border: 1px solid #252725;
+  border: 1px solid rgba(230,226,216,0.1);
   border-radius: 6px;
   padding: 36px 32px;
   display: flex;
@@ -120,14 +128,14 @@ button, nav, label { user-select: none; }
   gap: 0;
   min-width: 0;
 }
-.pricing-card-pro { border-color: #252725; background: #111211; }
+.pricing-card-pro { border-color: #151615; background: #151615; }
 
 .pricing-feature {
   font-size: 13px;
-  color: rgba(230,226,216,0.55);
+  color: rgba(230,226,216,0.65);
   line-height: 1.6;
   padding: 7px 0;
-  border-bottom: 1px solid #111211;
+  border-bottom: 1px solid #151615;
   letter-spacing: 0.01em;
 }
 .pricing-feature:last-child { border-bottom: none; }
@@ -140,13 +148,13 @@ button, nav, label { user-select: none; }
 }
 .section-label-green {
   font-size: 10px;
-  color: #8C887F;
+  color: rgba(230,226,216,0.65);
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 .land-section { max-width: 1080px; margin: 0 auto; padding: 0 32px; }
-.land-divider { width: 100%; height: 1px; background: #111211; }
+.land-divider { width: 100%; height: 1px; background: #151615; }
 
 .problem-text {
   font-size: 22px;
@@ -158,10 +166,10 @@ button, nav, label { user-select: none; }
 }
 
 .feature-title { font-size: 14px; font-weight: 500; color: #E6E2D8; letter-spacing: 0.01em; }
-.feature-body  { font-size: 13px; color: rgba(230,226,216,0.55); line-height: 1.7; letter-spacing: 0.01em; margin: 0; }
+.feature-body  { font-size: 13px; color: rgba(230,226,216,0.65); line-height: 1.7; letter-spacing: 0.01em; margin: 0; }
 
 .resume-headline { font-size: 32px; font-weight: 400; color: #E6E2D8; letter-spacing: -0.02em; line-height: 1.3; max-width: 580px; }
-.resume-sub      { font-size: 14px; color: rgba(230,226,216,0.55); line-height: 1.7; max-width: 420px; margin: 0; }
+.resume-sub      { font-size: 14px; color: rgba(230,226,216,0.65); line-height: 1.7; max-width: 420px; margin: 0; }
 
 .pricing-name      { font-size: 13px; font-weight: 500; color: #E6E2D8; letter-spacing: 0.04em; }
 .pricing-price     { font-size: 28px; font-weight: 400; color: #E6E2D8; letter-spacing: -0.02em; margin-top: 4px; }
@@ -172,7 +180,7 @@ button, nav, label { user-select: none; }
   align-items: center;
   padding: 9px 18px;
   background: transparent;
-  border: 1px solid #252725;
+  border: 1px solid rgba(230,226,216,0.1);
   border-radius: 4px;
   font-size: 11px;
   color: #E6E2D8;

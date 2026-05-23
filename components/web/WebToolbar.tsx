@@ -13,12 +13,12 @@ export function NavBtn({ children, onClick, disabled, title }: {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'none', border: 'none', borderRadius: '4px',
         cursor: disabled ? 'default' : 'pointer',
-        color: disabled ? '#8C887F' : '#8C887F',
+        color: disabled ? 'rgba(230,226,216,0.65)' : 'rgba(230,226,216,0.65)',
         fontFamily: 'inherit', padding: 0, outline: 'none', lineHeight: 0,
         transition: 'color 0.15s',
       }}
-      onMouseEnter={e => { if (!disabled) e.currentTarget.style.color = '#8C887F' }}
-      onMouseLeave={e => { if (!disabled) e.currentTarget.style.color = '#8C887F' }}
+      onMouseEnter={e => { if (!disabled) e.currentTarget.style.color = '#E6E2D8' }}
+      onMouseLeave={e => { if (!disabled) e.currentTarget.style.color = 'rgba(230,226,216,0.65)' }}
     >{children}</button>
   )
 }
@@ -39,11 +39,11 @@ function ActionBtn({ children, title, onClick, disabled, active }: {
       style={{
         width: '28px', height: '26px', flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: active ? '#111211' : hov && !disabled ? '#111211' : 'none',
-        border: `1px solid ${active ? '#8C887F' : hov && !disabled ? '#252725' : 'transparent'}`,
+        background: active ? '#151615' : hov && !disabled ? '#151615' : 'none',
+        border: `1px solid ${active ? 'rgba(230,226,216,0.65)' : hov && !disabled ? '#151615' : 'transparent'}`,
         borderRadius: '4px',
         cursor: disabled ? 'default' : 'pointer',
-        color: disabled ? '#8C887F' : active ? '#8C887F' : hov ? '#8C887F' : '#8C887F',
+        color: disabled ? 'rgba(230,226,216,0.45)' : active ? '#E6E2D8' : hov ? '#E6E2D8' : 'rgba(230,226,216,0.65)',
         padding: 0, outline: 'none', lineHeight: 0,
         fontFamily: 'inherit', transition: 'color 0.15s, background 0.15s, border-color 0.15s',
       }}
@@ -74,7 +74,7 @@ export default function WebToolbar({ active, panelId, urlInput, urlInputRef, hom
   return (
     <div style={{
       height: '44px', flexShrink: 0, display: 'flex', alignItems: 'center',
-      gap: '6px', padding: '0 16px 0 12px', borderBottom: '1px solid #252725', background: '#070807',
+      gap: '6px', padding: '0 16px 0 12px', borderBottom: '1px solid rgba(230,226,216,0.1)', background: '#070807',
       WebkitAppRegion: 'no-drag',
     } as React.CSSProperties}>
       <NavBtn disabled={!active?.canGoBack}    onClick={onGoBack}    title="Go back">
@@ -107,7 +107,7 @@ export default function WebToolbar({ active, panelId, urlInput, urlInputRef, hom
       <div style={{ width: '4px', flexShrink: 0 }} />
       <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
         <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"
-          style={{ position: 'absolute', left: '9px', color: '#8C887F', pointerEvents: 'none', flexShrink: 0 }}>
+          style={{ position: 'absolute', left: '9px', color: 'rgba(230,226,216,0.65)', pointerEvents: 'none', flexShrink: 0 }}>
           <circle cx="6" cy="6" r="4.5" />
           <line x1="9.5" y1="9.5" x2="13" y2="13" />
         </svg>
@@ -120,13 +120,13 @@ export default function WebToolbar({ active, panelId, urlInput, urlInputRef, hom
           onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); onUrlSubmit() } }}
           placeholder="Search or enter URL"
           style={{
-            flex: 1, width: '100%', height: '28px', background: '#111211', border: '1px solid #252725',
+            flex: 1, width: '100%', height: '28px', background: '#151615', border: '1px solid rgba(230,226,216,0.1)',
             borderRadius: '4px', color: '#E6E2D8', fontSize: '12px', padding: '0 10px 0 28px',
             outline: 'none', fontFamily: 'inherit', letterSpacing: '0.02em',
             transition: 'border-color 0.15s',
           }}
-          onFocusCapture={e => { e.currentTarget.style.borderColor = '#8C887F' }}
-          onBlurCapture={e  => { e.currentTarget.style.borderColor = '#252725' }}
+          onFocusCapture={e => { e.currentTarget.style.borderColor = 'rgba(230,226,216,0.25)' }}
+          onBlurCapture={e  => { e.currentTarget.style.borderColor = 'rgba(230,226,216,0.1)' }}
         />
       </div>
       {/* Save page to session */}

@@ -1,11 +1,14 @@
-export const FREE_WORKSPACES    = 1
-export const FREE_DOC_COUNT     = 10
-export const FREE_STORAGE_MB    = 150
+export const FREE_WORKSPACES    = 2
+export const FREE_DOC_COUNT     = 50
+export const FREE_STORAGE_MB    = 250
 export const FREE_STORAGE_BYTES = FREE_STORAGE_MB * 1024 * 1024
 
 export const PRO_DOC_COUNT     = Infinity
-export const PRO_STORAGE_MB    = 5120
+export const PRO_STORAGE_MB    = 2048
 export const PRO_STORAGE_BYTES = PRO_STORAGE_MB * 1024 * 1024
+
+export const PRO_PRICE_MONTHLY = '$4.99'
+export const PRO_PRICE_YEARLY  = '$39.99'
 
 export interface Limits {
   workspaces:   number   // Infinity = unlimited

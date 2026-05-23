@@ -1,22 +1,22 @@
 'use client'
 import ResearchBrowser from './ResearchBrowser'
-import { ActivityPanel } from './NotificationsPanel'
+import AskSitePanel from './AskSitePanel'
 
-export default function RightPanel({ isFocused, onFocusToggle, activityOpen }: {
+export default function RightPanel({ isFocused, onFocusToggle, askSiteOpen }: {
   isFocused?: boolean
   onFocusToggle?: () => void
-  activityOpen?: boolean
+  askSiteOpen?: boolean
 }) {
   return (
     <div style={{
       flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
-      overflow: 'hidden', padding: '7px', gap: activityOpen ? '7px' : 0,
+      overflow: 'hidden', padding: '7px', gap: askSiteOpen ? '7px' : 0,
       WebkitAppRegion: 'no-drag',
     } as React.CSSProperties}>
 
-      {/* Activity — top, grows from 0 to equal share */}
+      {/* Ask Site — top, grows from 0 to equal share */}
       <div style={{
-        flexGrow: activityOpen ? 1 : 0,
+        flexGrow: askSiteOpen ? 0.8 : 0,
         flexShrink: 1,
         flexBasis: 0,
         minHeight: 0,
@@ -24,10 +24,10 @@ export default function RightPanel({ isFocused, onFocusToggle, activityOpen }: {
         display: 'flex', flexDirection: 'column',
         transition: 'flex-grow 0.22s ease',
       }}>
-        <ActivityPanel />
+        <AskSitePanel />
       </div>
 
-      {/* Web — always flex:1, shrinks to share when activity opens */}
+      {/* Web — always flex:1, shrinks to share when Ask Site opens */}
       <div style={{
         flexGrow: 1,
         flexShrink: 1,
@@ -35,7 +35,7 @@ export default function RightPanel({ isFocused, onFocusToggle, activityOpen }: {
         minHeight: 0,
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
-        <ResearchBrowser isFocused={isFocused} onFocusToggle={onFocusToggle} />
+        <ResearchBrowser isFocused={isFocused} onFocusToggle={onFocusToggle} askSiteOpen={askSiteOpen} />
       </div>
     </div>
   )

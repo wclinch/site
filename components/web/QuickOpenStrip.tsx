@@ -7,14 +7,14 @@ const stripStyle = {
   height: '36px', flexShrink: 0,
   display: 'flex', alignItems: 'center', gap: '4px',
   padding: '0 8px',
-  background: '#070807', borderBottom: '1px solid #252725',
+  background: '#070807', borderBottom: '1px solid rgba(230,226,216,0.1)',
   overflowX: 'auto' as const, overflowY: 'hidden' as const,
   scrollbarWidth: 'none' as const,
   WebkitAppRegion: 'no-drag' as const,
 }
 
 function SectionDivider() {
-  return <div style={{ width: '1px', height: '14px', background: '#252725', flexShrink: 0, margin: '0 6px' }} />
+  return <div style={{ width: '1px', height: '14px', background: 'rgba(230,226,216,0.2)', flexShrink: 0, margin: '0 6px' }} />
 }
 
 function ShortcutChip({ label, pinned, onClick, onPin }: {
@@ -33,7 +33,7 @@ function ShortcutChip({ label, pinned, onClick, onPin }: {
       style={{
         display: 'flex', alignItems: 'center', flexShrink: 0,
         height: '22px',
-        border: `1px solid ${hov ? '#5E5A54' : pinned ? '#252725' : '#252725'}`,
+        border: `1px solid ${hov ? 'rgba(230,226,216,0.45)' : pinned ? '#151615' : '#151615'}`,
         borderRadius: '3px',
         transition: 'border-color 0.1s',
       }}
@@ -43,7 +43,7 @@ function ShortcutChip({ label, pinned, onClick, onPin }: {
         style={{
           height: '100%', padding: '0 8px 0 10px',
           background: 'none', border: 'none', outline: 'none',
-          color: hov ? '#8C887F' : pinned ? '#8C887F' : 'rgba(230,226,216,0.55)',
+          color: hov ? 'rgba(230,226,216,0.65)' : pinned ? 'rgba(230,226,216,0.65)' : 'rgba(230,226,216,0.65)',
           fontSize: '11px', letterSpacing: '0.02em',
           cursor: 'pointer', fontFamily: 'inherit',
           whiteSpace: 'nowrap',
@@ -61,7 +61,7 @@ function ShortcutChip({ label, pinned, onClick, onPin }: {
           height: '100%', padding: '0 6px 0 2px',
           background: 'none', border: 'none', outline: 'none',
           cursor: 'pointer', display: 'flex', alignItems: 'center',
-          color: pinHov ? (pinned ? '#8C887F' : 'rgba(230,226,216,0.55)') : pinned ? '#8C887F' : '#5E5A54',
+          color: pinHov ? (pinned ? 'rgba(230,226,216,0.65)' : 'rgba(230,226,216,0.65)') : pinned ? 'rgba(230,226,216,0.65)' : 'rgba(230,226,216,0.45)',
           opacity: (hov || pinned) ? 1 : 0,
           pointerEvents: (hov || pinned) ? 'auto' : 'none',
           transition: 'color 0.1s, opacity 0.1s',

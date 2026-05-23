@@ -12,7 +12,7 @@ export default function BackButton() {
       onMouseLeave={() => setHov(false)}
       style={{
         background: 'none', border: 'none', padding: 0,
-        fontSize: '12px', color: hov ? '#E6E2D8' : '#8C887F',
+        fontSize: '12px', color: hov ? '#E6E2D8' : 'rgba(230,226,216,0.65)',
         letterSpacing: '0.02em', cursor: 'pointer',
         fontFamily: 'inherit', transition: 'color 0.1s',
       }}
