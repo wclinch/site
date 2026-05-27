@@ -11,42 +11,6 @@ import { getContent } from '@/lib/idb'
 const T = '#E6E2D8', M = 'rgba(230,226,216,0.65)', F = 'rgba(230,226,216,0.45)'
 const S = '#151615', BG = '#070807', BR = 'rgba(230,226,216,0.1)'
 
-const ALL_SUGGESTIONS = [
-  'What am I looking at?',
-  'Summarize this session',
-  'What am I looking at in the View?',
-  'What sources are here?',
-  'What should I read next?',
-  'Turn this session into an outline',
-  'What page am I on?',
-  'What tabs do I have open?',
-  "What's saved in this session?",
-  'How are these sources related?',
-  'What should I focus on first?',
-  "What's in the View tab?",
-  'What do I have open?',
-  'Give me a reading order for my sources',
-  'What have I been working on?',
-  'Describe this session in one sentence',
-  'What documents do I have?',
-  "What's the current web page about?",
-  'List everything open right now',
-  'Where should I start?',
-  'Am I missing anything obvious?',
-  "What's open in my View?",
-]
-
-const SHOWN = 7
-
-function pickSuggestions(): string[] {
-  const pool = [...ALL_SUGGESTIONS]
-  const out: string[] = []
-  while (out.length < SHOWN && pool.length > 0) {
-    const i = Math.floor(Math.random() * pool.length)
-    out.push(pool.splice(i, 1)[0])
-  }
-  return out
-}
 
 const _web = { url: '', title: '' }
 
@@ -70,10 +34,10 @@ function docContentToText(content: DocContent, maxChars = 3000): string {
 }
 
 async function buildContext(app: ReturnType<typeof useApp>): Promise<AskSiteSessionContext> {
-  const { activeId, projects, stackSources, selectedSource, viewTabs, activeViewTabId, allSources } = app
+  const { activeId, projects, sources, selectedSource, viewTabs, activeViewTabId, allSources } = app
   const project = projects.find(p => p.id === activeId)
-  const docs  = stackSources.filter(s => s.fileType !== 'url')
-  const pages = stackSources.filter(s => s.fileType === 'url')
+  const docs  = sources.filter(s => s.fileType !== 'url')
+  const pages = sources.filter(s => s.fileType === 'url')
 
   const activeTab = viewTabs.find(t => t.id === activeViewTabId) ?? null
   const activeSrc = activeTab?.srcId ? allSources.find(s => s.id === activeTab.srcId) ?? null : null
@@ -177,7 +141,7 @@ function ChatRow({ chat, active, last, onSelect, onDelete }: {
     >
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
-          fontSize: '12px', color: active || hov ? T : M, lineHeight: 1.45,
+          fontSize: '13px', color: active || hov ? T : M, lineHeight: 1.45,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           opacity: armed ? 0.4 : 1,
           textDecoration: armed ? 'line-through' : 'none',
@@ -185,7 +149,7 @@ function ChatRow({ chat, active, last, onSelect, onDelete }: {
         }}>
           {chat.title || 'Untitled chat'}
         </div>
-        <div style={{ fontSize: '12px', color: F, marginTop: '1px', letterSpacing: '0.02em' }}>
+        <div style={{ fontSize: '13px', color: F, marginTop: '1px', letterSpacing: '0.02em' }}>
           {timeAgo(chat.updatedAt)}
         </div>
       </div>
@@ -239,30 +203,6 @@ function SendIcon() {
   return <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><line x1="6" y1="10" x2="6" y2="2"/><polyline points="2,6 6,2 10,6"/></svg>
 }
 
-// ─── Suggested prompt — row style matching StackRow exactly ───────────────────
-
-function PromptRow({ label, onClick }: { label: string; onClick: () => void }) {
-  const [hov, setHov] = useState(false)
-  return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        display: 'block', width: '100%',
-        padding: '8px 12px',
-        background: hov ? S : 'none',
-        border: 'none',
-        borderLeft: `2px solid ${hov ? M : 'transparent'}`,
-        color: hov ? T : M,
-        fontSize: '12px', letterSpacing: '0.01em', fontWeight: 400,
-        cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
-        userSelect: 'none',
-        transition: 'background 0.1s, border-color 0.1s, color 0.1s',
-      }}
-    >{label}</button>
-  )
-}
 
 // ─── Markdown renderer ────────────────────────────────────────────────────────
 
@@ -272,7 +212,7 @@ function renderInline(text: string): React.ReactNode {
     if (part.startsWith('**') && part.endsWith('**'))
       return <strong key={i} style={{ color: T, fontWeight: 500 }}>{part.slice(2, -2)}</strong>
     if (part.startsWith('`') && part.endsWith('`'))
-      return <code key={i} style={{ fontFamily: 'monospace', fontSize: '11px', background: S, padding: '0 3px', borderRadius: '2px' }}>{part.slice(1, -1)}</code>
+      return <code key={i} style={{ fontFamily: 'monospace', fontSize: '12px', background: S, padding: '0 3px', borderRadius: '2px' }}>{part.slice(1, -1)}</code>
     return part
   })
 }
@@ -359,17 +299,17 @@ function MessageRow({ msg, last }: { msg: AskSiteMessage; last: boolean }) {
       borderBottom: last ? 'none' : `1px solid ${S}`,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
-        <span style={{ fontSize: '12px', color: F, letterSpacing: '0.03em' }}>
+        <span style={{ fontSize: '13px', color: F, letterSpacing: '0.03em' }}>
           {isUser ? 'You' : 'Site'}
         </span>
         {!isUser && msg.isRateLimited && (
           <span style={{ fontSize: '9px', color: F, padding: '1px 4px', border: `1px solid ${S}`, borderRadius: '2px', letterSpacing: '0.04em' }}>limit</span>
         )}
       </div>
-      <div style={{ fontSize: '12px', color: M, lineHeight: 1.6, wordBreak: 'break-word' }}>
+      <div style={{ fontSize: '13px', color: M, lineHeight: 1.6, wordBreak: 'break-word' }}>
         {isUser ? <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span> : <MdText text={msg.content} />}
       </div>
-      <div style={{ fontSize: '12px', color: F, marginTop: '3px', letterSpacing: '0.02em' }}>
+      <div style={{ fontSize: '13px', color: F, marginTop: '3px', letterSpacing: '0.02em' }}>
         {timeAgo(msg.ts)}
       </div>
     </div>
@@ -379,17 +319,17 @@ function MessageRow({ msg, last }: { msg: AskSiteMessage; last: boolean }) {
 function LoadingRow({ label, bright }: { label?: string; bright?: boolean }) {
   return (
     <div style={{ padding: '9px 10px 9px 12px' }}>
-      <div style={{ fontSize: '12px', color: bright ? T : F, letterSpacing: '0.03em', marginBottom: '3px' }}>Site</div>
-      <div style={{ fontSize: '12px', color: bright ? M : F }}>{label ?? 'Thinking…'}</div>
+      <div style={{ fontSize: '13px', color: bright ? T : F, letterSpacing: '0.03em', marginBottom: '3px' }}>Site</div>
+      <div style={{ fontSize: '13px', color: bright ? M : F }}>{label ?? 'Thinking…'}</div>
     </div>
   )
 }
 
 // ─── Panel ────────────────────────────────────────────────────────────────────
 
-export default function AskSitePanel() {
+export default function AskSitePanel({ collapsed = false, onToggle }: { collapsed?: boolean; onToggle?: () => void }) {
   const app = useApp()
-  const { activeId, isPro } = app
+  const { activeId } = app
 
   const [chats,        setChats]        = useState<AskSiteChat[]>([])
   const [activeChatId, setActiveChatId] = useState<string | null>(null)
@@ -397,8 +337,7 @@ export default function AskSitePanel() {
   const [loading,      setLoading]      = useState(false)
   const [capturing,    setCapturing]    = useState(false)
   const [showHistory,  setShowHistory]  = useState(false)
-  const [suggestions,  setSuggestions]  = useState<string[]>(() => pickSuggestions())
-  const [, forceUpdate] = useState(0)
+const [, forceUpdate] = useState(0)
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLInputElement>(null)
@@ -416,7 +355,6 @@ export default function AskSitePanel() {
     if (!activeId) return
     const loaded = loadChats(activeId)
     setChats(loaded); setActiveChatId(null); setInput(''); setShowHistory(false)
-    setSuggestions(pickSuggestions())
   }, [activeId])
 
   useEffect(() => {
@@ -473,7 +411,7 @@ export default function AskSitePanel() {
 
     setLoading(true)
     const ctx = await buildContext(app)
-    const res = await askSiteAI({ messages: chatWithUser.messages, context: ctx, screenshot }, { provider: 'none', isPro: app.isPro })
+    const res = await askSiteAI({ messages: chatWithUser.messages, context: ctx, screenshot })
 
     const assistantMsg: AskSiteMessage = {
       id: Math.random().toString(36).slice(2),
@@ -502,9 +440,11 @@ export default function AskSitePanel() {
       <div style={{
         height: '44px', flexShrink: 0,
         display: 'flex', alignItems: 'center',
-        padding: '0 8px 0 10px', borderBottom: `1px solid ${BR}`,
+        padding: '0 8px 0 10px',
+        borderBottom: collapsed ? 'none' : `1px solid ${BR}`,
         userSelect: 'none', gap: '6px',
       }}>
+        {/* Everything except chevron fades out when collapsed */}
         <span
           onClick={() => { if (activeChatId || showHistory) startNewChat() }}
           style={{
@@ -512,7 +452,7 @@ export default function AskSitePanel() {
             height: '28px', padding: '0 12px', marginRight: 'auto',
             borderRadius: '4px', background: S,
             border: `1px solid ${(capturing || loading) ? 'rgba(230,226,216,0.35)' : BR}`,
-            fontSize: '13px', color: T, letterSpacing: '0.01em',
+            fontSize: '14px', color: T, letterSpacing: '0.01em',
             userSelect: 'none', flexShrink: 0,
             cursor: activeChatId || showHistory ? 'pointer' : 'default',
             transition: 'border-color 0.2s',
@@ -535,87 +475,77 @@ export default function AskSitePanel() {
               onClick={() => setShowHistory(v => !v)}
               style={{
                 background: 'none', border: 'none', padding: 0, height: '22px',
-                fontSize: '12px', cursor: 'pointer', fontWeight: 400,
-                fontFamily: 'inherit', letterSpacing: '0.02em', transition: 'color 0.1s',
+                fontSize: '13px', cursor: 'pointer', fontWeight: 400,
+                fontFamily: 'inherit', letterSpacing: '0.02em', transition: 'color 0.1s, opacity 0.15s',
                 color: showHistory ? T : F,
+                opacity: collapsed ? 0 : 1, pointerEvents: collapsed ? 'none' : 'auto',
               }}
               onMouseEnter={e => { if (!showHistory) e.currentTarget.style.color = T }}
               onMouseLeave={e => { if (!showHistory) e.currentTarget.style.color = F }}
             >{showHistory ? 'Done' : 'Chats'}</button>
-            <div style={{ width: '1px', height: '10px', background: 'rgba(230,226,216,0.2)', flexShrink: 0 }} />
+            <div style={{ width: '1px', height: '10px', background: 'rgba(230,226,216,0.2)', flexShrink: 0, opacity: collapsed ? 0 : 1, transition: 'opacity 0.15s' }} />
           </>
         )}
 
-        {(activeChatId !== null || showHistory) && (
+        {(activeChatId !== null || showHistory) && !collapsed && (
           <IconBtn onClick={startNewChat} title="New chat"><PlusIcon /></IconBtn>
         )}
-      </div>
 
-      {/* ── Status bar ── */}
-      {(capturing || loading) && (
-        <div style={{
-          height: '2px', flexShrink: 0,
-          background: capturing ? 'rgba(230,226,216,0.9)' : 'rgba(230,226,216,0.45)',
-          animation: 'pulse-dot 1.4s ease-in-out infinite',
-        }} />
-      )}
-
-      {/* ── Body ── */}
-      {showHistory ? (
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-          {chats.map((chat, i) => (
-            <ChatRow
-              key={chat.id} chat={chat}
-              active={chat.id === activeChatId}
-              last={i === chats.length - 1}
-              onSelect={() => { setActiveChatId(chat.id); setShowHistory(false); setInput('') }}
-              onDelete={() => deleteChat(chat.id)}
-            />
-          ))}
-        </div>
-
-      ) : activeChat && activeChat.messages.length > 0 ? (
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-          {activeChat.messages.map((msg, i) => (
-            <MessageRow key={msg.id} msg={msg} last={i === activeChat.messages.length - 1 && !loading} />
-          ))}
-          {capturing && <LoadingRow label="Reading screen…" bright />}
-          {loading && !capturing && <LoadingRow />}
-          <div ref={bottomRef} />
-        </div>
-
-      ) : (
-        // Empty state — minimal, input-focused
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: '12px', color: F, letterSpacing: '0.02em' }}>Ask the current session.</span>
-        </div>
-      )}
-
-      {/* ── Footer — locked for Free, input for Pro ── */}
-      <div style={{ flexShrink: 0, padding: '6px 8px 8px' }}>
-        {isPro ? (
-          <InputRow inputRef={inputRef} input={input} loading={loading} setInput={setInput} handleSend={handleSend} />
-        ) : (
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            height: '30px', padding: '0 10px',
-            background: S, border: `1px solid ${BR}`, borderRadius: '4px',
-          }}>
-            <span style={{ fontSize: '12px', color: F, letterSpacing: '0.01em' }}>Ask Site is included with Pro.</span>
-            <button
-              onClick={() => window.dispatchEvent(new Event('proof:upgrade-needed'))}
-              style={{
-                background: 'none', border: 'none', padding: 0,
-                fontSize: '11px', color: M, cursor: 'pointer',
-                fontFamily: 'inherit', letterSpacing: '0.02em',
-                transition: 'color 0.1s', flexShrink: 0,
-              }}
-              onMouseEnter={e => (e.currentTarget.style.color = T)}
-              onMouseLeave={e => (e.currentTarget.style.color = M)}
-            >Upgrade →</button>
-          </div>
+        {/* Chevron — always visible, always at same position */}
+        {onToggle && (
+          <IconBtn onClick={onToggle} title={collapsed ? 'Expand' : 'Collapse'}>
+            <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+              {collapsed
+                ? <polyline points="1,3 5,7 9,3" />
+                : <polyline points="1,6 5,2 9,6" />}
+            </svg>
+          </IconBtn>
         )}
       </div>
+
+      {/* ── Status bar, body, footer — hidden when collapsed ── */}
+      {!collapsed && (
+        <>
+          {(capturing || loading) && (
+            <div style={{
+              height: '2px', flexShrink: 0,
+              background: capturing ? 'rgba(230,226,216,0.9)' : 'rgba(230,226,216,0.45)',
+              animation: 'pulse-dot 1.4s ease-in-out infinite',
+            }} />
+          )}
+
+          {showHistory ? (
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+              {chats.map((chat, i) => (
+                <ChatRow
+                  key={chat.id} chat={chat}
+                  active={chat.id === activeChatId}
+                  last={i === chats.length - 1}
+                  onSelect={() => { setActiveChatId(chat.id); setShowHistory(false); setInput('') }}
+                  onDelete={() => deleteChat(chat.id)}
+                />
+              ))}
+            </div>
+          ) : activeChat && activeChat.messages.length > 0 ? (
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+              {activeChat.messages.map((msg, i) => (
+                <MessageRow key={msg.id} msg={msg} last={i === activeChat.messages.length - 1 && !loading} />
+              ))}
+              {capturing && <LoadingRow label="Reading screen…" bright />}
+              {loading && !capturing && <LoadingRow />}
+              <div ref={bottomRef} />
+            </div>
+          ) : (
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: '13px', color: F, letterSpacing: '0.02em' }}>Query your workspace below.</span>
+            </div>
+          )}
+
+          <div style={{ flexShrink: 0, padding: '6px 8px 8px' }}>
+            <InputRow inputRef={inputRef} input={input} loading={loading} setInput={setInput} handleSend={handleSend} />
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -635,14 +565,14 @@ function InputRow({ inputRef, input, loading, setInput, handleSend }: {
         value={input}
         onChange={e => setInput(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSend() } }}
-        placeholder="Ask about what's open, visible, or saved here…"
+        placeholder="Ask this session..."
         disabled={loading}
         spellCheck={false}
         style={{
           flex: 1, height: '30px',
           background: S, border: `1px solid ${BR}`,
           borderRadius: '4px', color: T,
-          fontSize: '12px', padding: '0 10px',
+          fontSize: '13px', padding: '0 10px',
           outline: 'none', fontFamily: 'inherit', letterSpacing: '0.01em',
           transition: 'border-color 0.15s',
         }}

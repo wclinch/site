@@ -10,13 +10,8 @@ import {
 import { storeFile, deleteFile, getFile, storeContent, getContent, deleteContent } from '@/lib/idb'
 import { extractContent } from '@/lib/extract'
 import { wouldExceedLimit, STORAGE_LIMIT_BYTES } from '@/lib/storage-limit'
-import { checkIsPro, FREE_LIMITS, PRO_LIMITS } from '@/lib/entitlement'
+import { LIMITS } from '@/lib/entitlement'
 import type { Limits } from '@/lib/entitlement'
-import {
-  getStoredUser, clearStoredSession,
-  signIn as authSignIn, refreshEntitlement as authRefresh, getPortalUrl,
-} from '@/lib/auth'
-import type { AuthUser, SignInResult } from '@/lib/auth'
 import type { AppState, ContextMenu } from './appTypes'
 
 // ─── Module-level constants ──────────────────────────────────────────────────
@@ -97,9 +92,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [viewTabs, setViewTabs]               = useState<ViewTab[]>([])
   const [activeViewTabId, setActiveViewTabId] = useState<string | null>(null)
 
-  // Auth / entitlement
-  const [isPro, setIsPro] = useState(false)
-  const [user,  setUser]  = useState<AuthUser | null>(null)
 
   // ─── Refs ───────────────────────────────────────────────────────────────
 
@@ -107,14 +99,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const activeIdRef        = useRef(activeId)
   const viewTabsRef        = useRef<ViewTab[]>([])
   const activeViewTabIdRef = useRef<string | null>(null)
-  const isProRef           = useRef(false)
   const autoSaveTimer      = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Sync refs on every render so async callbacks always see the latest values.
   useEffect(() => { activeIdRef.current = activeId },              [activeId])
   useEffect(() => { viewTabsRef.current = viewTabs },              [viewTabs])
   useEffect(() => { activeViewTabIdRef.current = activeViewTabId }, [activeViewTabId])
-  useEffect(() => { isProRef.current = isPro },                    [isPro])
 
   // ─── Derived ────────────────────────────────────────────────────────────
 
@@ -126,10 +116,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const selectedSource    = allSources.find(s => s.id === selectedId) ?? null
   const namedProjectCount = projects.length
 
-  // Stack = active project's sources. No separate storage, no separate
-  // ordering — switching projects swaps the stack instantly.
-  const stackSources: QueuedSource[] = sources
-  const stackIds   : string[]        = sources.map(s => s.id)
   // ─── Effects: UI events ─────────────────────────────────────────────────
 
   // Close context menu on Escape or any click outside.
@@ -185,7 +171,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       fixed = named
       if (fixed.length === 0) {
         const def = newProject(1)
-        def.name = 'New Session'
+        def.name = 'New Thread'
         fixed = [def]
       }
       setProjects(fixed)
@@ -243,20 +229,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } else {
       // First launch — default session.
       const def = newProject(1)
-      def.name = 'New Session'
+      def.name = 'New Thread'
       setProjects([def])
       setActiveId(def.id)
-    }
-
-    setIsPro(checkIsPro())
-
-    // Restore auth session and recheck subscription in background.
-    const storedUser = getStoredUser()
-    if (storedUser) {
-      setUser(storedUser)
-      authRefresh(storedUser.email, storedUser.licenseKey).then(pro => {
-        if (pro !== null) setIsPro(pro)
-      }).catch(() => {})
     }
 
     setMounted(true)
@@ -385,12 +360,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   function newWorkspace() {
-    const limits = isProRef.current ? PRO_LIMITS : FREE_LIMITS
-    if (!isProRef.current && projectsRef.current.length >= limits.workspaces) {
-      needUpgrade('Free includes 2 sessions. Upgrade to Pro for unlimited sessions.')
-      return
-    }
-
     const curId        = activeId
     const curTabs      = viewTabsRef.current
     const researchTabs = readResearchTabs()
@@ -403,10 +372,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const p = newProject(namedProjectCount + 1)
     const usedNames = new Set(projectsRef.current.map(w => w.name))
-    let sessionName = 'New Session'
+    let sessionName = 'New Thread'
     if (usedNames.has(sessionName)) {
       for (let i = 2; i <= projectsRef.current.length + 2; i++) {
-        const candidate = `New Session ${i}`
+        const candidate = `New Thread ${i}`
         if (!usedNames.has(candidate)) { sessionName = candidate; break }
       }
     }
@@ -532,18 +501,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }))
   }
 
-  function moveProject(projId: string, toIndex: number) {
-    setProjects(ps => {
-      const from = ps.findIndex(p => p.id === projId)
-      if (from === -1) return ps
-      const arr = [...ps]
-      const [item] = arr.splice(from, 1)
-      const clamped = Math.max(0, Math.min(toIndex, arr.length))
-      arr.splice(clamped, 0, item)
-      return arr
-    })
-  }
-
   function moveSourceToProject(srcId: string, targetProjId: string) {
     setProjects(ps => {
       const src = ps.flatMap(p => p.sources).find(s => s.id === srcId)
@@ -588,18 +545,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     list = list.filter(f => !currentAllSources.some(s => s.label === f.name))
     if (!list.length) return
 
-    const limits = isProRef.current ? PRO_LIMITS : FREE_LIMITS
-
-    // Global uploaded-document count cap (PDFs and images only; Pages/notes excluded).
-    if (isFinite(limits.docCount)) {
+    // Global uploaded-document count cap.
+    if (isFinite(LIMITS.docCount)) {
       const uploadedCount = currentAllSources.filter(
         s => s.fileType === 'pdf' || s.fileType === 'image'
       ).length
-      if (uploadedCount >= limits.docCount) {
-        needUpgrade('Free includes 10 Documents. Upgrade to Pro or remove uploaded Documents.')
+      if (uploadedCount >= LIMITS.docCount) {
+        warn(`Document limit reached (${LIMITS.docCount}). Remove some to add more.`)
         return
       }
-      const countRoom = limits.docCount - uploadedCount
+      const countRoom = LIMITS.docCount - uploadedCount
       if (list.length > countRoom) list = list.slice(0, countRoom)
     }
 
@@ -609,10 +564,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (room <= 0) { warn(`Document limit reached (${STACK_LIMIT}). Remove Documents to add more.`); return }
     if (list.length > room) list = list.slice(0, room)
 
-    // Storage cap — tier-specific.
+    // Storage cap.
     const batchBytes = list.reduce((sum, f) => sum + f.size, 0)
-    if (await wouldExceedLimit(batchBytes, limits.storageBytes)) {
-      needUpgrade('Storage limit reached. Upgrade to Pro or remove uploaded Documents.')
+    if (await wouldExceedLimit(batchBytes, LIMITS.storageBytes)) {
+      warn(`Storage limit reached (${Math.round(LIMITS.storageBytes / 1024 / 1024)}MB). Remove Documents to free space.`)
       return
     }
 
@@ -626,6 +581,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       p.id !== projId ? p : { ...p, sources: [...p.sources, ...newSources] }
     ))
 
+    // Auto-open the first uploaded file in the View
+    if (projId === activeIdRef.current && newSources.length > 0) {
+      openInView(newSources[0].id)
+    }
 
     for (let i = 0; i < list.length; i++) {
       const file = list[i]
@@ -656,25 +615,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function retrySource(srcId: string) {
-    const file = await getFile(srcId)
-    if (!file) {
-      patchSource('', srcId, { status: 'error', error: 'File not found — re-upload to retry.' })
-      return
-    }
-    try {
-      patchSource('', srcId, { status: 'extracting' })
-      const content = await extractContent(file)
-      await storeContent(srcId, content).catch(() => {})
-      patchSource('', srcId, { status: 'done', content, error: null })
-    } catch (err) {
-      patchSource('', srcId, {
-        status: 'error',
-        error: err instanceof Error ? err.message : 'Failed to process file — try again.',
-      })
-    }
-  }
-
   function removeSource(srcId: string) {
     // Find source + its project for per-session archiving
     let srcProjectId: string | null = null
@@ -700,7 +640,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (removedTab) closeViewTab(removedTab.id)
     setSelectedIds(new Set())
     setAnchorId(null)
-    // File data kept in IDB — needed for restore. Only cleaned up on permanent delete.
+    Promise.allSettled([deleteFile(srcId), deleteContent(srcId)]).then(notifyStorageChanged)
   }
 
   function restoreArchivedSource(srcId: string, projectId: string) {
@@ -717,16 +657,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Remove from archive
       localStorage.setItem(key, JSON.stringify(archived.filter(e => e.source.id !== srcId)))
     } catch {}
-  }
-
-  function permanentlyDeleteArchived(srcId: string, projectId: string) {
-    const key = `proof-archive-${projectId}`
-    try {
-      const archived: Array<{ source: QueuedSource; projectId: string; deletedAt: number }> =
-        JSON.parse(localStorage.getItem(key) || '[]')
-      localStorage.setItem(key, JSON.stringify(archived.filter(e => e.source.id !== srcId)))
-    } catch {}
-    Promise.allSettled([deleteFile(srcId), deleteContent(srcId)]).then(notifyStorageChanged)
   }
 
   function removeSelected() {
@@ -761,6 +691,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setProjects(ps => ps.map(p =>
       p.id !== toProjectId ? p : { ...p, sources: [...p.sources, captured] }
     ))
+    if (toProjectId === activeIdRef.current && captured.fileType !== 'url') {
+      openInView(srcId)
+    }
     return toProj.name || 'Session'
   }
 
@@ -799,80 +732,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ─── Library (stack) actions ────────────────────────────────────────────
 
-  // Drag-source-into-stack semantics: if the source already lives in the
-  // active project, no-op. If it lives in another project, move it here.
-  function addToStack(id: string) {
-    const projId = activeIdRef.current
-    if (!projId) return
-    moveSourceToProject(id, projId)
-  }
-
-  // Unpinning IS removing the source — there's no separate "pinned" set
-  // to detach from, so the only meaningful operation is delete.
-  function removeFromStack(id: string) {
-    removeSource(id)
-  }
-
-  // Empty out the active project. Removes every source and reaps IDB.
-  function clearStack() {
-    const proj = projects.find(p => p.id === activeIdRef.current)
-    if (!proj || proj.sources.length === 0) return
-    const ids = proj.sources.map(s => s.id)
-    setProjects(ps => ps.map(p => p.id === proj.id ? { ...p, sources: [] } : p))
-    // Close all tabs that were showing sources from this stack.
-    setViewTabs(ts => ts.filter(t => !t.srcId || !ids.includes(t.srcId)))
-    setActiveViewTabId(prev => {
-      const tab = viewTabsRef.current.find(t => t.id === prev)
-      if (tab?.srcId && ids.includes(tab.srcId)) return null
-      return prev
-    })
-    setSelectedIds(new Set())
-    setAnchorId(null)
-    Promise.allSettled(ids.flatMap(sid => [deleteFile(sid), deleteContent(sid)]))
-      .then(notifyStorageChanged)
-  }
-
-  function reorderStack(fromIndex: number, toIndex: number) {
-    const proj = projects.find(p => p.id === activeIdRef.current)
-    if (!proj) return
-    if (fromIndex === toIndex) return
-    if (fromIndex < 0 || fromIndex >= proj.sources.length) return
-    if (toIndex   < 0 || toIndex   >  proj.sources.length) return
-    setProjects(ps => ps.map(p => {
-      if (p.id !== proj.id) return p
-      const next = [...p.sources]
-      const [moved] = next.splice(fromIndex, 1)
-      next.splice(toIndex > fromIndex ? toIndex - 1 : toIndex, 0, moved)
-      return { ...p, sources: next }
-    }))
-  }
-
   // ─── View tab actions ───────────────────────────────────────────────────
-
-  // Routes URL sources to the research browser; opens docs in the tab view.
-  function openInPane(id: string) {
-    const src = allSources.find(s => s.id === id)
-    if (!src) return
-    if (src.fileType === 'url') {
-      const url = src.url ?? src.raw
-      if (typeof window === 'undefined') return
-      if (window.electronAPI?.research?.navigate) {
-        window.dispatchEvent(new CustomEvent('proof:browser-navigate', { detail: url }))
-        return
-      }
-      window.open(url, '_blank', 'noopener,noreferrer')
-      return
-    }
-    openInView(id)
-  }
 
   function openInView(srcId: string) {
     const tabs = viewTabsRef.current
-    const existing = tabs.find(t => t.srcId === srcId)
-    if (existing) {
-      setActiveViewTabId(existing.id)
-      return
-    }
     const activeTab = tabs.find(t => t.id === activeViewTabIdRef.current)
     if (activeTab && !activeTab.srcId && !activeTab.url) {
       // Reuse empty active tab
@@ -947,63 +810,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveViewTabId(tabId)
   }
 
-  // ─── Auth / entitlement ─────────────────────────────────────────────────
-
-  async function signInFn(email: string, key: string): Promise<SignInResult> {
-    const result = await authSignIn(email, key)
-    if (result.ok) {
-      setUser(result.user)
-      setIsPro(result.isPro)
-    }
-    return result
-  }
-
-  function signOut() {
-    clearStoredSession()
-    setUser(null)
-    setIsPro(checkIsPro())
-  }
-
-  async function refreshEntitlementFn() {
-    if (!user) return
-    const pro = await authRefresh(user.email, user.licenseKey).catch(() => null)
-    if (pro !== null) setIsPro(pro)
-  }
-
-  async function openBilling() {
-    const customerId = user?.customerId
-    const url = customerId
-      ? await getPortalUrl(customerId).catch(() => null)
-      : null
-    if (url) window.open(url, '_blank', 'noopener,noreferrer')
-    else window.open('https://polar.sh/site-official/portal', '_blank', 'noopener,noreferrer')
-  }
-
-  function needUpgrade(msg: string) {
-    warn(msg)
-    if (typeof window !== 'undefined') window.dispatchEvent(new Event('proof:upgrade-needed'))
-  }
-
   // ─── Context value ──────────────────────────────────────────────────────
-
-  const limits: Limits = isPro ? PRO_LIMITS : FREE_LIMITS
 
   const value: AppState = {
     mounted, projects, activeId, selectedId, selectedIds, anchorId,
     contextMenu,
     activeProject, sources, allSources, selectedSource,
-    stackIds, stackSources,
     viewTabs, activeViewTabId, openInView, openUrlInView, closeViewTab, switchViewTab, reorderViewTabs,
-    user, isPro, limits,
-    signIn: signInFn, signOut, refreshEntitlement: refreshEntitlementFn, openBilling,
+    limits: LIMITS,
     setSelectedIds, setAnchorId,
     setContextMenu,
-    setProjects, updateProject, patchSource, moveSource, moveSourceToProject, moveProject,
-    uploadFiles, retrySource,
+    setProjects, updateProject, patchSource, moveSource, moveSourceToProject,
+    uploadFiles,
     removeSource, removeSelected, addSourceToSession, addUrlToSession, removeSourceFromProject,
-    restoreArchivedSource, permanentlyDeleteArchived,
+    restoreArchivedSource,
     addUrl,
-    addToStack, removeFromStack, clearStack, reorderStack, openInPane,
     switchWorkspace, newWorkspace, saveWorkspace, removeWorkspace, removeWorkspaceSoft, commitWorkspaceRemoval, restoreWorkspace,
   }
 

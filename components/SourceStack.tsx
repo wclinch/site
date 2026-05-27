@@ -11,7 +11,7 @@ type Filter = 'all' | 'docs' | 'pages'
 
 export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
   const {
-    stackSources, patchSource, uploadFiles,
+    sources, patchSource, uploadFiles,
     openInView, viewTabs, activeViewTabId,
     removeSource,
     restoreArchivedSource, commitWorkspaceRemoval, restoreWorkspace, activeId,
@@ -82,8 +82,8 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
 
   if (hidden) return null
 
-  const fileSources = stackSources.filter(s => s.fileType !== 'url')
-  const siteSources = stackSources.filter(s => s.fileType === 'url')
+  const fileSources = sources.filter(s => s.fileType !== 'url')
+  const siteSources = sources.filter(s => s.fileType === 'url')
 
   const showDocs  = filter === 'all' || filter === 'docs'
   const showPages = filter === 'all' || filter === 'pages'
@@ -157,7 +157,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
                 background: filter === f ? '#151615' : 'none',
                 border: `1px solid ${filter === f ? '#151615' : 'transparent'}`,
                 borderRadius: '4px', cursor: 'pointer', outline: 'none',
-                fontSize: '13px', letterSpacing: '0.01em',
+                fontSize: '14px', letterSpacing: '0.01em',
                 color: filter === f ? '#E6E2D8' : 'rgba(230,226,216,0.65)',
                 fontFamily: 'inherit', transition: 'color 0.1s, background 0.1s',
               }}
@@ -208,7 +208,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
                   Object.assign(ghost.style, {
                     position: 'fixed', top: '-1000px', left: '-1000px',
                     background: '#151615', border: '1px solid rgba(230,226,216,0.1)', borderRadius: '4px',
-                    padding: '5px 12px', fontSize: '12px', color: '#E6E2D8',
+                    padding: '5px 12px', fontSize: '13px', color: '#E6E2D8',
                     fontFamily: 'ui-monospace, monospace', whiteSpace: 'nowrap',
                     pointerEvents: 'none',
                   })
@@ -248,7 +248,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
                   Object.assign(ghost.style, {
                     position: 'fixed', top: '-1000px', left: '-1000px',
                     background: '#151615', border: '1px solid rgba(230,226,216,0.1)', borderRadius: '4px',
-                    padding: '5px 12px', fontSize: '12px', color: '#E6E2D8',
+                    padding: '5px 12px', fontSize: '13px', color: '#E6E2D8',
                     fontFamily: 'ui-monospace, monospace', whiteSpace: 'nowrap',
                     pointerEvents: 'none',
                   })
@@ -302,10 +302,13 @@ function EmptyRow({ text }: { text: string }) {
     { t: 'Add with + or drop onto the View.', dim: true },
     { t: 'Bookmark pages from the browser.', dim: true },
   ] : isPages ? [
-    { t: 'No saved pages yet.', dim: true },
-    { t: 'Bookmark pages from the browser.', dim: true },
+    { t: 'No saved pages yet.' },
+    { t: 'Open the browser on the right.', dim: true },
+    { t: 'Bookmark a page to save it here.', dim: true },
   ] : [
-    { t: text, dim: true },
+    { t: 'No documents yet.' },
+    { t: 'Add PDFs or images with +', dim: true },
+    { t: 'or drop them onto the View.', dim: true },
   ]
 
   return (
@@ -318,7 +321,7 @@ function EmptyRow({ text }: { text: string }) {
     }}>
       {lines.map(({ t, dim }, i) => (
         <span key={i} style={{
-          fontSize: '11px',
+          fontSize: '12px',
           color: dim ? 'rgba(230,226,216,0.22)' : 'rgba(230,226,216,0.38)',
           letterSpacing: '0.01em', lineHeight: 1.65,
         }}>
@@ -439,14 +442,14 @@ function StackRow({
               outline: 'none',
               margin: 0, padding: 0,
               resize: 'none', overflow: 'hidden',
-              fontSize: '12px', lineHeight: '1.45', color: '#E6E2D8',
+              fontSize: '13px', lineHeight: '1.45', color: '#E6E2D8',
               fontFamily: 'inherit', letterSpacing: '0.01em',
               WebkitAppearance: 'none', display: 'block',
             } as React.CSSProperties}
           />
         ) : (
           <div style={{
-            fontSize: '12px', lineHeight: '1.45', letterSpacing: '0.01em',
+            fontSize: '13px', lineHeight: '1.45', letterSpacing: '0.01em',
             color: '#E6E2D8',
             wordBreak: 'break-word',
             opacity: armed ? 0.4 : 1,
