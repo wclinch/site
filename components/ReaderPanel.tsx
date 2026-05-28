@@ -4,7 +4,7 @@ import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/Page/TextLayer.css'
 import { useApp } from '@/context/AppContext'
 import { getFile } from '@/lib/idb'
-import type { QueuedSource } from '@/lib/types'
+import type { Source } from '@/lib/types'
 import { notify } from './NotificationsPanel'
 
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
@@ -22,7 +22,7 @@ export default function ReaderPanel({
     viewTabs, activeViewTabId,
     openInView, openUrlInView, closeViewTab,
     uploadFiles, patchSource,
-    sources, allSources, activeId, addSourceToSession, removeSourceFromProject,
+    sources, allSources, activeId, addSourceToThread, removeSourceFromThread,
   } = useApp()
 
   const activeViewTab = viewTabs.find(t => t.id === activeViewTabId) ?? null
@@ -38,13 +38,13 @@ export default function ReaderPanel({
     const src = sources.find(s => s.id === srcId)
     if (!src) {
       if (activeId) {
-        addSourceToSession(srcId, activeId)
+        addSourceToThread(srcId, activeId)
         const pid = activeId
         const prevTabId = activeViewTabId
         setTimeout(() => openInView(srcId), 50)
-        notify('Opened', () => {
+        notify('Opened in View', () => {
           if (prevTabId) closeViewTab(prevTabId)
-          removeSourceFromProject(srcId, pid)
+          removeSourceFromThread(srcId, pid)
         })
       }
       return
@@ -56,8 +56,8 @@ export default function ReaderPanel({
   const hasContent = !!(viewPage || selectedSource)
 
   return (
-    <div style={{ flexGrow: hidden ? 0 : 1, flexShrink: 1, flexBasis: 0, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'flex-grow 0.22s ease' }}>
-      <div style={{ flex: 1, minHeight: 0, padding: '7px', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ flexGrow: hidden ? 0 : 1, flexShrink: 1, flexBasis: 0, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'flex-grow 0.22s ease', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+      <div style={{ flex: 1, minHeight: 0, padding: '7px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
         <ViewPane
           viewId={1}
           source={viewPage ? null : selectedSource}
@@ -85,14 +85,14 @@ function ViewPane({
   isFocused, isExpanded, onFocusToggle,
 }: {
   viewId: 1
-  source: QueuedSource | null
+  source: Source | null
   viewPage: { url: string; title: string } | null
   isHidden: boolean
   onClose?: () => void
   onSelectId: (id: string) => void
   onDropUrl?: (url: string, title: string) => void
   uploadFiles: (files: FileList | File[]) => Promise<void>
-  patchSource: (projId: string, srcId: string, patch: Partial<QueuedSource>) => void
+  patchSource: (projId: string, srcId: string, patch: Partial<Source>) => void
   isFocused?: boolean
   isExpanded?: boolean
   onFocusToggle?: () => void
@@ -158,13 +158,13 @@ function ViewPane({
       } as React.CSSProperties}
       onDragOver={e => {
         const t = e.dataTransfer.types
-        if (t.includes('application/x-proof-source-id') || t.includes('application/x-proof-web-url') || t.includes('Files')) {
+        if (t.includes('application/x-site-source-id') || t.includes('application/x-site-web-url') || t.includes('Files')) {
           e.preventDefault(); setDragOver(true)
         }
       }}
       onDragEnter={e => {
         const t = e.dataTransfer.types
-        if (t.includes('application/x-proof-source-id') || t.includes('application/x-proof-web-url') || t.includes('Files'))
+        if (t.includes('application/x-site-source-id') || t.includes('application/x-site-web-url') || t.includes('Files'))
           setDragOver(true)
       }}
       onDragLeave={e => {
@@ -172,9 +172,9 @@ function ViewPane({
       }}
       onDrop={e => {
         e.preventDefault(); setDragOver(false)
-        const srcId = e.dataTransfer.getData('application/x-proof-source-id')
+        const srcId = e.dataTransfer.getData('application/x-site-source-id')
         if (srcId) { onSelectId(srcId); return }
-        const webRaw = e.dataTransfer.getData('application/x-proof-web-url')
+        const webRaw = e.dataTransfer.getData('application/x-site-web-url')
         if (webRaw && onDropUrl) {
           try { const { url, title } = JSON.parse(webRaw); onDropUrl(url, title) } catch {}
           return
@@ -188,7 +188,7 @@ function ViewPane({
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(7,8,7,0.55)',
         }}>
-          <span style={{ fontSize: '12px', color: '#E6E2D8', letterSpacing: '0.03em' }}>
+          <span style={{ fontSize: '13px', color: '#E6E2D8', letterSpacing: '0.03em' }}>
             Drop to open
           </span>
         </div>
@@ -213,8 +213,8 @@ function ViewPane({
 function SourceContent({
   source, patchSource, isFocused,
 }: {
-  source: QueuedSource
-  patchSource: (projId: string, srcId: string, patch: Partial<QueuedSource>) => void
+  source: Source
+  patchSource: (projId: string, srcId: string, patch: Partial<Source>) => void
   isFocused?: boolean
 }) {
   if (source.fileType === 'note')  return <NoteEditor  source={source} patchSource={patchSource} />
@@ -264,15 +264,15 @@ function EmptySource({ uploadFiles }: { uploadFiles: (files: FileList | File[]) 
       }}
     >
       {fileDragOver ? (
-        <span style={{ fontSize: '12px', color: 'rgba(230,226,216,0.65)', letterSpacing: '0.03em', userSelect: 'none' }}>
+        <span style={{ fontSize: '13px', color: 'rgba(230,226,216,0.65)', letterSpacing: '0.03em', userSelect: 'none' }}>
           Drop to open.
         </span>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: '360px', userSelect: 'none' }}>
-          <span style={{ fontSize: '12px', color: 'rgba(230,226,216,0.35)', letterSpacing: '0.01em', textAlign: 'center', lineHeight: 1.7, marginBottom: '6px', whiteSpace: 'nowrap' }}>
-            Select a source from the shelf to open it here.
+          <span style={{ fontSize: '13px', color: 'rgba(230,226,216,0.35)', letterSpacing: '0.01em', textAlign: 'center', lineHeight: 1.7, marginBottom: '6px', whiteSpace: 'nowrap' }}>
+            Select a document or page to open it here.
           </span>
-          <span style={{ fontSize: '11px', color: 'rgba(230,226,216,0.2)', letterSpacing: '0.01em', textAlign: 'center', lineHeight: 1.7, marginBottom: '24px', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: '12px', color: 'rgba(230,226,216,0.2)', letterSpacing: '0.01em', textAlign: 'center', lineHeight: 1.7, marginBottom: '24px', whiteSpace: 'nowrap' }}>
             Sources stack as tabs — switch between them at the top.
           </span>
           <button
@@ -283,7 +283,7 @@ function EmptySource({ uploadFiles }: { uploadFiles: (files: FileList | File[]) 
               border: '1px solid rgba(230,226,216,0.1)',
               borderRadius: '4px',
               color: 'rgba(230,226,216,0.3)',
-              fontSize: '11px', letterSpacing: '0.02em',
+              fontSize: '12px', letterSpacing: '0.02em',
               cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
               transition: 'color 0.12s, border-color 0.12s',
             }}
@@ -345,7 +345,7 @@ function ViewTabStrip({
         overflow: 'hidden',
       } as React.CSSProperties}
       onDragOver={e => {
-        if (e.dataTransfer.types.includes('application/x-proof-view-tab-id')) e.preventDefault()
+        if (e.dataTransfer.types.includes('application/x-site-view-tab-id')) e.preventDefault()
       }}
       onDragLeave={e => {
         if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
@@ -353,7 +353,7 @@ function ViewTabStrip({
         }
       }}
       onDrop={e => {
-        const fromId = e.dataTransfer.getData('application/x-proof-view-tab-id')
+        const fromId = e.dataTransfer.getData('application/x-site-view-tab-id')
         const toId   = dropTargetIdRef.current
         if (fromId && toId && fromId !== toId) reorderViewTabs(fromId, toId)
         dragTabIdRef.current = null; dropTargetIdRef.current = null; setDropVisualId(null)
@@ -376,14 +376,14 @@ function ViewTabStrip({
             onClose={e => { e.stopPropagation(); closeViewTab(tab.id) }}
             onDragStart={() => {
               dragTabIdRef.current = tab.id
-              window.dispatchEvent(new CustomEvent('proof:drag-active', { detail: { originalSessionId: activeId } }))
+              window.dispatchEvent(new CustomEvent('site:drag-active', { detail: { originalSessionId: activeId } }))
             }}
             onDragEnd={e => {
               dragTabIdRef.current = null; setDropVisualId(null)
-              window.dispatchEvent(new CustomEvent('proof:drag-done', { detail: { canceled: e.dataTransfer.dropEffect === 'none' } }))
+              window.dispatchEvent(new CustomEvent('site:drag-done', { detail: { canceled: e.dataTransfer.dropEffect === 'none' } }))
             }}
             onDragOver={e => {
-              if (!e.dataTransfer.types.includes('application/x-proof-view-tab-id')) return
+              if (!e.dataTransfer.types.includes('application/x-site-view-tab-id')) return
               e.preventDefault(); e.stopPropagation()
               if (dropTargetIdRef.current !== tab.id) {
                 dropTargetIdRef.current = tab.id; setDropVisualId(tab.id)
@@ -398,7 +398,7 @@ function ViewTabStrip({
           height: '28px', padding: '0 12px',
           display: 'inline-flex', alignItems: 'center',
           borderRadius: '4px', background: '#151615', border: '1px solid rgba(230,226,216,0.1)',
-          fontSize: '13px', color: '#E6E2D8', letterSpacing: '0.01em',
+          fontSize: '14px', color: '#E6E2D8', letterSpacing: '0.01em',
           userSelect: 'none', marginLeft: '4px', flexShrink: 0,
         }}>
           View
@@ -434,9 +434,9 @@ function TabChip({
       onMouseLeave={() => setHov(false)}
       draggable
       onDragStart={e => {
-        e.dataTransfer.setData('application/x-proof-view-tab-id', tabId)
-        if (srcId) e.dataTransfer.setData('application/x-proof-source-id', srcId)
-        if (dragUrl) e.dataTransfer.setData('application/x-proof-web-url', JSON.stringify(dragUrl))
+        e.dataTransfer.setData('application/x-site-view-tab-id', tabId)
+        if (srcId) e.dataTransfer.setData('application/x-site-source-id', srcId)
+        if (dragUrl) e.dataTransfer.setData('application/x-site-web-url', JSON.stringify(dragUrl))
         e.dataTransfer.effectAllowed = 'move'
         onDragStart?.()
       }}
@@ -449,7 +449,7 @@ function TabChip({
         background: active ? '#151615' : hov ? 'rgba(21,22,21,0.5)' : 'none',
         border: `1px solid ${active ? 'rgba(230,226,216,0.1)' : 'transparent'}`,
         borderLeft: dragBefore ? '2px solid rgba(230,226,216,0.65)' : active ? '1px solid rgba(230,226,216,0.1)' : '1px solid transparent',
-        fontSize: '13px', color: active ? '#E6E2D8' : 'rgba(230,226,216,0.65)',
+        fontSize: '14px', color: active ? '#E6E2D8' : 'rgba(230,226,216,0.65)',
         letterSpacing: '0.01em', userSelect: 'none', cursor: 'grab', flexShrink: 0,
         maxWidth: '160px', overflow: 'hidden',
         transition: 'background 0.1s, color 0.1s',
@@ -483,8 +483,8 @@ function TabChip({
 function NoteEditor({
   source, patchSource,
 }: {
-  source: QueuedSource
-  patchSource: (projId: string, srcId: string, patch: Partial<QueuedSource>) => void
+  source: Source
+  patchSource: (projId: string, srcId: string, patch: Partial<Source>) => void
 }) {
   const { activeId } = useApp()
   const [text, setText] = useState(source.noteContent ?? '')
@@ -510,7 +510,7 @@ function NoteEditor({
           flex: 1, width: '100%', minHeight: '100%',
           background: 'transparent', border: 'none', outline: 'none',
           resize: 'none', padding: '20px 24px',
-          fontSize: '13px', lineHeight: 1.8, color: 'rgba(230,226,216,0.65)',
+          fontSize: '14px', lineHeight: 1.8, color: 'rgba(230,226,216,0.65)',
           fontFamily: 'Georgia, "Times New Roman", serif',
           boxSizing: 'border-box',
         }}
@@ -527,7 +527,7 @@ const CURSOR_OUT = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000
 
 // ─── Image viewer ────────────────────────────────────────────────────────────
 
-function ImageViewer({ source }: { source: QueuedSource }) {
+function ImageViewer({ source }: { source: Source }) {
   const [imgUrl,     setImgUrl]     = useState<string | null>(null)
   const [zoomed,     setZoomed]     = useState(false)
   const [zoomOrigin, setZoomOrigin] = useState<{ x: number; y: number; vx: number; vy: number } | null>(null)
@@ -634,12 +634,12 @@ function ImageViewer({ source }: { source: QueuedSource }) {
 
 // ─── PDF viewer ──────────────────────────────────────────────────────────────
 
-function PdfViewer({ source, isFocused }: { source: QueuedSource; isFocused?: boolean }) {
+function PdfViewer({ source, isFocused }: { source: Source; isFocused?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(640)
   const [zoomed,    setZoomed]    = useState(false)
-  const [clickPos,  setClickPos]  = useState<{ cx: number; cy: number; vx: number; vy: number } | null>(null)
   const [fileUrl,   setFileUrl]   = useState<string | null>(null)
+  const pendingClickScroll = useRef<{ cx: number; cy: number; vx: number; vy: number } | null>(null)
   const [numPages,  setNumPages]  = useState(0)
   const [loadError, setLoadError] = useState(false)
   const prevUrl = useRef<string | null>(null)
@@ -674,7 +674,7 @@ function PdfViewer({ source, isFocused }: { source: QueuedSource; isFocused?: bo
     if (prevUrl.current) URL.revokeObjectURL(prevUrl.current)
   }, [])
 
-  useEffect(() => { setZoomed(false); setClickPos(null) }, [source.id])
+  useEffect(() => { setZoomed(false) }, [source.id])
 
   useEffect(() => {
     if (!zoomed) return
@@ -683,20 +683,29 @@ function PdfViewer({ source, isFocused }: { source: QueuedSource; isFocused?: bo
     return () => window.removeEventListener('keydown', onKey)
   }, [zoomed])
 
-  // After zoom re-render, scroll so the clicked pixel stays under the cursor
-  useLayoutEffect(() => {
-    if (!containerRef.current || !clickPos) return
-    const el = containerRef.current
-    if (zoomed) {
-      // Just zoomed in (1x → 1.75x): cx/cy are in 1x content space
-      el.scrollLeft = Math.max(0, clickPos.cx * 1.75 - clickPos.vx)
-      el.scrollTop  = Math.max(0, clickPos.cy * 1.75 - clickPos.vy)
-    } else {
-      // Just zoomed out (1.75x → 1x): cx/cy are in 1.75x content space
-      el.scrollLeft = Math.max(0, clickPos.cx / 1.75 - clickPos.vx)
-      el.scrollTop  = Math.max(0, clickPos.cy / 1.75 - clickPos.vy)
-    }
-  }, [zoomed, clickPos])
+  // After zoom toggles, scroll so the clicked pixel stays under the cursor.
+  // Double RAF waits for react-pdf to finish painting pages at new size before
+  // setting scroll — without it scrollLeft/Top gets clamped to the old dimensions.
+  useEffect(() => {
+    if (!pendingClickScroll.current) return
+    const { cx, cy, vx, vy } = pendingClickScroll.current
+    pendingClickScroll.current = null
+    let raf2: number
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        if (!containerRef.current) return
+        const el = containerRef.current
+        if (zoomed) {
+          el.scrollLeft = Math.max(0, cx * 1.75 - vx)
+          el.scrollTop  = Math.max(0, cy * 1.75 - vy)
+        } else {
+          el.scrollLeft = Math.max(0, cx / 1.75 - vx)
+          el.scrollTop  = Math.max(0, cy / 1.75 - vy)
+        }
+      })
+    })
+    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2) }
+  }, [zoomed])
 
   const baseWidth = isFocused ? Math.min(containerWidth - 32, 520) : (containerWidth - 32)
   const pageWidth = zoomed ? baseWidth * 1.75 : baseWidth
@@ -712,14 +721,23 @@ function PdfViewer({ source, isFocused }: { source: QueuedSource; isFocused?: bo
             const rect = el.getBoundingClientRect()
             const vx = e.clientX - rect.left
             const vy = e.clientY - rect.top
-            setClickPos({ cx: el.scrollLeft + vx, cy: el.scrollTop + vy, vx, vy })
+            if (!zoomed) {
+              // Zooming in: alignItems:center offsets the page from x=0 by hOffset.
+              // cx must be relative to the page itself, not the scroll origin.
+              const hOffset = Math.max(0, Math.floor((containerWidth - baseWidth) / 2))
+              pendingClickScroll.current = { cx: el.scrollLeft + vx - hOffset, cy: el.scrollTop + vy, vx, vy }
+            } else {
+              // Zooming out: alignItems:flex-start, page at x=0, no offset needed.
+              pendingClickScroll.current = { cx: el.scrollLeft + vx, cy: el.scrollTop + vy, vx, vy }
+            }
           }
           setZoomed(z => !z)
         }
       }}
       style={{
         flex: 1, overflow: 'auto', background: '#070807',
-        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        display: 'flex', flexDirection: 'column',
+        alignItems: zoomed ? 'flex-start' : 'center',
         WebkitAppRegion: 'no-drag',
         userSelect: 'none',
         cursor: fileUrl && !loadError ? (zoomed ? CURSOR_OUT : CURSOR_IN) : 'default',
@@ -731,7 +749,7 @@ function PdfViewer({ source, isFocused }: { source: QueuedSource; isFocused?: bo
       {source.status === 'error'            && <Msg>{source.error ?? 'Failed to open.'}</Msg>}
       {source.status === 'done' && loadError && <Msg>Could not read this file.</Msg>}
       {source.status === 'done' && fileUrl && !loadError && (
-        <div style={{ margin: 'auto 0', padding: '16px 0' }}>
+        <div style={{ padding: '16px 0' }}>
           <Document
             file={fileUrl}
             onLoadSuccess={({ numPages }) => { setNumPages(numPages); setLoadError(false) }}
@@ -858,7 +876,7 @@ function Msg({ children }: { children: React.ReactNode }) {
     <div style={{
       flex: 1, minHeight: '40px',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: '11px', color: 'rgba(230,226,216,0.65)', letterSpacing: '0.02em',
+      fontSize: '12px', color: 'rgba(230,226,216,0.65)', letterSpacing: '0.02em',
     }}>
       {children}
     </div>
@@ -872,7 +890,7 @@ function Empty({ label }: { label: string }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: '32px 24px',
     }}>
-      <span style={{ fontSize: '13px', color: 'rgba(230,226,216,0.65)', letterSpacing: '0.02em' }}>{label}</span>
+      <span style={{ fontSize: '14px', color: 'rgba(230,226,216,0.65)', letterSpacing: '0.02em' }}>{label}</span>
     </div>
   )
 }

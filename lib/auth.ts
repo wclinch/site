@@ -2,9 +2,9 @@
 // All Polar API calls go through Electron IPC — the main process holds the org token.
 // In web/dev context without Electron, auth is unavailable but the app still works.
 
-const AUTH_KEY  = 'proof-v3-auth-session'
-const ENT_KEY   = 'proof-v3-entitlement'
-const CREDS_KEY = 'proof-v3-credentials'
+const AUTH_KEY  = 'site-v3-auth-session'
+const ENT_KEY   = 'site-v3-entitlement'
+const CREDS_KEY = 'site-v3-credentials'
 
 export interface AuthUser {
   email:      string

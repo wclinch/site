@@ -33,13 +33,36 @@ function docContentToText(content: DocContent, maxChars = 3000): string {
   return parts.join(' ')
 }
 
-async function buildContext(app: ReturnType<typeof useApp>): Promise<AskSiteSessionContext> {
-  const { activeId, projects, sources, selectedSource, viewTabs, activeViewTabId, allSources } = app
-  const project = projects.find(p => p.id === activeId)
-  const docs  = sources.filter(s => s.fileType !== 'url')
-  const pages = sources.filter(s => s.fileType === 'url')
+export type AskContextSelection =
+  | { type: 'current' }
+  | { type: 'activeView' }
+  | { type: 'thread'; threadId: string; threadName: string }
 
-  const activeTab = viewTabs.find(t => t.id === activeViewTabId) ?? null
+export async function buildContext(
+  app: ReturnType<typeof useApp>,
+  selection: AskContextSelection = { type: 'current' },
+): Promise<AskSiteSessionContext> {
+  const { activeId, threads, sources, selectedSource, viewTabs, activeViewTabId, allSources } = app
+  const currentThread = threads.find(p => p.id === activeId)
+  const currentLocationName = currentThread?.name || 'Untitled'
+
+  // Decide the SOURCE thread for the context payload.
+  // For 'current' and 'activeView' → current thread.
+  // For 'thread'                   → the selected thread.
+  let sourceThread = currentThread
+  if (selection.type === 'thread') {
+    sourceThread = threads.find(p => p.id === selection.threadId) ?? currentThread
+  }
+
+  const sourceThreadSources = sourceThread?.sources ?? []
+  const docs  = sourceThreadSources.filter(s => s.fileType !== 'url')
+  const pages = sourceThreadSources.filter(s => s.fileType === 'url')
+
+  // View tabs: only meaningful for current/activeView; for another thread, fall back to its persisted tabs.
+  const usingCurrent = sourceThread?.id === currentThread?.id
+  const effectiveViewTabs = usingCurrent ? viewTabs : (sourceThread?.viewTabs ?? [])
+  const effectiveActiveTabId = usingCurrent ? activeViewTabId : (sourceThread?.activeViewTabId ?? null)
+  const activeTab = effectiveViewTabs.find(t => t.id === effectiveActiveTabId) ?? null
   const activeSrc = activeTab?.srcId ? allSources.find(s => s.id === activeTab.srcId) ?? null : null
 
   // Label and type of the active view
@@ -55,7 +78,7 @@ async function buildContext(app: ReturnType<typeof useApp>): Promise<AskSiteSess
     }
   }
 
-  // Extracted text from the active document
+  // Extracted text from the active document — only when we have a real active source.
   let documentText: string | undefined
   if (activeSrc) {
     if (activeSrc.fileType === 'note' && activeSrc.noteContent) {
@@ -69,33 +92,51 @@ async function buildContext(app: ReturnType<typeof useApp>): Promise<AskSiteSess
     }
   }
 
-  // Other sessions (excluding current)
-  const otherSessions = projects
-    .filter(p => p.id !== activeId)
+  // For 'activeView': trim payload to just the active view + its text. Drop shelf/saved pages.
+  const isActiveViewOnly = selection.type === 'activeView'
+
+  // Other sessions (excluding the source thread)
+  const otherSessions = threads
+    .filter(p => p.id !== sourceThread?.id)
     .map(p => p.name)
     .filter(Boolean)
 
+  // Selection labels for prompt
+  let contextSourceType: 'current' | 'activeView' | 'thread' = 'current'
+  let contextSourceName = currentLocationName
+  if (selection.type === 'activeView') {
+    contextSourceType = 'activeView'
+    contextSourceName = activeViewLabel || 'Current View'
+  } else if (selection.type === 'thread') {
+    contextSourceType = 'thread'
+    contextSourceName = selection.threadName
+  }
+
   return {
-    sessionName: project?.name || 'Untitled Session',
-    sessionId:   activeId ?? '',
-    sources:     docs.map(s => ({ label: s.label || s.raw || 'Untitled', type: s.fileType || 'doc' })),
-    savedPages:  pages.map(s => ({ label: s.label || s.raw || '', url: s.raw || '' })),
-    viewTabs: viewTabs.map(tab => {
+    sessionName: sourceThread?.name || 'Untitled',
+    sessionId:   sourceThread?.id ?? '',
+    sources:     isActiveViewOnly ? [] : docs.map(s => ({ label: s.label || s.raw || 'Untitled', type: s.fileType || 'doc' })),
+    savedPages:  isActiveViewOnly ? [] : pages.map(s => ({ label: s.label || s.raw || '', url: s.raw || '' })),
+    viewTabs: effectiveViewTabs.map(tab => {
       const src = tab.srcId ? allSources.find(s => s.id === tab.srcId) : null
       const label = src
         ? (src.label || src.raw || 'Document')
         : tab.title || (tab.url ? (() => { try { return new URL(tab.url!).hostname.replace(/^www\./, '') } catch { return tab.url! } })() : 'View')
       const type = src ? (src.fileType || 'doc') : (tab.url ? 'web' : undefined)
-      return { label, url: tab.url, active: tab.id === activeViewTabId, type }
+      return { label, url: tab.url, active: tab.id === effectiveActiveTabId, type }
     }),
-    webUrl:   _web.url,
-    webTitle: _web.title,
-    selectedSourceLabel: selectedSource?.label || selectedSource?.raw || undefined,
+    webUrl:   usingCurrent ? _web.url   : '',
+    webTitle: usingCurrent ? _web.title : '',
+    selectedSourceLabel: usingCurrent ? (selectedSource?.label || selectedSource?.raw || undefined) : undefined,
     recentActions: [],
     activeViewLabel,
     activeViewType,
     documentText,
-    otherSessions: otherSessions.length > 0 ? otherSessions : undefined,
+    otherSessions:    otherSessions.length > 0 ? otherSessions : undefined,
+    inheritedContext: sourceThread?.inheritedContextSummary || undefined,
+    contextSourceType,
+    contextSourceName,
+    currentLocationName,
   }
 }
 
@@ -107,72 +148,63 @@ function timeAgo(ts: number): string {
   return `${Math.floor(s / 86400)}d ago`
 }
 
-// ─── Chat row with arm-to-delete ─────────────────────────────────────────────
+// ─── Context tab chip ─────────────────────────────────────────────────────────
 
-function ChatRow({ chat, active, last, onSelect, onDelete }: {
-  chat: AskSiteChat; active: boolean; last: boolean
-  onSelect: () => void; onDelete: () => void
-}) {
-  const [hov,   setHov]   = useState(false)
+function CtxTab({ label, active, onClick, onRemove }: { label: string; active: boolean; onClick: () => void; onRemove?: () => void }) {
+  const [hov, setHov] = useState(false)
   const [armed, setArmed] = useState(false)
-  const [xHov,  setXHov]  = useState(false)
+  const [xHov, setXHov] = useState(false)
 
-  function handleDeleteClick(e: React.MouseEvent) {
+  function handleX(e: React.MouseEvent) {
     e.stopPropagation()
     if (!armed) { setArmed(true); return }
-    setArmed(false); onDelete()
+    setArmed(false)
+    onRemove?.()
   }
 
   return (
     <div
-      onClick={() => { if (!armed) onSelect() }}
+      onClick={onClick}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => { setHov(false); setArmed(false) }}
       style={{
-        display: 'flex', alignItems: 'flex-start', gap: '8px',
-        padding: '8px 8px 8px 12px',
-        background: active || hov ? S : 'transparent',
-        borderBottom: last ? 'none' : `1px solid ${S}`,
-        borderLeft: `2px solid ${active ? M : hov ? S : 'transparent'}`,
-        cursor: armed ? 'default' : 'pointer',
-        userSelect: 'none',
-        transition: 'background 0.1s, border-color 0.1s',
+        height: '28px', padding: onRemove ? '0 6px 0 12px' : '0 12px',
+        flexShrink: 0, display: 'flex', alignItems: 'center', gap: '4px',
+        background: active ? '#151615' : hov ? 'rgba(21,22,21,0.5)' : 'none',
+        border: `1px solid ${active ? 'rgba(230,226,216,0.1)' : 'transparent'}`,
+        borderRadius: '4px', cursor: 'pointer', userSelect: 'none',
+        transition: 'background 0.1s',
       }}
     >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontSize: '13px', color: active || hov ? T : M, lineHeight: 1.45,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          opacity: armed ? 0.4 : 1,
-          textDecoration: armed ? 'line-through' : 'none',
-          transition: 'opacity 0.15s, color 0.1s',
-        }}>
-          {chat.title || 'Untitled chat'}
-        </div>
-        <div style={{ fontSize: '13px', color: F, marginTop: '1px', letterSpacing: '0.02em' }}>
-          {timeAgo(chat.updatedAt)}
-        </div>
-      </div>
-      <button
-        onClick={handleDeleteClick}
-        onMouseEnter={() => setXHov(true)}
-        onMouseLeave={() => setXHov(false)}
-        title={armed ? 'Click again to delete' : 'Delete chat'}
-        style={{
-          width: '20px', height: '20px', flexShrink: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'none', border: 'none', borderRadius: '3px',
-          cursor: 'pointer', padding: 0, outline: 'none', lineHeight: 0,
-          color: armed ? T : xHov ? T : F,
-          opacity: armed || hov || active ? 1 : 0,
-          pointerEvents: armed || hov || active ? 'auto' : 'none',
-          transition: 'color 0.1s, opacity 0.12s',
-        }}
-      >
-        <svg width="8" height="8" viewBox="0 0 9 9" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-          <path d="M1 1L8 8M8 1L1 8"/>
-        </svg>
-      </button>
+      <span style={{
+        fontSize: '13px', letterSpacing: '0.01em',
+        color: active ? T : M,
+        whiteSpace: 'nowrap',
+        textDecoration: armed ? 'line-through' : 'none',
+        opacity: armed ? 0.4 : 1,
+        transition: 'opacity 0.15s',
+      }}>
+        {label}
+      </span>
+      {onRemove && (hov || active || armed) && (
+        <button
+          onClick={handleX}
+          onMouseEnter={() => setXHov(true)}
+          onMouseLeave={() => setXHov(false)}
+          style={{
+            width: '16px', height: '16px', flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'none', border: 'none', borderRadius: '2px',
+            cursor: 'pointer', padding: 0, outline: 'none', lineHeight: 0,
+            color: armed || xHov ? T : F,
+            transition: 'color 0.1s',
+          }}
+        >
+          <svg width="7" height="7" viewBox="0 0 9 9" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+            <path d="M1 1L8 8M8 1L1 8" />
+          </svg>
+        </button>
+      )}
     </div>
   )
 }
@@ -193,14 +225,11 @@ function IconBtn({ onClick, title, children }: { onClick: () => void; title?: st
   )
 }
 
-function PlusIcon() {
-  return <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><line x1="5" y1="1" x2="5" y2="9"/><line x1="1" y1="5" x2="9" y2="5"/></svg>
-}
 function CloseIcon() {
   return <svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="M1 1L8 8M8 1L1 8"/></svg>
 }
 function SendIcon() {
-  return <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><line x1="6" y1="10" x2="6" y2="2"/><polyline points="2,6 6,2 10,6"/></svg>
+  return <svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><line x1="2" y1="6" x2="10" y2="6"/><polyline points="6,2 10,6 6,10"/></svg>
 }
 
 
@@ -325,37 +354,77 @@ function LoadingRow({ label, bright }: { label?: string; bright?: boolean }) {
   )
 }
 
+// ─── Pill toggle ─────────────────────────────────────────────────────────────
+
+function PillToggle({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}
+    >
+      <span style={{ fontSize: '11px', color: 'rgba(230,226,216,0.35)', letterSpacing: '0.02em' }}>{label}</span>
+      <div style={{
+        width: '26px', height: '14px', borderRadius: '7px', flexShrink: 0,
+        background: on ? 'rgba(230,226,216,0.18)' : 'rgba(230,226,216,0.06)',
+        border: `1px solid ${on ? 'rgba(230,226,216,0.3)' : 'rgba(230,226,216,0.1)'}`,
+        position: 'relative', transition: 'background 0.18s, border-color 0.18s',
+      }}>
+        <div style={{
+          width: '10px', height: '10px', borderRadius: '50%',
+          background: on ? 'rgba(230,226,216,0.9)' : 'rgba(230,226,216,0.25)',
+          position: 'absolute', top: '1px',
+          left: on ? '13px' : '1px',
+          transition: 'left 0.18s, background 0.18s',
+        }} />
+      </div>
+    </button>
+  )
+}
+
 // ─── Panel ────────────────────────────────────────────────────────────────────
 
-export default function AskSitePanel({ collapsed = false, onToggle }: { collapsed?: boolean; onToggle?: () => void }) {
+export default function AskSitePanel({ onClose, initialChatId, minimal }: { onClose?: () => void; initialChatId?: string | null; minimal?: boolean }) {
   const app = useApp()
-  const { activeId } = app
+  const { activeId, threads, removeThreadSoft } = app
 
   const [chats,        setChats]        = useState<AskSiteChat[]>([])
-  const [activeChatId, setActiveChatId] = useState<string | null>(null)
+  const [activeChatId, setActiveChatId] = useState<string | null>(initialChatId ?? null)
   const [input,        setInput]        = useState('')
   const [loading,      setLoading]      = useState(false)
   const [capturing,    setCapturing]    = useState(false)
-  const [showHistory,  setShowHistory]  = useState(false)
-const [, forceUpdate] = useState(0)
+  const [, forceUpdate]  = useState(0)
+  const [askContext,   setAskContext]   = useState<AskContextSelection>({ type: 'current' })
+  const [liveViewOn,   setLiveViewOn]   = useState(true)
+  const [chatArmed,    setChatArmed]    = useState(false)
 
-  const bottomRef = useRef<HTMLDivElement>(null)
-  const inputRef  = useRef<HTMLInputElement>(null)
+  const bottomRef  = useRef<HTMLDivElement>(null)
+  const inputRef   = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     function onWebState(e: Event) {
       const { url, title } = (e as CustomEvent).detail as { url: string; title: string }
       _web.url = url; _web.title = title; forceUpdate(n => n + 1)
     }
-    window.addEventListener('proof:web-state', onWebState)
-    return () => window.removeEventListener('proof:web-state', onWebState)
+    window.addEventListener('site:web-state', onWebState)
+    return () => window.removeEventListener('site:web-state', onWebState)
+  }, [])
+
+  // Reset to current thread context when the active thread changes
+  useEffect(() => {
+    setAskContext({ type: 'current' })
+    setInput('')
+  }, [activeId])
+
+  // Load chats once on mount — independent of workspace thread
+  useEffect(() => {
+    const loaded = loadChats('__ask__')
+    setChats(loaded)
+    setActiveChatId(loaded[0]?.id ?? null)
   }, [])
 
   useEffect(() => {
-    if (!activeId) return
-    const loaded = loadChats(activeId)
-    setChats(loaded); setActiveChatId(null); setInput(''); setShowHistory(false)
-  }, [activeId])
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -363,32 +432,40 @@ const [, forceUpdate] = useState(0)
 
   const activeChat = chats.find(c => c.id === activeChatId) ?? null
 
-  function deleteChat(chatId: string) {
-    setChats(prev => {
-      const next = prev.filter(c => c.id !== chatId)
-      if (activeId) saveChats(activeId, next)
-      if (next.length === 0) setShowHistory(false) // exit history when empty
-      return next
-    })
-    if (activeChatId === chatId) setActiveChatId(null)
+  function handleDeleteThread(threadId: string) {
+    const thread = threads.find(t => t.id === threadId)
+    const insertIdx = threads.findIndex(t => t.id === threadId)
+    if (!thread) return
+    removeThreadSoft(threadId)
+    window.dispatchEvent(new CustomEvent('site:thread-removed', { detail: { proj: thread, insertIdx } }))
+    if (askContext.type === 'thread' && askContext.threadId === threadId) {
+      setAskContext({ type: 'current' })
+    }
   }
 
-  function startNewChat() {
-    setActiveChatId(null); setInput(''); setShowHistory(false)
-    requestAnimationFrame(() => inputRef.current?.focus())
+  function handleDeleteClick() {
+    if (!activeChatId) return
+    if (!chatArmed) { setChatArmed(true); return }
+    setChatArmed(false)
+    setChats(prev => {
+      const next = prev.filter(c => c.id !== activeChatId)
+      saveChats('__ask__', next)
+      setActiveChatId(next[0]?.id ?? null)
+      return next
+    })
   }
 
   async function handleSend(msg?: string) {
     const content = (msg ?? input).trim()
-    if (!content || loading || capturing || !activeId) return
-    setInput(''); setShowHistory(false)
+    if (!content || loading || capturing) return
+    setInput('')
 
     const userMsg: AskSiteMessage = {
       id: Math.random().toString(36).slice(2),
       role: 'user', content, ts: Date.now(), usedContext: true,
     }
 
-    let chat = activeChat ?? createChat(activeId)
+    let chat = activeChat ?? createChat('__ask__')
     const isNew = !activeChat
     const chatWithUser: AskSiteChat = {
       ...chat,
@@ -400,17 +477,18 @@ const [, forceUpdate] = useState(0)
     setActiveChatId(chatWithUser.id)
     setChats(prev => {
       const next = isNew ? [chatWithUser, ...prev] : prev.map(c => c.id === chatWithUser.id ? chatWithUser : c)
-      saveChats(activeId, next); return next
+      saveChats('__ask__', next); return next
     })
 
-    // Always capture the window — Ask Site is screen-aware for every question
-    setCapturing(true)
-    const cap = await captureWindow()
-    const screenshot = cap ?? undefined
-    setCapturing(false)
+    let screenshot: string | undefined
+    if (liveViewOn) {
+      setCapturing(true)
+      screenshot = await captureWindow() ?? undefined
+      setCapturing(false)
+    }
 
     setLoading(true)
-    const ctx = await buildContext(app)
+    const ctx = await buildContext(app, askContext)
     const res = await askSiteAI({ messages: chatWithUser.messages, context: ctx, screenshot })
 
     const assistantMsg: AskSiteMessage = {
@@ -424,7 +502,7 @@ const [, forceUpdate] = useState(0)
       const next = prev.map(c =>
         c.id !== chatWithUser.id ? c : { ...c, messages: [...c.messages, assistantMsg], updatedAt: Date.now() }
       )
-      saveChats(activeId, next); return next
+      saveChats('__ask__', next); return next
     })
     setLoading(false)
   }
@@ -432,120 +510,115 @@ const [, forceUpdate] = useState(0)
   return (
     <div style={{
       flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
-      border: `1px solid ${BR}`, borderRadius: '4px',
-      background: BG, overflow: 'hidden',
+      overflow: 'hidden',
+      ...(minimal ? {} : { border: `1px solid ${BR}`, borderRadius: '4px', background: BG }),
     }}>
 
       {/* ── Header ── */}
-      <div style={{
-        height: '44px', flexShrink: 0,
-        display: 'flex', alignItems: 'center',
-        padding: '0 8px 0 10px',
-        borderBottom: collapsed ? 'none' : `1px solid ${BR}`,
-        userSelect: 'none', gap: '6px',
-      }}>
-        {/* Everything except chevron fades out when collapsed */}
-        <span
-          onClick={() => { if (activeChatId || showHistory) startNewChat() }}
+      <div style={{ flexShrink: 0, userSelect: 'none' }}>
+        {/* Row 1: back + label — hidden in minimal/tab mode */}
+        {!minimal && (
+          <div style={{
+            height: '38px',
+            display: 'flex', alignItems: 'center',
+            padding: '0 8px 0 6px', gap: '2px',
+            borderBottom: `1px solid ${BR}`,
+          }}>
+            {onClose && (
+              <IconBtn onClick={onClose} title="Back to sources">
+                <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="7,1 3,5 7,9" />
+                </svg>
+              </IconBtn>
+            )}
+            <span style={{ fontSize: '13px', color: T, letterSpacing: '0.01em', flex: 1 }}>Ask Site</span>
+          </div>
+        )}
+        {/* Row 2: context tab strip — scrollable */}
+        <div
+          className="tab-strip"
           style={{
-            display: 'inline-flex', alignItems: 'center', gap: '7px',
-            height: '28px', padding: '0 12px', marginRight: 'auto',
-            borderRadius: '4px', background: S,
-            border: `1px solid ${(capturing || loading) ? 'rgba(230,226,216,0.35)' : BR}`,
-            fontSize: '14px', color: T, letterSpacing: '0.01em',
-            userSelect: 'none', flexShrink: 0,
-            cursor: activeChatId || showHistory ? 'pointer' : 'default',
-            transition: 'border-color 0.2s',
+            display: 'flex', alignItems: 'center',
+            padding: '0 8px', gap: '2px',
+            height: '44px',
+            borderBottom: `1px solid ${BR}`,
+            overflowX: 'auto',
           }}
         >
-          Ask Site
-          {(capturing || loading) && (
-            <span style={{
-              width: '5px', height: '5px', borderRadius: '50%', flexShrink: 0,
-              background: capturing ? 'rgba(230,226,216,0.9)' : 'rgba(230,226,216,0.5)',
-              animation: 'pulse-dot 1.4s ease-in-out infinite',
-              display: 'inline-block',
-            }} />
+          <CtxTab
+            label={threads.find(t => t.id === activeId)?.name || 'Current Thread'}
+            active={askContext.type === 'current'}
+            onClick={() => setAskContext({ type: 'current' })}
+            onRemove={threads.length > 1 ? () => handleDeleteThread(activeId ?? '') : undefined}
+          />
+          {threads.filter(t => t.id !== activeId).map(t => (
+            <CtxTab
+              key={t.id}
+              label={t.name || 'Untitled'}
+              active={askContext.type === 'thread' && askContext.threadId === t.id}
+              onClick={() => setAskContext({ type: 'thread', threadId: t.id, threadName: t.name || 'Untitled' })}
+              onRemove={() => handleDeleteThread(t.id)}
+            />
+          ))}
+        </div>
+        {/* Row 3: chat actions — title, new, delete */}
+        <div style={{
+          height: '32px', display: 'flex', alignItems: 'center',
+          padding: '0 6px 0 12px', gap: '2px',
+          borderBottom: `1px solid ${BR}`,
+        }}>
+          <span style={{
+            flex: 1, fontSize: '11px', color: F, letterSpacing: '0.02em',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            opacity: chatArmed ? 0.4 : 1,
+            textDecoration: chatArmed ? 'line-through' : 'none',
+            transition: 'opacity 0.15s',
+          }}>
+            {activeChat?.title ?? (chats.length > 0 ? `${chats.length} conversation${chats.length !== 1 ? 's' : ''}` : 'No conversations')}
+          </span>
+          {activeChat && (
+            <IconBtn onClick={handleDeleteClick} title="Delete this conversation">
+              <CloseIcon />
+            </IconBtn>
           )}
-        </span>
-
-        {chats.length > 0 && (
-          <>
-            <button
-              onClick={() => setShowHistory(v => !v)}
-              style={{
-                background: 'none', border: 'none', padding: 0, height: '22px',
-                fontSize: '13px', cursor: 'pointer', fontWeight: 400,
-                fontFamily: 'inherit', letterSpacing: '0.02em', transition: 'color 0.1s, opacity 0.15s',
-                color: showHistory ? T : F,
-                opacity: collapsed ? 0 : 1, pointerEvents: collapsed ? 'none' : 'auto',
-              }}
-              onMouseEnter={e => { if (!showHistory) e.currentTarget.style.color = T }}
-              onMouseLeave={e => { if (!showHistory) e.currentTarget.style.color = F }}
-            >{showHistory ? 'Done' : 'Chats'}</button>
-            <div style={{ width: '1px', height: '10px', background: 'rgba(230,226,216,0.2)', flexShrink: 0, opacity: collapsed ? 0 : 1, transition: 'opacity 0.15s' }} />
-          </>
-        )}
-
-        {(activeChatId !== null || showHistory) && !collapsed && (
-          <IconBtn onClick={startNewChat} title="New chat"><PlusIcon /></IconBtn>
-        )}
-
-        {/* Chevron — always visible, always at same position */}
-        {onToggle && (
-          <IconBtn onClick={onToggle} title={collapsed ? 'Expand' : 'Collapse'}>
-            <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-              {collapsed
-                ? <polyline points="1,3 5,7 9,3" />
-                : <polyline points="1,6 5,2 9,6" />}
-            </svg>
-          </IconBtn>
-        )}
+        </div>
       </div>
 
-      {/* ── Status bar, body, footer — hidden when collapsed ── */}
-      {!collapsed && (
-        <>
-          {(capturing || loading) && (
-            <div style={{
-              height: '2px', flexShrink: 0,
-              background: capturing ? 'rgba(230,226,216,0.9)' : 'rgba(230,226,216,0.45)',
-              animation: 'pulse-dot 1.4s ease-in-out infinite',
-            }} />
-          )}
-
-          {showHistory ? (
-            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-              {chats.map((chat, i) => (
-                <ChatRow
-                  key={chat.id} chat={chat}
-                  active={chat.id === activeChatId}
-                  last={i === chats.length - 1}
-                  onSelect={() => { setActiveChatId(chat.id); setShowHistory(false); setInput('') }}
-                  onDelete={() => deleteChat(chat.id)}
-                />
-              ))}
-            </div>
-          ) : activeChat && activeChat.messages.length > 0 ? (
-            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-              {activeChat.messages.map((msg, i) => (
-                <MessageRow key={msg.id} msg={msg} last={i === activeChat.messages.length - 1 && !loading} />
-              ))}
-              {capturing && <LoadingRow label="Reading screen…" bright />}
-              {loading && !capturing && <LoadingRow />}
-              <div ref={bottomRef} />
-            </div>
-          ) : (
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: '13px', color: F, letterSpacing: '0.02em' }}>Query your workspace below.</span>
-            </div>
-          )}
-
-          <div style={{ flexShrink: 0, padding: '6px 8px 8px' }}>
-            <InputRow inputRef={inputRef} input={input} loading={loading} setInput={setInput} handleSend={handleSend} />
-          </div>
-        </>
+      {/* ── Status bar ── */}
+      {(capturing || loading) && (
+        <div style={{
+          height: '2px', flexShrink: 0,
+          background: capturing ? 'rgba(230,226,216,0.9)' : 'rgba(230,226,216,0.45)',
+          animation: 'pulse-dot 1.4s ease-in-out infinite',
+        }} />
       )}
+
+      {/* ── Messages / empty state ── */}
+      {activeChat && activeChat.messages.length > 0 ? (
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+          {activeChat.messages.map((msg, i) => (
+            <MessageRow key={msg.id} msg={msg} last={i === activeChat.messages.length - 1 && !loading} />
+          ))}
+          {capturing && <LoadingRow label="Reading screen…" bright />}
+          {loading && !capturing && <LoadingRow />}
+          <div ref={bottomRef} />
+        </div>
+      ) : (
+        <div style={{ flex: 1, minHeight: 0 }} />
+      )}
+
+      {/* ── Composer ── */}
+      <div style={{ flexShrink: 0, padding: minimal ? '0 10px 14px' : '0 8px 10px' }}>
+        {/* Metadata row: context label + live view toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', padding: '6px 2px 5px', gap: '6px' }}>
+          <span style={{ flex: 1, fontSize: '11px', color: 'rgba(230,226,216,0.3)', letterSpacing: '0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            Using: {askContext.type === 'thread' ? askContext.threadName : (threads.find(t => t.id === activeId)?.name || 'This Thread')}
+          </span>
+          <PillToggle label="Live view" on={liveViewOn} onToggle={() => setLiveViewOn(v => !v)} />
+        </div>
+        {/* Input row */}
+        <InputRow inputRef={inputRef} input={input} loading={loading} setInput={setInput} handleSend={handleSend} />
+      </div>
     </div>
   )
 }
@@ -565,7 +638,7 @@ function InputRow({ inputRef, input, loading, setInput, handleSend }: {
         value={input}
         onChange={e => setInput(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSend() } }}
-        placeholder="Ask this session..."
+        placeholder="Ask this thread..."
         disabled={loading}
         spellCheck={false}
         style={{

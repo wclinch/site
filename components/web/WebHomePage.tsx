@@ -7,6 +7,7 @@ const STARTERS: [string, string][] = [
   ['google',    'Google'],
   ['chatgpt',   'ChatGPT'],
   ['wikipedia', 'Wikipedia'],
+  ['youtube', 'YouTube'],
 ]
 
 // ─── 3-D wireframe globe ──────────────────────────────────────────────────────
@@ -154,7 +155,7 @@ function WebHomePage({ navigate }, ref) {
             width: '100%', height: '42px',
             background: '#151615', border: '1px solid rgba(230,226,216,0.1)',
             borderRadius: '6px', color: 'rgba(230,226,216,0.65)',
-            fontSize: '13px', padding: '0 16px 0 36px',
+            fontSize: '14px', padding: '0 16px 0 36px',
             outline: 'none', fontFamily: 'inherit', letterSpacing: '0.01em',
             transition: 'border-color 0.15s, background 0.15s',
           }}
@@ -171,7 +172,7 @@ function WebHomePage({ navigate }, ref) {
       </div>
 
       {/* Hint */}
-      <span style={{ marginTop: '20px', fontSize: '10px', color: 'rgba(230,226,216,0.65)', letterSpacing: '0.03em' }}>
+      <span style={{ marginTop: '20px', fontSize: '11px', color: 'rgba(230,226,216,0.65)', letterSpacing: '0.03em' }}>
         <span style={{ fontFamily: 'monospace', color: 'rgba(230,226,216,0.65)' }}>? query</span>
         {' '}→ Google
       </span>
@@ -194,7 +195,7 @@ function StarterChip({ label, onClick }: { label: string; onClick: () => void })
         border: `1px solid ${hov ? 'rgba(230,226,216,0.65)' : '#151615'}`,
         borderRadius: '5px',
         color: hov ? 'rgba(230,226,216,0.65)' : 'rgba(230,226,216,0.65)',
-        fontSize: '11px', letterSpacing: '0.03em',
+        fontSize: '12px', letterSpacing: '0.03em',
         cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
         transition: 'color 0.12s, border-color 0.12s, background 0.12s',
         whiteSpace: 'nowrap',

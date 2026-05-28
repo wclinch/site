@@ -36,6 +36,12 @@ export interface AskSiteSessionContext {
   documentText?: string
   // Other sessions in the workspace
   otherSessions?: string[]
+  // Inherited context carried forward from the origin thread
+  inheritedContext?: string
+  // Context selector metadata (set when using non-current context)
+  contextSourceType?: 'current' | 'activeView' | 'thread'
+  contextSourceName?: string
+  currentLocationName?: string
 }
 
 export type AskSiteProvider = 'none' | 'claude' | 'openai' | 'gemini'
@@ -43,7 +49,6 @@ export type AskSiteProvider = 'none' | 'claude' | 'openai' | 'gemini'
 export interface AskSiteConfig {
   provider: AskSiteProvider
   apiKey?: string
-  isPro?: boolean
 }
 
 export interface AskSiteRequest {

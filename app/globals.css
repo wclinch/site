@@ -36,7 +36,7 @@ input { cursor: text; }
 
 .nav-logo {
   text-decoration: none;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 300;
   color: #E6E2D8;
   transition: color 0.15s;
@@ -44,7 +44,7 @@ input { cursor: text; }
 .nav-logo:hover { color: #fff; }
 
 .nav-link {
-  font-size: 11px;
+  font-size: 12px;
   color: rgba(230,226,216,0.65);
   text-decoration: none;
   letter-spacing: 0.08em;
@@ -54,7 +54,7 @@ input { cursor: text; }
 .nav-link:hover { color: #E6E2D8; }
 
 .footer-link {
-  font-size: 11px;
+  font-size: 12px;
   color: rgba(230,226,216,0.65);
   text-decoration: none;
   letter-spacing: 0.08em;

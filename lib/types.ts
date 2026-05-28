@@ -16,7 +16,7 @@ export interface DocContent {
   pageBreaks: number[]
 }
 
-export interface QueuedSource {
+export interface Source {
   id: string
   raw: string
   status: 'queued' | 'extracting' | 'done' | 'error'
@@ -49,14 +49,18 @@ export interface ViewTab {
   title?: string
 }
 
-export interface Project {
+export interface Thread {
   id: string
   name: string
-  sources: QueuedSource[]
+  sources: Source[]
   pinned?: boolean
-  // Per-workspace view tabs (current model)
+  // Per-thread view tabs (current model)
   viewTabs?: ViewTab[]
   activeViewTabId?: string | null
+  // Inherited context (V1) — set when thread is created from another thread
+  originThreadId?: string
+  originThreadTitle?: string
+  inheritedContextSummary?: string
   // Legacy — read-only for migration, no longer written
   sel1?: string | null
   sel2?: string | null

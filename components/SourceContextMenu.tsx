@@ -20,7 +20,7 @@ export default function SourceContextMenu() {
 
   function handleRename() {
     const detail: RenameSourceDetail = { srcId: src!.id, currentLabel: src!.label ?? src!.raw }
-    window.dispatchEvent(new CustomEvent('proof:rename-source', { detail }))
+    window.dispatchEvent(new CustomEvent('site:rename-source', { detail }))
     setContextMenu(null)
   }
 

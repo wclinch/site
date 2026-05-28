@@ -1,12 +1,13 @@
 'use client'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useApp } from '@/context/AppContext'
-import type { QueuedSource, Project } from '@/lib/types'
+import type { Source } from '@/lib/types'
 import { notify } from './NotificationsPanel'
+import AskSitePanel from './AskSitePanel'
 
 // ─── SourceStack ──────────────────────────────────────────────────────────────
 
-type Filter = 'all' | 'docs' | 'pages'
+type Filter = 'all' | 'docs' | 'pages' | 'ask'
 
 
 export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
@@ -14,9 +15,9 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
     sources, patchSource, uploadFiles,
     openInView, viewTabs, activeViewTabId,
     removeSource,
-    restoreArchivedSource, commitWorkspaceRemoval, restoreWorkspace, activeId,
-    setProjects,
-    addSourceToSession, addUrlToSession, removeSourceFromProject, allSources, projects,
+    restoreArchivedSource, commitThreadRemoval, restoreThread, activeId,
+    setThreads,
+    addSourceToThread, addUrlToThread, removeSourceFromThread, allSources, threads,
   } = useApp()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [filter, setFilter] = useState<Filter>('all')
@@ -27,7 +28,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
 
   function handleSourceReorder(fromId: string, toId: string) {
     if (fromId === toId || !activeId) return
-    setProjects(ps => ps.map(p => {
+    setThreads(ps => ps.map(p => {
       if (p.id !== activeId) return p
       const sources = [...p.sources]
       const from = sources.findIndex(s => s.id === fromId)
@@ -41,7 +42,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
   const [renameId,    setRenameId]    = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
 
-  function handleRemove(src: QueuedSource) {
+  function handleRemove(src: Source) {
     removeSource(src.id)
     const pid = activeId ?? ''
     notify('Deleted', () => restoreArchivedSource(src.id, pid))
@@ -51,24 +52,24 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
     function onSessionRemoved(e: Event) {
       const { proj, insertIdx } = (e as CustomEvent).detail
       let undone = false
-      notify('Deleted session', () => {
+      notify('Deleted thread', () => {
         undone = true
-        restoreWorkspace(proj, insertIdx)
+        restoreThread(proj, insertIdx)
       })
-      setTimeout(() => { if (!undone) commitWorkspaceRemoval(proj) }, 4000)
+      setTimeout(() => { if (!undone) commitThreadRemoval(proj) }, 4000)
     }
-    window.addEventListener('proof:session-removed', onSessionRemoved)
-    return () => window.removeEventListener('proof:session-removed', onSessionRemoved)
+    window.addEventListener('site:thread-removed', onSessionRemoved)
+    return () => window.removeEventListener('site:thread-removed', onSessionRemoved)
   }, [])
 
   useEffect(() => {
     const onActive = () => setIsDragActive(true)
     const onDone   = () => { setIsDragActive(false); setShelfDragOver(false) }
-    window.addEventListener('proof:drag-active', onActive)
-    window.addEventListener('proof:drag-done',   onDone)
+    window.addEventListener('site:drag-active', onActive)
+    window.addEventListener('site:drag-done',   onDone)
     return () => {
-      window.removeEventListener('proof:drag-active', onActive)
-      window.removeEventListener('proof:drag-done',   onDone)
+      window.removeEventListener('site:drag-active', onActive)
+      window.removeEventListener('site:drag-done',   onDone)
     }
   }, [])
 
@@ -107,8 +108,8 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
         transition: 'border-color 0.1s',
       }}
       onDragOver={e => {
-        if (e.dataTransfer.types.includes('application/x-proof-source-id') ||
-            e.dataTransfer.types.includes('application/x-proof-web-url')) {
+        if (e.dataTransfer.types.includes('application/x-site-source-id') ||
+            e.dataTransfer.types.includes('application/x-site-web-url')) {
           e.preventDefault()
           setShelfDragOver(true)
         }
@@ -118,23 +119,22 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
       }}
       onDrop={e => {
         setShelfDragOver(false)
-        const srcId = e.dataTransfer.getData('application/x-proof-source-id')
+        const srcId = e.dataTransfer.getData('application/x-site-source-id')
         if (srcId && activeId) {
-          addSourceToSession(srcId, activeId)
-          const proj = projects.find(p => p.id === activeId)
+          addSourceToThread(srcId, activeId)
           const label = allSources.find(s => s.id === srcId)?.label || 'Source'
           const pid = activeId
-          notify('Added', () => removeSourceFromProject(srcId, pid))
+          notify('Added', () => removeSourceFromThread(srcId, pid))
           return
         }
-        const webRaw = e.dataTransfer.getData('application/x-proof-web-url')
+        const webRaw = e.dataTransfer.getData('application/x-site-web-url')
         if (webRaw && activeId) {
           try {
             const { url, title } = JSON.parse(webRaw)
-            const result = addUrlToSession(activeId, url, title)
+            const result = addUrlToThread(activeId, url, title)
             if (result) {
               const pid = activeId
-              notify('Added', () => removeSourceFromProject(result.srcId, pid))
+              notify('Added', () => removeSourceFromThread(result.srcId, pid))
             }
           } catch {}
         }
@@ -150,7 +150,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
       }}>
         {/* Filter tabs */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flex: 1 }}>
-          {(['all', 'docs', 'pages'] as Filter[]).map(f => (
+          {(['all', 'docs', 'pages', 'ask'] as Filter[]).map(f => (
             <button key={f} onClick={() => setFilter(f)}
               style={{
                 height: '34px', padding: '0 14px',
@@ -164,12 +164,12 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
               onMouseEnter={e => { if (filter !== f) e.currentTarget.style.color = '#E6E2D8' }}
               onMouseLeave={e => { if (filter !== f) e.currentTarget.style.color = 'rgba(230,226,216,0.65)' }}
             >
-              {f === 'all' ? 'All' : f === 'docs' ? 'Documents' : 'Pages'}
+              {f === 'all' ? 'All' : f === 'docs' ? 'Documents' : f === 'pages' ? 'Pages' : 'Ask'}
             </button>
           ))}
         </div>
-        {/* Add document */}
-        {(filter === 'all' || filter === 'docs') && (
+        {/* Add document — hidden in Ask mode */}
+        {filter !== 'ask' && (filter === 'all' || filter === 'docs') && (
           <>
             <button onClick={() => fileInputRef.current?.click()} title="Add Document"
               style={{ background: 'none', border: 'none', padding: '4px 2px', cursor: 'pointer', color: 'rgba(230,226,216,0.65)', lineHeight: 0, display: 'flex', alignItems: 'center', transition: 'color 0.12s' }}
@@ -186,8 +186,15 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
         )}
       </div>
 
-      {/* ── List ── */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '2px 0 4px', display: 'flex', flexDirection: 'column' }}>
+      {/* ── Ask mode ── */}
+      {filter === 'ask' && (
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <AskSitePanel minimal />
+        </div>
+      )}
+
+      {/* ── Source list ── */}
+      {filter !== 'ask' && <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '2px 0 4px', display: 'flex', flexDirection: 'column' }}>
         {isEmpty ? (
           <EmptyRow text={filter === 'docs' ? 'No documents.' : filter === 'pages' ? 'No saved pages.' : 'Nothing here yet.'} />
         ) : (
@@ -216,12 +223,12 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
                   e.dataTransfer.setDragImage(ghost, 14, 14)
                   setTimeout(() => ghost.remove(), 0)
                   setDragSrcId(src.id)
-                  window.dispatchEvent(new CustomEvent('proof:drag-active', { detail: { originalSessionId: activeId } }))
+                  window.dispatchEvent(new CustomEvent('site:drag-active', { detail: { originalSessionId: activeId } }))
                 }}
                 onDragOver={() => setDropTargetId(src.id)}
                 onDragEnd={e => {
                   setDragSrcId(null); setDropTargetId(null)
-                  window.dispatchEvent(new CustomEvent('proof:drag-done', { detail: { canceled: e.dataTransfer.dropEffect === 'none' } }))
+                  window.dispatchEvent(new CustomEvent('site:drag-done', { detail: { canceled: e.dataTransfer.dropEffect === 'none' } }))
                 }}
                 onDrop={() => { if (dragSrcId) handleSourceReorder(dragSrcId, src.id); setDragSrcId(null); setDropTargetId(null) }}
               />
@@ -239,7 +246,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
               <StackRow key={src.id} src={src} isActive={isInView}
                 {...sharedRename} renaming={renameId === src.id}
                 dropBefore={dropTargetId === src.id && dragSrcId !== src.id}
-                onClick={() => src.raw && window.dispatchEvent(new CustomEvent('proof:browser-navigate', { detail: src.raw }))}
+                onClick={() => src.raw && window.dispatchEvent(new CustomEvent('site:browser-navigate', { detail: src.raw }))}
                 onRename={() => { setRenameId(src.id); setRenameValue(src.label || src.raw || '') }}
                 onRemove={() => handleRemove(src)}
                 onDragStart={e => {
@@ -256,12 +263,12 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
                   e.dataTransfer.setDragImage(ghost, 14, 14)
                   setTimeout(() => ghost.remove(), 0)
                   setDragSrcId(src.id)
-                  window.dispatchEvent(new CustomEvent('proof:drag-active', { detail: { originalSessionId: activeId } }))
+                  window.dispatchEvent(new CustomEvent('site:drag-active', { detail: { originalSessionId: activeId } }))
                 }}
                 onDragOver={() => setDropTargetId(src.id)}
                 onDragEnd={e => {
                   setDragSrcId(null); setDropTargetId(null)
-                  window.dispatchEvent(new CustomEvent('proof:drag-done', { detail: { canceled: e.dataTransfer.dropEffect === 'none' } }))
+                  window.dispatchEvent(new CustomEvent('site:drag-done', { detail: { canceled: e.dataTransfer.dropEffect === 'none' } }))
                 }}
                 onDrop={() => { if (dragSrcId) handleSourceReorder(dragSrcId, src.id); setDragSrcId(null); setDropTargetId(null) }}
               />
@@ -269,7 +276,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
             })}
           </>
         )}
-      </div>
+      </div>}
 
     </div>
   )
@@ -278,7 +285,7 @@ export default function SourceStack({ hidden = false }: { hidden?: boolean }) {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
-function getMetaLine(src: QueuedSource): string {
+function getMetaLine(src: Source): string {
   if (src.fileType === 'url') {
     try { return new URL(src.raw).hostname.replace(/^www\./, '') } catch { return src.raw }
   }
@@ -339,7 +346,7 @@ function StackRow({
   renaming, renameValue, onRenameChange, onRenameCommit, onRenameCancel,
   onClick, onRename, onRemove, onDragStart, onDragOver, onDragEnd, onDrop,
 }: {
-  src: QueuedSource
+  src: Source
   isActive: boolean
   dropBefore?: boolean
   renaming: boolean
@@ -387,18 +394,18 @@ function StackRow({
       onMouseLeave={() => { setHov(false); setArmed(false) }}
       draggable={!renaming}
       onDragStart={e => {
-        e.dataTransfer.setData('application/x-proof-source-id', src.id)
+        e.dataTransfer.setData('application/x-site-source-id', src.id)
         e.dataTransfer.effectAllowed = 'copy'
         onDragStart?.(e)
       }}
       onDragOver={e => {
-        if (e.dataTransfer.types.includes('application/x-proof-source-id')) {
+        if (e.dataTransfer.types.includes('application/x-site-source-id')) {
           e.preventDefault(); e.stopPropagation(); onDragOver?.()
         }
       }}
       onDragEnd={e => onDragEnd?.(e)}
       onDrop={e => {
-        if (e.dataTransfer.types.includes('application/x-proof-source-id')) {
+        if (e.dataTransfer.types.includes('application/x-site-source-id')) {
           e.preventDefault(); e.stopPropagation(); onDrop?.()
         }
       }}

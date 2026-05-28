@@ -121,7 +121,7 @@ export default function WebToolbar({ active, panelId, urlInput, urlInputRef, hom
           placeholder="Search or enter URL"
           style={{
             flex: 1, width: '100%', height: '28px', background: '#151615', border: '1px solid rgba(230,226,216,0.1)',
-            borderRadius: '4px', color: '#E6E2D8', fontSize: '12px', padding: '0 10px 0 28px',
+            borderRadius: '4px', color: '#E6E2D8', fontSize: '13px', padding: '0 10px 0 28px',
             outline: 'none', fontFamily: 'inherit', letterSpacing: '0.02em',
             transition: 'border-color 0.15s',
           }}

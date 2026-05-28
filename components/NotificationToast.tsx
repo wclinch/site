@@ -16,10 +16,10 @@ export default function NotificationToast() {
       setToast({ id, message, onUndo })
       hideTimer.current = setTimeout(() => setToast(null), 4000)
     }
-    window.addEventListener('proof:notify', onNotify)
-    // ignore proof:notify-expire — undo stays visible until toast fades
+    window.addEventListener('site:notify', onNotify)
+    // ignore site:notify-expire — undo stays visible until toast fades
     return () => {
-      window.removeEventListener('proof:notify', onNotify)
+      window.removeEventListener('site:notify', onNotify)
       if (hideTimer.current) clearTimeout(hideTimer.current)
     }
   }, [])

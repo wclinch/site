@@ -85,7 +85,7 @@ export function TabChip({ tab, active, onSelect, onClose, onDragOver, onDragStar
         Object.assign(ghost.style, {
           position: 'fixed', top: '-1000px', left: '-1000px',
           background: '#151615', border: '1px solid rgba(230,226,216,0.1)', borderRadius: '4px',
-          padding: '5px 12px', fontSize: '12px', color: '#E6E2D8',
+          padding: '5px 12px', fontSize: '13px', color: '#E6E2D8',
           fontFamily: 'ui-monospace, monospace', whiteSpace: 'nowrap',
           pointerEvents: 'none',
         })
@@ -93,8 +93,8 @@ export function TabChip({ tab, active, onSelect, onClose, onDragOver, onDragStar
         e.dataTransfer.setDragImage(ghost, 14, 14)
         setTimeout(() => ghost.remove(), 0)
         onDragStartCapture?.()
-        e.dataTransfer.setData('application/x-proof-tab-id', tab.id)
-        e.dataTransfer.setData('application/x-proof-web-url', JSON.stringify({ url: tab.url, title: tab.title || tab.url }))
+        e.dataTransfer.setData('application/x-site-tab-id', tab.id)
+        e.dataTransfer.setData('application/x-site-web-url', JSON.stringify({ url: tab.url, title: tab.title || tab.url }))
         e.dataTransfer.effectAllowed = 'copy'
       }}
       onDragOver={onDragOver}
@@ -113,10 +113,10 @@ export function TabChip({ tab, active, onSelect, onClose, onDragOver, onDragStar
       }}
     >
       {tab.loading && (
-        <span style={{ fontSize: '8px', color: 'rgba(230,226,216,0.65)', flexShrink: 0, animation: 'pulse-dot 1.2s ease-in-out infinite' }}>●</span>
+        <span style={{ fontSize: '14px', color: 'rgba(230,226,216,0.65)', flexShrink: 0, animation: 'pulse-dot 1.2s ease-in-out infinite' }}>●</span>
       )}
       <span style={{
-        fontSize: '13px', color: active ? '#E6E2D8' : hov ? '#E6E2D8' : 'rgba(230,226,216,0.65)',
+        fontSize: '14px', color: active ? '#E6E2D8' : hov ? '#E6E2D8' : 'rgba(230,226,216,0.65)',
         overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
         flex: 1, letterSpacing: '0.02em', transition: 'color 0.1s',
       }}>
@@ -143,33 +143,7 @@ export function TabChip({ tab, active, onSelect, onClose, onDragOver, onDragStar
   )
 }
 
-function AskSiteBtn({ active, onClick }: { active: boolean; onClick: () => void }) {
-  const [hov, setHov] = useState(false)
-  const on = active || hov
-  return (
-    <button
-      onClick={onClick}
-      title={active ? 'Close Ask Site' : 'Open Ask Site'}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        height: '34px', padding: '0 13px', flexShrink: 0, marginRight: '8px',
-        display: 'flex', alignItems: 'center',
-        background: on ? '#151615' : 'transparent',
-        border: `1px solid ${on ? 'rgba(230,226,216,0.1)' : 'transparent'}`,
-        borderRadius: '4px',
-        color: on ? '#E6E2D8' : 'rgba(230,226,216,0.65)',
-        fontSize: '13px', letterSpacing: '0.02em',
-        cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
-        transition: 'color 0.1s, background 0.1s, border-color 0.1s',
-      }}
-    >
-      Ask Site
-    </button>
-  )
-}
-
-export default function WebTabBar({ tabs, activeTabId, panelId, isFocused, onFocusToggle, onReorderTabs, onTabDragStart, askSiteOpen }: {
+export default function WebTabBar({ tabs, activeTabId, panelId, isFocused, onFocusToggle, onReorderTabs, onTabDragStart }: {
   tabs: TabState[]
   activeTabId: string
   panelId: string
@@ -177,7 +151,6 @@ export default function WebTabBar({ tabs, activeTabId, panelId, isFocused, onFoc
   onFocusToggle?: () => void
   onReorderTabs?: (fromId: string, toId: string) => void
   onTabDragStart?: () => void
-  askSiteOpen?: boolean
 }) {
   const [dropVisualId, setDropVisualId] = useState<string | null>(null)
   const dragTabIdRef   = useRef<string | null>(null)
@@ -216,8 +189,8 @@ export default function WebTabBar({ tabs, activeTabId, panelId, isFocused, onFoc
           scrollbarWidth: 'none',
         }}
         onDragOver={e => {
-          if (e.dataTransfer.types.includes('application/x-proof-tab-id') ||
-              e.dataTransfer.types.includes('application/x-proof-web-url')) e.preventDefault()
+          if (e.dataTransfer.types.includes('application/x-site-tab-id') ||
+              e.dataTransfer.types.includes('application/x-site-web-url')) e.preventDefault()
         }}
         onDragLeave={e => {
           if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
@@ -227,12 +200,12 @@ export default function WebTabBar({ tabs, activeTabId, panelId, isFocused, onFoc
         onDrop={e => {
           const fromId = dragTabIdRef.current
           const toId   = dropTargetIdRef.current
-          const isTabReorder = e.dataTransfer.types.includes('application/x-proof-tab-id')
+          const isTabReorder = e.dataTransfer.types.includes('application/x-site-tab-id')
           if (isTabReorder) {
-            const tabId = e.dataTransfer.getData('application/x-proof-tab-id')
+            const tabId = e.dataTransfer.getData('application/x-site-tab-id')
             if (tabId && toId && tabId !== toId && onReorderTabs) onReorderTabs(tabId, toId)
           } else {
-            const raw = e.dataTransfer.getData('application/x-proof-web-url')
+            const raw = e.dataTransfer.getData('application/x-site-web-url')
             if (!raw) return
             try { const { url } = JSON.parse(raw); window.electronAPI?.research?.newTab(panelId, url); notify('Opened in Web') } catch {}
           }
@@ -250,10 +223,10 @@ export default function WebTabBar({ tabs, activeTabId, panelId, isFocused, onFoc
             onDragStartCapture={() => { dragTabIdRef.current = tab.id; onTabDragStart?.() }}
             onDragEnd={e => {
               dragTabIdRef.current = null; setDropVisualId(null)
-              window.dispatchEvent(new CustomEvent('proof:drag-done', { detail: { canceled: e.dataTransfer.dropEffect === 'none' } }))
+              window.dispatchEvent(new CustomEvent('site:drag-done', { detail: { canceled: e.dataTransfer.dropEffect === 'none' } }))
             }}
             onDragOver={e => {
-              if (!e.dataTransfer.types.includes('application/x-proof-tab-id')) return
+              if (!e.dataTransfer.types.includes('application/x-site-tab-id')) return
               e.preventDefault(); e.stopPropagation()
               if (dropTargetIdRef.current !== tab.id) {
                 dropTargetIdRef.current = tab.id; setDropVisualId(tab.id)
@@ -281,8 +254,6 @@ export default function WebTabBar({ tabs, activeTabId, panelId, isFocused, onFoc
         </button>
       </div>
 
-      {/* Ask Site toggle — far right */}
-      <AskSiteBtn active={!!askSiteOpen} onClick={() => window.dispatchEvent(new Event('proof:ask-site-toggle'))} />
     </div>
   )
 }

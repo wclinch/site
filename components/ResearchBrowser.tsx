@@ -36,15 +36,14 @@ function FallbackBtn({ children, onClick }: { children: React.ReactNode; onClick
   )
 }
 
-export default function ResearchBrowser({ isFocused = false, onFocusToggle, askSiteOpen }: {
+export default function ResearchBrowser({ isFocused = false, onFocusToggle }: {
   isFocused?: boolean
   onFocusToggle?: () => void
-  askSiteOpen?: boolean
 }) {
   const panelId = 'A'
   const { addUrl, sources, activeId } = useApp()
 
-  const tabsKey = 'proof-v3-research-tabs'
+  const tabsKey = 'site-v3-research-tabs'
 
   const [isElectron, setIsElectron]   = useState(false)
   const [tabs, setTabs]               = useState<TabState[]>([makePlaceholderTab()])
@@ -77,7 +76,7 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle, askS
   // Broadcast current web state for Ask Site context
   useEffect(() => {
     const active = tabs.find(t => t.id === activeTabId)
-    window.dispatchEvent(new CustomEvent('proof:web-state', {
+    window.dispatchEvent(new CustomEvent('site:web-state', {
       detail: { url: homeMode ? '' : (active?.url || ''), title: active?.title || '' },
     }))
   }, [tabs, activeTabId, homeMode])
@@ -253,8 +252,8 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle, askS
       if (tabsRef.current.length < MAX_TABS) api.newTab(panelId, url)
       else navigateUrl(url)
     }
-    window.addEventListener('proof:browser-navigate', onNav as EventListener)
-    return () => window.removeEventListener('proof:browser-navigate', onNav as EventListener)
+    window.addEventListener('site:browser-navigate', onNav as EventListener)
+    return () => window.removeEventListener('site:browser-navigate', onNav as EventListener)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panelId])
 
@@ -323,8 +322,8 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle, askS
     function onSettingsChanged() {
       // reserved for future settings
     }
-    window.addEventListener('proof:settings-changed', onSettingsChanged)
-    return () => window.removeEventListener('proof:settings-changed', onSettingsChanged)
+    window.addEventListener('site:settings-changed', onSettingsChanged)
+    return () => window.removeEventListener('site:settings-changed', onSettingsChanged)
   }, [])
 
 
@@ -412,9 +411,8 @@ export default function ResearchBrowser({ isFocused = false, onFocusToggle, askS
           panelId={panelId}
           isFocused={isFocused}
           onFocusToggle={onFocusToggle}
-          askSiteOpen={askSiteOpen}
           onTabDragStart={() => {
-            window.dispatchEvent(new CustomEvent('proof:drag-active', { detail: { originalSessionId: activeId } }))
+            window.dispatchEvent(new CustomEvent('site:drag-active', { detail: { originalSessionId: activeId } }))
           }}
           onReorderTabs={(fromId, toId) => {
             setTabs(ts => {

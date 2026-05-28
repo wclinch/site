@@ -8,7 +8,6 @@ import SourceContextMenu from '@/components/SourceContextMenu'
 import AccountModal      from '@/components/AccountModal'
 import NotificationToast from '@/components/NotificationToast'
 import { useApp }        from '@/context/AppContext'
-import { getCheckoutUrl } from '@/lib/auth'
 import { useState, useEffect, useRef } from 'react'
 
 // pdfjs-dist uses DOMMatrix at module init — must not run during SSR
@@ -17,236 +16,11 @@ const ReaderPanel = dynamic(() => import('@/components/ReaderPanel'), { ssr: fal
 const DEF_SOURCE = '20%'
 
 
-const PRO_FEATURES = [
-  'Unlimited sessions',
-  'Unlimited documents',
-  '2GB storage',
-  'Full session transfer',
-  'Pinned sessions',
-  'Extended activity history',
-  'Ask Site — 40 messages/day',
-]
-
-function UpgradeModal({ onClose }: { onClose: () => void }) {
-  const { user, isPro, signIn, refreshEntitlement } = useApp()
-  const [email,      setEmail]      = useState('')
-  const [key,        setKey]        = useState('')
-  const [busy,       setBusy]       = useState(false)
-  const [error,      setError]      = useState<string | null>(null)
-  const [checked,    setChecked]    = useState(false)
-  const [showSignIn, setShowSignIn] = useState(false)
-  const isProRef = useRef(isPro)
-  useEffect(() => { isProRef.current = isPro }, [isPro])
-
-  async function handleSignIn() {
-    const trimmedEmail = email.trim()
-    const trimmedKey   = key.trim()
-    if (!trimmedEmail || !trimmedKey || busy) return
-    setBusy(true); setError(null)
-    const result = await signIn(trimmedEmail, trimmedKey)
-    setBusy(false)
-    if (result.ok) {
-      if (result.isPro) { onClose(); return }
-    } else {
-      setError(
-        result.error === 'invalid_key'    ? 'Subscription not found or inactive.' :
-        result.error === 'email_mismatch' ? 'Email does not match this subscription.' :
-        result.error === 'network_error'  ? 'Network unavailable. Try again when online.' :
-        result.error === 'not_configured' ? 'Sign-in is not configured in this build.' :
-                                            'Sign in failed. Try again.'
-      )
-    }
-  }
-
-  async function handleRefresh() {
-    setBusy(true)
-    await refreshEntitlement()
-    setBusy(false)
-    setChecked(true)
-    if (isProRef.current) onClose()
-  }
-
-  const checkoutUrl = getCheckoutUrl(user?.email)
-
-  return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 2000,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(0,0,0,0.6)',
-        backdropFilter: 'blur(3px)',
-        WebkitBackdropFilter: 'blur(3px)',
-        WebkitAppRegion: 'no-drag',
-      } as React.CSSProperties}
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{
-          width: '440px', maxWidth: 'calc(100vw - 48px)',
-          background: '#151615', border: '1px solid rgba(230,226,216,0.1)',
-          borderRadius: '6px', boxShadow: '0 24px 60px rgba(0,0,0,0.7)',
-          padding: '32px 28px 28px', fontFamily: 'inherit',
-        }}
-      >
-        <div style={{ fontSize: '11px', color: 'rgba(230,226,216,0.65)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '16px' }}>
-          Pro
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', margin: '0 0 18px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 500, color: 'rgba(230,226,216,0.65)', margin: 0, letterSpacing: '-0.01em' }}>
-            More room, full session transfer, and Ask Site.
-          </h2>
-          <span style={{ fontSize: '13px', color: 'rgba(230,226,216,0.65)', letterSpacing: '0.01em' }}>$4.99 / mo</span>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '26px' }}>
-          {PRO_FEATURES.map(f => (
-            <div key={f} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '11px', color: 'rgba(230,226,216,0.65)' }}>—</span>
-              <span style={{ fontSize: '13px', color: 'rgba(230,226,216,0.65)' }}>{f}</span>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ height: '1px', background: '#151615', marginBottom: '22px' }} />
-
-        {/* Checkout button — always shown when not Pro */}
-        {!isPro && (
-          <button
-            onClick={() => window.open(checkoutUrl || 'https://polar.sh', '_blank', 'noopener,noreferrer')}
-            style={{
-              background: '#151615', border: '1px solid rgba(230,226,216,0.1)',
-              color: 'rgba(230,226,216,0.65)', padding: '10px 20px',
-              fontSize: '12px', fontFamily: 'inherit',
-              letterSpacing: '0.06em', textTransform: 'uppercase',
-              cursor: 'pointer', borderRadius: '3px',
-              transition: 'color 0.15s, border-color 0.15s',
-              display: 'block', width: '100%', textAlign: 'left',
-              marginBottom: '20px',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(230,226,216,0.25)'; e.currentTarget.style.color = '#E6E2D8' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(230,226,216,0.1)'; e.currentTarget.style.color = 'rgba(230,226,216,0.65)' }}
-          >
-            Upgrade to Pro →
-          </button>
-        )}
-
-        {/* Already subscribed — sign in or check */}
-        {!isPro && !user && !showSignIn && (
-          <button
-            onClick={() => setShowSignIn(true)}
-            style={{
-              background: 'none', border: 'none', padding: 0,
-              fontSize: '12px', color: 'rgba(230,226,216,0.65)', fontFamily: 'inherit',
-              cursor: 'pointer', transition: 'color 0.15s',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#E6E2D8')}
-            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(230,226,216,0.65)')}
-          >
-            Already subscribed? Sign in →
-          </button>
-        )}
-
-        {/* Sign-in form — shown after clicking "Already subscribed" or when signed in + not Pro */}
-        {!isPro && (showSignIn || user) && (
-          <>
-            {!user && (
-              <>
-                <div style={{
-                  background: '#151615', border: `1px solid ${error ? '#151615' : '#151615'}`,
-                  borderRadius: '4px', padding: '11px 14px', marginBottom: '8px',
-                }}>
-                  <input
-                    autoFocus type="email" value={email}
-                    onChange={e => { setEmail(e.target.value); if (error) setError(null) }}
-                    onKeyDown={e => { if (e.key === 'Enter') handleSignIn() }}
-                    placeholder="you@example.com"
-                    spellCheck={false} autoCapitalize="off" autoCorrect="off"
-                    style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', color: 'rgba(230,226,216,0.65)', fontFamily: 'inherit', letterSpacing: '0.02em' }}
-                  />
-                </div>
-                <div style={{
-                  background: '#151615', border: `1px solid ${error ? '#151615' : '#151615'}`,
-                  borderRadius: '4px', padding: '11px 14px', marginBottom: error ? '8px' : '12px',
-                }}>
-                  <input
-                    type="text" value={key}
-                    onChange={e => { setKey(e.target.value); if (error) setError(null) }}
-                    onKeyDown={e => { if (e.key === 'Enter') handleSignIn() }}
-                    placeholder="XXXX-XXXX-XXXX-XXXX"
-                    spellCheck={false} autoCapitalize="off" autoCorrect="off"
-                    style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', color: 'rgba(230,226,216,0.65)', fontFamily: 'monospace', letterSpacing: '0.06em' }}
-                  />
-                </div>
-                {error && <div style={{ fontSize: '11px', color: 'rgba(230,226,216,0.7)', margin: '0 0 12px' }}>{error}</div>}
-                <button
-                  onClick={handleSignIn} disabled={busy || !email.trim() || !key.trim()}
-                  style={{
-                    background: 'transparent', border: '1px solid rgba(230,226,216,0.1)',
-                    color: busy || !email.trim() || !key.trim() ? 'rgba(230,226,216,0.45)' : 'rgba(230,226,216,0.65)',
-                    padding: '9px 18px', fontSize: '11px', fontFamily: 'inherit',
-                    letterSpacing: '0.08em', textTransform: 'uppercase',
-                    cursor: busy || !email.trim() || !key.trim() ? 'not-allowed' : 'pointer',
-                    borderRadius: '3px', transition: 'color 0.15s, border-color 0.15s',
-                  }}
-                  onMouseEnter={e => { if (!busy && email.trim() && key.trim()) { e.currentTarget.style.borderColor = 'rgba(230,226,216,0.25)'; e.currentTarget.style.color = '#E6E2D8' } }}
-                  onMouseLeave={e => { if (!busy && email.trim() && key.trim()) { e.currentTarget.style.borderColor = 'rgba(230,226,216,0.1)'; e.currentTarget.style.color = 'rgba(230,226,216,0.65)' } }}
-                >
-                  {busy ? 'Signing in…' : 'Sign in'}
-                </button>
-              </>
-            )}
-            {user && (
-              <>
-                <button
-                  onClick={handleRefresh} disabled={busy}
-                  style={{
-                    background: 'none', border: 'none', padding: 0,
-                    fontSize: '12px', color: 'rgba(230,226,216,0.65)', fontFamily: 'inherit',
-                    cursor: busy ? 'default' : 'pointer', transition: 'color 0.15s',
-                  }}
-                  onMouseEnter={e => { if (!busy) e.currentTarget.style.color = '#E6E2D8' }}
-                  onMouseLeave={e => { e.currentTarget.style.color = 'rgba(230,226,216,0.65)' }}
-                >
-                  {busy ? 'Checking…' : 'Already subscribed? Check now'}
-                </button>
-                {checked && !isPro && (
-                  <div style={{ fontSize: '11px', color: 'rgba(230,226,216,0.65)', marginTop: '10px' }}>
-                    No active subscription found.
-                  </div>
-                )}
-              </>
-            )}
-          </>
-        )}
-
-        <button
-          onClick={onClose}
-          style={{
-            marginTop: '28px', background: 'none', border: 'none', padding: 0,
-            fontSize: '12px', color: 'rgba(230,226,216,0.65)', letterSpacing: '0.02em',
-            cursor: 'pointer', fontFamily: 'inherit', transition: 'color 0.1s',
-            display: 'block',
-          }}
-          onMouseEnter={e => (e.currentTarget.style.color = '#E6E2D8')}
-          onMouseLeave={e => (e.currentTarget.style.color = 'rgba(230,226,216,0.65)')}
-        >Close</button>
-      </div>
-    </div>
-  )
-}
-
 type WorkspaceLayout = { researchFocused: boolean; viewFocused: boolean; sidebarCollapsed: boolean }
 const DEFAULT_LAYOUT: WorkspaceLayout = { researchFocused: false, viewFocused: false, sidebarCollapsed: false }
 
-const GLOBAL_UI_KEY = 'proof-global-ui'
-function loadGlobalUI() { try { return JSON.parse(localStorage.getItem(GLOBAL_UI_KEY) || '{}') } catch { return {} } }
-function saveGlobalUI(patch: Record<string, unknown>) {
-  try { localStorage.setItem(GLOBAL_UI_KEY, JSON.stringify({ ...loadGlobalUI(), ...patch })) } catch {}
-}
 
-function layoutKey(id: string) { return `proof-layout:${id}` }
+function layoutKey(id: string) { return `site-layout:${id}` }
 function saveLayout(id: string, l: WorkspaceLayout) {
   try { localStorage.setItem(layoutKey(id), JSON.stringify(l)) } catch {}
 }
@@ -263,8 +37,6 @@ function AppShell() {
   const [researchFocused,  setResearchFocused]  = useState(false)
   const [viewFocused,      setViewFocused]      = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [askSiteOpen,      setAskSiteOpen]      = useState(() => !!loadGlobalUI().askSiteOpen)
-  const [showUpgrade, setShowUpgrade] = useState(false)
   const [showAccount, setShowAccount] = useState(false)
 
   const layoutMapRef    = useRef<Record<string, WorkspaceLayout>>({})
@@ -300,40 +72,27 @@ function AppShell() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId])
 
-  // Restore whichever modal was open before hard reload
+  // Restore settings modal if it was open before hard reload
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('proof-modal-open')
+      const saved = localStorage.getItem('site-modal-open')
       if (saved === 'account') { ;(window as any).electronAPI?.setModal?.(true); setShowAccount(true) }
-      else if (saved === 'upgrade') { ;(window as any).electronAPI?.setModal?.(true); setShowUpgrade(true) }
     } catch {}
   }, [])
 
   useEffect(() => {
-    function onUpgradeNeeded() {
-      try { localStorage.setItem('proof-modal-open', 'upgrade') } catch {}
-      ;(window as any).electronAPI?.setModal?.(true)
-      setShowUpgrade(true)
-    }
     function onShowAccount() {
-      try { localStorage.setItem('proof-modal-open', 'account') } catch {}
+      try { localStorage.setItem('site-modal-open', 'account') } catch {}
       ;(window as any).electronAPI?.setModal?.(true)
       setShowAccount(true)
     }
-    window.addEventListener('proof:upgrade-needed', onUpgradeNeeded as EventListener)
-    window.addEventListener('proof:show-account',   onShowAccount   as EventListener)
-    return () => {
-      window.removeEventListener('proof:upgrade-needed', onUpgradeNeeded as EventListener)
-      window.removeEventListener('proof:show-account',   onShowAccount   as EventListener)
-    }
+    window.addEventListener('site:show-account', onShowAccount as EventListener)
+    return () => { window.removeEventListener('site:show-account', onShowAccount as EventListener) }
   }, [])
 
-  // Hide native WebContentsViews on close — keep in sync when modals dismiss.
   useEffect(() => {
-    if (!showUpgrade && !showAccount) {
-      ;(window as any).electronAPI?.setModal?.(false)
-    }
-  }, [showUpgrade, showAccount])
+    if (!showAccount) { ;(window as any).electronAPI?.setModal?.(false) }
+  }, [showAccount])
 
   // Sidebar toggle via event (dispatched from ReaderPanel)
   useEffect(() => {
@@ -347,20 +106,8 @@ function AppShell() {
         setSidebarCollapsed(true)
       }
     }
-    window.addEventListener('proof:toggle-sidebar', handler)
-    return () => window.removeEventListener('proof:toggle-sidebar', handler)
-  }, [])
-
-  // Sync askSiteOpen with the event system
-  useEffect(() => {
-    const toggle = () => setAskSiteOpen(v => { saveGlobalUI({ askSiteOpen: !v }); return !v })
-    const close  = () => { saveGlobalUI({ askSiteOpen: false }); setAskSiteOpen(false) }
-    window.addEventListener('proof:ask-site-toggle', toggle)
-    window.addEventListener('proof:ask-site-close',  close)
-    return () => {
-      window.removeEventListener('proof:ask-site-toggle', toggle)
-      window.removeEventListener('proof:ask-site-close',  close)
-    }
+    window.addEventListener('site:toggle-sidebar', handler)
+    return () => window.removeEventListener('site:toggle-sidebar', handler)
   }, [])
 
   // Poll resize events after layout changes so Electron WebContentsViews recapture bounds.
@@ -371,7 +118,7 @@ function AppShell() {
       if (Date.now() - start > 500) clearInterval(id)
     }, 32)
     return () => clearInterval(id)
-  }, [researchFocused, viewFocused, sidebarCollapsed, askSiteOpen])
+  }, [researchFocused, viewFocused, sidebarCollapsed])
 
   if (!mounted) {
     return (
@@ -384,7 +131,7 @@ function AppShell() {
   return (
     <>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#070807', WebkitAppRegion: 'drag' } as React.CSSProperties}>
-        <ProjectBar askSiteOpen={askSiteOpen} />
+        <ProjectBar />
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: '0 7px 7px 7px', background: '#090b09' }}>
           <SourcePanel width={DEF_SOURCE} hidden={viewFocused || sidebarCollapsed} />
           <ReaderPanel
@@ -394,7 +141,6 @@ function AppShell() {
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <RightPanel
               isFocused={researchFocused}
-              askSiteOpen={askSiteOpen}
               onFocusToggle={() => {
                 if (researchFocused) {
                   setResearchFocused(false)
@@ -409,8 +155,7 @@ function AppShell() {
         <SourceContextMenu />
       </div>
       <NotificationToast />
-      {showUpgrade && <UpgradeModal onClose={() => { try { localStorage.removeItem('proof-modal-open') } catch {} setShowUpgrade(false) }} />}
-      {showAccount && <AccountModal onClose={() => { try { localStorage.removeItem('proof-modal-open') } catch {} setShowAccount(false) }} />}
+      {showAccount && <AccountModal onClose={() => { try { localStorage.removeItem('site-modal-open') } catch {} setShowAccount(false) }} />}
     </>
   )
 }

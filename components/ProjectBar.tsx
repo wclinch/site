@@ -1,15 +1,14 @@
 'use client'
 import React, { useState, useRef, useEffect } from 'react'
 import { useApp } from '@/context/AppContext'
-import type { Project } from '@/lib/types'
 import { notify } from './NotificationsPanel'
 
-export default function ProjectBar({ askSiteOpen = false }: { askSiteOpen?: boolean }) {
+export default function ProjectBar() {
   const {
-    projects, activeId,
-    switchWorkspace, newWorkspace, removeWorkspace,
-    removeWorkspaceSoft, addSourceToSession, addUrlToSession, removeSourceFromProject,
-    allSources, updateProject, setProjects,
+    threads, activeId, activeThread,
+    switchThread, newThread, removeThread,
+    removeThreadSoft, addSourceToThread, addUrlToThread, removeSourceFromThread,
+    allSources, updateThread, setThreads,
   } = useApp()
 
   const [editingProjId,  setEditingProjId]  = useState<string | null>(null)
@@ -34,29 +33,29 @@ export default function ProjectBar({ askSiteOpen = false }: { askSiteOpen?: bool
     setTransferTarget(null)
     if (toProjectId === activeId) return
 
-    const srcId = e.dataTransfer.getData('application/x-proof-source-id')
+    const srcId = e.dataTransfer.getData('application/x-site-source-id')
     if (srcId) {
-      const name = addSourceToSession(srcId, toProjectId)
+      const name = addSourceToThread(srcId, toProjectId)
       if (name) {
         const label = allSources.find(s => s.id === srcId)?.label || 'Source'
-        notify('Added', () => removeSourceFromProject(srcId, toProjectId))
+        notify('Added to thread', () => removeSourceFromThread(srcId, toProjectId))
       }
       return
     }
 
-    const webRaw = e.dataTransfer.getData('application/x-proof-web-url')
+    const webRaw = e.dataTransfer.getData('application/x-site-web-url')
     if (webRaw) {
       try {
         const { url, title } = JSON.parse(webRaw)
-        const result = addUrlToSession(toProjectId, url, title)
-        if (result) notify('Added', () => removeSourceFromProject(result.srcId, toProjectId))
+        const result = addUrlToThread(toProjectId, url, title)
+        if (result) notify('Added to thread', () => removeSourceFromThread(result.srcId, toProjectId))
       } catch {}
     }
   }
 
   function isTransferDrag(e: React.DragEvent) {
-    return e.dataTransfer.types.includes('application/x-proof-source-id') ||
-           e.dataTransfer.types.includes('application/x-proof-web-url')
+    return e.dataTransfer.types.includes('application/x-site-source-id') ||
+           e.dataTransfer.types.includes('application/x-site-web-url')
   }
 
   // Scroll active tab into view on workspace switch
@@ -94,7 +93,7 @@ export default function ProjectBar({ askSiteOpen = false }: { askSiteOpen?: bool
       setDragOverId(null)
       const { canceled } = (e as CustomEvent).detail
       if (canceled && originalSessionRef.current && originalSessionRef.current !== activeIdRef.current) {
-        switchWorkspace(originalSessionRef.current)
+        switchThread(originalSessionRef.current)
       }
       originalSessionRef.current = null
       if (hoverPeekRef.current) { clearTimeout(hoverPeekRef.current.timer); hoverPeekRef.current = null }
@@ -102,7 +101,7 @@ export default function ProjectBar({ askSiteOpen = false }: { askSiteOpen?: bool
     }
     // Fallback: clear visual drag state when any drag ends/drops anywhere on the page.
     // This handles the case where the drag source unmounts (peek-switch) so dragend never
-    // fires on it, leaving proof:drag-done undispatched and transferTarget stuck.
+    // fires on it, leaving site:drag-done undispatched and transferTarget stuck.
     const clearVisual = () => {
       setTransferTarget(null)
       setDragOverId(null)
@@ -111,17 +110,17 @@ export default function ProjectBar({ askSiteOpen = false }: { askSiteOpen?: bool
       if (hoverPeekRef.current) { clearTimeout(hoverPeekRef.current.timer); hoverPeekRef.current = null }
       setPeekHoverId(null)
     }
-    window.addEventListener('proof:drag-active', onActive)
-    window.addEventListener('proof:drag-done', onDone)
+    window.addEventListener('site:drag-active', onActive)
+    window.addEventListener('site:drag-done', onDone)
     document.addEventListener('dragend', clearVisual, true)
     document.addEventListener('drop', clearVisual, true)
     return () => {
-      window.removeEventListener('proof:drag-active', onActive)
-      window.removeEventListener('proof:drag-done', onDone)
+      window.removeEventListener('site:drag-active', onActive)
+      window.removeEventListener('site:drag-done', onDone)
       document.removeEventListener('dragend', clearVisual, true)
       document.removeEventListener('drop', clearVisual, true)
     }
-  }, [switchWorkspace])
+  }, [switchThread])
 
   function startEditing(projId: string, currentName: string) {
     cancelEditRef.current = false
@@ -131,18 +130,18 @@ export default function ProjectBar({ askSiteOpen = false }: { askSiteOpen?: bool
   }
 
   function nextUntitledName() {
-    const used = new Set(projects.map(p => p.name))
-    if (!used.has('New Session')) return 'New Session'
-    for (let i = 2; i <= projects.length + 2; i++) {
-      const candidate = `New Session ${i}`
+    const used = new Set(threads.map(p => p.name))
+    if (!used.has('New Thread')) return 'New Thread'
+    for (let i = 2; i <= threads.length + 2; i++) {
+      const candidate = `New Thread ${i}`
       if (!used.has(candidate)) return candidate
     }
-    return 'New Session'
+    return 'New Thread'
   }
 
   function reorderProjects(fromId: string, toId: string) {
     if (fromId === toId) return
-    setProjects(ps => {
+    setThreads(ps => {
       const from = ps.findIndex(p => p.id === fromId)
       const to   = ps.findIndex(p => p.id === toId)
       if (from === -1 || to === -1) return ps
@@ -155,16 +154,16 @@ export default function ProjectBar({ askSiteOpen = false }: { askSiteOpen?: bool
   function commitRename(projId: string) {
     const name = nameInput.trim()
     setEditingProjId(null)
-    updateProject(projId, { name: name || nextUntitledName() })
+    updateThread(projId, { name: name || nextUntitledName() })
   }
 
   function handleRemoveClick(e: React.MouseEvent, projId: string) {
     e.stopPropagation()
-    const proj = projects.find(p => p.id === projId)
-    const insertIdx = projects.findIndex(p => p.id === projId)
+    const proj = threads.find(p => p.id === projId)
+    const insertIdx = threads.findIndex(p => p.id === projId)
     if (!proj) return
-    removeWorkspaceSoft(projId)
-    window.dispatchEvent(new CustomEvent('proof:session-removed', { detail: { proj, insertIdx } }))
+    removeThreadSoft(projId)
+    window.dispatchEvent(new CustomEvent('site:thread-removed', { detail: { proj, insertIdx } }))
   }
 
 
@@ -172,8 +171,7 @@ export default function ProjectBar({ askSiteOpen = false }: { askSiteOpen?: bool
     <div style={{
       display: 'flex', alignItems: 'center',
       height: '60px', flexShrink: 0,
-      borderBottom: `1px solid ${askSiteOpen ? 'rgba(230,226,216,0.4)' : 'rgba(230,226,216,0.1)'}`,
-      transition: 'border-color 0.3s ease',
+      borderBottom: '1px solid rgba(230,226,216,0.1)',
       WebkitAppRegion: 'drag',
       overflow: 'hidden',
     } as React.CSSProperties}>
@@ -196,7 +194,7 @@ export default function ProjectBar({ askSiteOpen = false }: { askSiteOpen?: bool
             scrollbarWidth: 'none',
           } as React.CSSProperties}
         >
-          {projects.map(p => {
+          {threads.map(p => {
             const isActive  = p.id === activeId
             const isEditing = p.id === editingProjId
 
@@ -214,12 +212,12 @@ export default function ProjectBar({ askSiteOpen = false }: { askSiteOpen?: bool
                     if (e.key === 'Escape') { cancelEditRef.current = true; setEditingProjId(null) }
                   }}
                   onBlur={() => { if (!cancelEditRef.current) commitRename(p.id) }}
-                  placeholder="Session name"
+                  placeholder="Thread name"
                   style={{
                     height: '36px', padding: '0 12px', flexShrink: 0,
                     background: '#151615', border: '1px solid rgba(230,226,216,0.1)',
                     borderRadius: '4px', color: '#E6E2D8',
-                    fontSize: '13px', letterSpacing: '0.01em',
+                    fontSize: '14px', letterSpacing: '0.01em',
                     fontFamily: 'inherit', outline: 'none', width: '140px',
                   }}
                 />
@@ -229,15 +227,15 @@ export default function ProjectBar({ askSiteOpen = false }: { askSiteOpen?: bool
             return (
               <WorkspaceTab
                 key={p.id}
-                name={p.name || 'New Session'}
+                name={p.name || 'New Thread'}
                 active={isActive}
-                canRemove={projects.length > 1}
+                canRemove={threads.length > 1}
                 dragOver={dragOverId === p.id && draggedId !== p.id}
                 transferTarget={transferTarget === p.id}
                 peeking={peekHoverId === p.id}
                 validTarget={isDragActive && !isActive}
                 peekPending={peekHoverId === p.id}
-                onClick={() => { if (!isActive) switchWorkspace(p.id) }}
+                onClick={() => { if (!isActive) switchThread(p.id) }}
                 onDoubleClick={() => startEditing(p.id, p.name || '')}
                 onRemoveClick={e => handleRemoveClick(e, p.id)}
                 onDragStart={() => setDraggedId(p.id)}
@@ -252,7 +250,7 @@ export default function ProjectBar({ askSiteOpen = false }: { askSiteOpen?: bool
                         hoverPeekRef.current = {
                           id: p.id,
                           timer: setTimeout(() => {
-                            switchWorkspace(p.id)
+                            switchThread(p.id)
                             hoverPeekRef.current = null
                             setPeekHoverId(null)
                           }, 600),
@@ -280,37 +278,32 @@ export default function ProjectBar({ askSiteOpen = false }: { askSiteOpen?: bool
               />
             )
           })}
-          {/* New workspace — at end of tab strip */}
-          <button
-            onClick={() => newWorkspace()}
-            title="New session"
-            style={{
-              width: '24px', height: '24px', flexShrink: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'none', border: 'none',
-              color: 'rgba(230,226,216,0.45)', cursor: 'pointer', padding: 0, outline: 'none',
-              transition: 'color 0.15s', marginLeft: '2px',
-              WebkitAppRegion: 'no-drag',
-            } as React.CSSProperties}
-            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(230,226,216,0.7)' }}
-            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(230,226,216,0.45)' }}
-          >
-            <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-              <line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" />
-            </svg>
-          </button>
+          {/* New thread */}
+          <NewThreadBtn onClick={() => newThread()} />
         </div>
       </div>
 
-      {/* ── Right: notifications + account ── */}
+      {/* ── Right: origin indicator + account ── */}
       <div style={{
         display: 'flex', alignItems: 'center',
         padding: '0 14px 0 8px', gap: '0', flexShrink: 0,
         WebkitAppRegion: 'no-drag',
       } as React.CSSProperties}>
+        {activeThread?.originThreadTitle && (
+          <span
+            title={`Started from: ${activeThread.originThreadTitle}`}
+            style={{
+              fontSize: '11px', color: 'rgba(230,226,216,0.28)', letterSpacing: '0.02em',
+              marginRight: '10px', maxWidth: '130px',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              userSelect: 'none', flexShrink: 1,
+            }}>
+            ↳ {activeThread.originThreadTitle}
+          </span>
+        )}
         <div style={{ width: '1px', height: '14px', background: 'rgba(230,226,216,0.2)', marginRight: '2px', flexShrink: 0 }} />
-        <RightBtn onClick={() => window.dispatchEvent(new Event('proof:show-account'))}>
-          Account
+        <RightBtn onClick={() => window.dispatchEvent(new Event('site:show-account'))}>
+          Settings
         </RightBtn>
       </div>
     </div>
@@ -377,7 +370,7 @@ function WorkspaceTab({ name, active, canRemove, dragOver, transferTarget, peeki
       } as React.CSSProperties}
     >
       <span style={{
-        fontSize: '13px', letterSpacing: '0.01em',
+        fontSize: '14px', letterSpacing: '0.01em',
         color: active ? '#E6E2D8' : hovered ? '#E6E2D8' : 'rgba(230,226,216,0.65)',
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         flex: 1, minWidth: 0,
@@ -415,23 +408,51 @@ function WorkspaceTab({ name, active, canRemove, dragOver, transferTarget, peeki
   )
 }
 
-// ─── Right-cluster button ────────────────────────────────────────────────────
+// ─── New-thread button ────────────────────────────────────────────────────────
 
-function RightBtn({ children, onClick, active }: { children: React.ReactNode; onClick: () => void; active?: boolean }) {
+function NewThreadBtn({ onClick }: { onClick: () => void }) {
   const [hov, setHov] = useState(false)
   return (
     <button
       onClick={onClick}
+      title="New Thread"
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        width: '24px', height: '24px', flexShrink: 0, marginLeft: '2px',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'none', border: 'none', borderRadius: '3px',
+        color: hov ? 'rgba(230,226,216,0.7)' : 'rgba(230,226,216,0.45)',
+        cursor: 'pointer', padding: 0, outline: 'none',
+        transition: 'color 0.15s',
+        WebkitAppRegion: 'no-drag',
+      } as React.CSSProperties}
+    >
+      <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+        <line x1="5" y1="1" x2="5" y2="9" /><line x1="1" y1="5" x2="9" y2="5" />
+      </svg>
+    </button>
+  )
+}
+
+// ─── Right-cluster button ────────────────────────────────────────────────────
+
+function RightBtn({ children, onClick, active, title }: { children: React.ReactNode; onClick: () => void; active?: boolean; title?: string }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      title={title}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
         height: '32px', padding: '0 9px',
         background: 'none', border: 'none', borderRadius: '3px',
         color: active || hov ? '#E6E2D8' : 'rgba(230,226,216,0.65)',
-        fontSize: '13px', letterSpacing: '0.02em',
+        fontSize: '14px', letterSpacing: '0.02em',
         cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
         transition: 'color 0.12s',
-        whiteSpace: 'nowrap',
+        whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center',
       }}
     >
       {children}

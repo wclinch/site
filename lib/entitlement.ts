@@ -1,41 +1,15 @@
-export const FREE_WORKSPACES    = 2
 export const FREE_DOC_COUNT     = 50
 export const FREE_STORAGE_MB    = 250
 export const FREE_STORAGE_BYTES = FREE_STORAGE_MB * 1024 * 1024
 
-export const PRO_DOC_COUNT     = Infinity
-export const PRO_STORAGE_MB    = 2048
-export const PRO_STORAGE_BYTES = PRO_STORAGE_MB * 1024 * 1024
-
-export const PRO_PRICE_MONTHLY = '$4.99'
-export const PRO_PRICE_YEARLY  = '$39.99'
-
 export interface Limits {
-  workspaces:   number   // Infinity = unlimited
-  docCount:     number   // Infinity = unlimited
+  workspaces:   number
+  docCount:     number
   storageBytes: number
 }
 
-export const FREE_LIMITS: Limits = {
-  workspaces:   FREE_WORKSPACES,
+export const LIMITS: Limits = {
+  workspaces:   Infinity,
   docCount:     FREE_DOC_COUNT,
   storageBytes: FREE_STORAGE_BYTES,
-}
-
-export const PRO_LIMITS: Limits = {
-  workspaces:   Infinity,
-  docCount:     Infinity,
-  storageBytes: PRO_STORAGE_BYTES,
-}
-
-export function checkIsPro(): boolean {
-  if (typeof window === 'undefined') return false
-  try {
-    const raw = localStorage.getItem('proof-v3-entitlement')
-    if (raw) {
-      const { isPro } = JSON.parse(raw) as { isPro?: boolean }
-      if (typeof isPro === 'boolean') return isPro
-    }
-  } catch {}
-  return false
 }

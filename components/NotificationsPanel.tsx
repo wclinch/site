@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 
-const STORAGE_KEY = 'proof-activity-log'
+const STORAGE_KEY = 'site-activity-log'
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -9,9 +9,9 @@ export type NotifHandle = { expire: () => void }
 
 export function notify(message: string, onUndo?: () => void): NotifHandle {
   const id = Math.random().toString(36).slice(2)
-  window.dispatchEvent(new CustomEvent('proof:notify', { detail: { id, message, onUndo } }))
+  window.dispatchEvent(new CustomEvent('site:notify', { detail: { id, message, onUndo } }))
   return {
-    expire: () => window.dispatchEvent(new CustomEvent('proof:notify-expire', { detail: { id } })),
+    expire: () => window.dispatchEvent(new CustomEvent('site:notify-expire', { detail: { id } })),
   }
 }
 
@@ -48,24 +48,24 @@ export default function NotificationsBtn() {
     function onNotify() { setUnread(c => c + 1) }
     function onToggle() { setActive(v => { const next = !v; if (next) setUnread(0); return next }) }
     function onClose()  { setActive(false) }
-    window.addEventListener('proof:notify', onNotify)
-    window.addEventListener('proof:activity-toggle', onToggle)
-    window.addEventListener('proof:activity-close', onClose)
+    window.addEventListener('site:notify', onNotify)
+    window.addEventListener('site:activity-toggle', onToggle)
+    window.addEventListener('site:activity-close', onClose)
     return () => {
-      window.removeEventListener('proof:notify', onNotify)
-      window.removeEventListener('proof:activity-toggle', onToggle)
-      window.removeEventListener('proof:activity-close', onClose)
+      window.removeEventListener('site:notify', onNotify)
+      window.removeEventListener('site:activity-toggle', onToggle)
+      window.removeEventListener('site:activity-close', onClose)
     }
   }, [])
 
   return (
     <button
-      onClick={() => window.dispatchEvent(new Event('proof:activity-toggle'))}
+      onClick={() => window.dispatchEvent(new Event('site:activity-toggle'))}
       style={{
         height: '28px', padding: '0 7px', position: 'relative',
         background: 'none', border: 'none', borderRadius: '3px',
         color: active ? '#E6E2D8' : 'rgba(230,226,216,0.65)',
-        fontSize: '11px', letterSpacing: '0.04em',
+        fontSize: '12px', letterSpacing: '0.04em',
         cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
         transition: 'color 0.12s',
         WebkitAppRegion: 'no-drag',
@@ -118,11 +118,11 @@ export function ActivityPanel() {
         return next
       })
     }
-    window.addEventListener('proof:notify', onNotify)
-    window.addEventListener('proof:notify-expire', onExpire)
+    window.addEventListener('site:notify', onNotify)
+    window.addEventListener('site:notify-expire', onExpire)
     return () => {
-      window.removeEventListener('proof:notify', onNotify)
-      window.removeEventListener('proof:notify-expire', onExpire)
+      window.removeEventListener('site:notify', onNotify)
+      window.removeEventListener('site:notify-expire', onExpire)
     }
   }, [])
 
@@ -156,14 +156,14 @@ export function ActivityPanel() {
         padding: '0 6px 0 12px', borderBottom: '1px solid rgba(230,226,216,0.1)',
         userSelect: 'none', gap: '6px',
       }}>
-        <span style={{ flex: 1, fontSize: '10px', color: '#E6E2D8', letterSpacing: '0.04em' }}>Activity</span>
+        <span style={{ flex: 1, fontSize: '11px', color: '#E6E2D8', letterSpacing: '0.04em' }}>Activity</span>
         {notifs.length > 0 && (
           <>
             <button
               onClick={clearArmed ? confirmClear : armClear}
               style={{
                 background: 'none', border: 'none', padding: 0, height: '22px',
-                fontSize: '10px', cursor: 'pointer',
+                fontSize: '11px', cursor: 'pointer',
                 fontFamily: 'inherit', letterSpacing: '0.02em', transition: 'color 0.1s',
                 color: clearArmed ? '#E6E2D8' : 'rgba(230,226,216,0.45)',
               }}
@@ -176,7 +176,7 @@ export function ActivityPanel() {
           </>
         )}
         <button
-          onClick={() => window.dispatchEvent(new Event('proof:activity-toggle'))}
+          onClick={() => window.dispatchEvent(new Event('site:activity-toggle'))}
           style={{
             width: '22px', height: '22px', flexShrink: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -200,8 +200,8 @@ export function ActivityPanel() {
             height: '100%', padding: '0 14px', textAlign: 'center', letterSpacing: '0.02em',
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px',
           }}>
-            <span style={{ fontSize: '12px', color: 'rgba(230,226,216,0.65)' }}>No activity yet.</span>
-            <span style={{ fontSize: '11px', color: 'rgba(230,226,216,0.45)' }}>Removals and actions appear here with undo.</span>
+            <span style={{ fontSize: '13px', color: 'rgba(230,226,216,0.65)' }}>No activity yet.</span>
+            <span style={{ fontSize: '12px', color: 'rgba(230,226,216,0.45)' }}>Removals and actions appear here with undo.</span>
           </div>
         ) : notifs.map((n, i) => (
           <div key={n.id} style={{
@@ -210,10 +210,10 @@ export function ActivityPanel() {
             borderBottom: i < notifs.length - 1 ? '1px solid rgba(230,226,216,0.1)' : 'none',
           }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '12px', color: 'rgba(230,226,216,0.65)', lineHeight: 1.45, wordBreak: 'break-word' }}>
+              <div style={{ fontSize: '13px', color: 'rgba(230,226,216,0.65)', lineHeight: 1.45, wordBreak: 'break-word' }}>
                 {n.message}
               </div>
-              <div style={{ fontSize: '11px', color: 'rgba(230,226,216,0.45)', marginTop: '2px', letterSpacing: '0.02em' }}>
+              <div style={{ fontSize: '12px', color: 'rgba(230,226,216,0.45)', marginTop: '2px', letterSpacing: '0.02em' }}>
                 {timeAgo(n.ts)}
               </div>
             </div>
@@ -224,7 +224,7 @@ export function ActivityPanel() {
                   style={{
                     background: 'none', border: '1px solid rgba(230,226,216,0.1)', borderRadius: '3px',
                     padding: '2px 8px', cursor: 'pointer',
-                    fontSize: '10px', color: '#E6E2D8', fontFamily: 'inherit',
+                    fontSize: '11px', color: '#E6E2D8', fontFamily: 'inherit',
                     letterSpacing: '0.03em', transition: 'border-color 0.1s',
                   }}
                   onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(230,226,216,0.25)')}

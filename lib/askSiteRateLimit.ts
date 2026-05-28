@@ -1,6 +1,6 @@
 const KEY = 'ask-site-daily-usage'
 
-export const PRO_ASK_DAILY = 40
+export const DAILY_ASK_LIMIT = 10
 
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10)
@@ -22,8 +22,7 @@ export function incrementAskSiteUsage(): void {
   } catch {}
 }
 
-export function checkAskSiteLimit(isPro: boolean): { allowed: boolean; used: number; limit: number } {
-  if (!isPro) return { allowed: false, used: 0, limit: 0 }
+export function checkAskSiteLimit(): { allowed: boolean; used: number; limit: number } {
   const used = getAskSiteUsageToday()
-  return { allowed: used < PRO_ASK_DAILY, used, limit: PRO_ASK_DAILY }
+  return { allowed: used < DAILY_ASK_LIMIT, used, limit: DAILY_ASK_LIMIT }
 }
